@@ -51,6 +51,7 @@ IF TYPE_ID(N'TaskEvents') IS NULL
         PayloadText nvarchar(max) NULL,
         CustomStatusText nvarchar(max) NULL,
         IsPlayed bit NULL,
+        LockedBy nvarchar(100) NULL,
         LockExpiration datetime2 NULL,
         CompletedTime datetime2 NULL
     )
@@ -92,6 +93,8 @@ IF OBJECT_ID(N'dbo.NewEvents', 'U') IS NULL
         Reason nvarchar(max) NULL,
         PayloadText nvarchar(max) NULL,
     )
+
+CREATE CLUSTERED INDEX IX_NewEvents_InstanceId_SequenceNumber ON NewEvents (InstanceID, SequenceNumber)
 
 IF OBJECT_ID(N'NewTasks', 'U') IS NULL
     CREATE TABLE NewTasks (
@@ -137,8 +140,6 @@ ALTER PROCEDURE CreateInstances
     @NewInstanceEvents TaskEvents READONLY
 AS
 BEGIN
-    BEGIN TRANSACTION
-
     DECLARE @existingStatus varchar(30) = (
         SELECT TOP 1 existing.RuntimeStatus
         FROM Instances existing WITH (HOLDLOCK)
@@ -182,8 +183,6 @@ BEGIN
         [Name],
         PayloadText
     FROM @NewInstanceEvents
-
-    COMMIT TRANSACTION
 END
 GO
 
@@ -227,21 +226,19 @@ ALTER PROCEDURE LockNextOrchestration
     @LockExpiration datetime2
 AS
 BEGIN
-    BEGIN TRANSACTION
-
     DECLARE @now datetime2 = SYSUTCDATETIME()
     DECLARE @instanceID nvarchar(100)
 
     -- Lock the first active instance that has pending messages.
     -- Delayed events from durable timers will have a non-null VisibleTime value.
     -- Non-active instances will never have their messages or history read.
-    UPDATE TOP (1) Instances
+    UPDATE TOP (1) Instances WITH (READPAST)
     SET
         LockedBy = @LockedBy,
 	    LockExpiration = @LockExpiration,
         @instanceID = ID
     FROM 
-        Instances I INNER JOIN NewEvents E ON E.InstanceID = I.ID
+        Instances I INNER JOIN NewEvents E WITH (READPAST) ON E.InstanceID = I.ID
     WHERE
         I.RuntimeStatus IN ('Pending', 'Running') AND
 	    (I.LockExpiration IS NULL OR I.LockExpiration < @now) AND
@@ -264,16 +261,15 @@ BEGIN
         RuntimeStatus,
         TaskID,
         Reason,
-        PayloadText
-    FROM NewEvents
+        PayloadText,
+        DATEDIFF(millisecond, [Timestamp], @now) AS WaitTime
+    FROM NewEvents WITH (READPAST)
     WHERE InstanceID = @instanceID
 
     -- Result #2: The full event history for the locked instance
     SELECT *
     FROM History
     WHERE InstanceID = @instanceID
-
-    COMMIT TRANSACTION
 END
 GO
 
@@ -372,8 +368,13 @@ BEGIN
         EventType,
         [Name],
         TaskID,
-        PayloadText
+        PayloadText,
+        LockedBy,
+        LockExpiration
     )
+    OUTPUT
+        inserted.SequenceNumber,
+        inserted.TaskID
     SELECT 
         VisibleTime,
         InstanceID,
@@ -381,7 +382,9 @@ BEGIN
         EventType,
         [Name],
         TaskID,
-        PayloadText
+        PayloadText,
+        LockedBy,
+        LockExpiration
     FROM @NewTaskEvents
 
     COMMIT TRANSACTION
@@ -408,7 +411,8 @@ BEGIN
 	    LockExpiration = @LockExpiration,
         DequeueCount = DequeueCount + 1
     OUTPUT
-        INSERTED.*
+        INSERTED.*,
+        DATEDIFF(millisecond, INSERTED.[Timestamp], @now) AS WaitTime
     FROM
         NewTasks WITH (INDEX (PK_NewTasks_SequenceNumber))
     WHERE

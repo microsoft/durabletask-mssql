@@ -12,7 +12,7 @@ namespace DurableTask.RelationalDb
 {
     // TODO: Refactor this file
     // TODO: Separate out SQL Server-specific APIs
-    static class ExtensionMethods
+    static class SqlUtils
     {
         static readonly SqlMetaData[] TaskEventSchema = new SqlMetaData[]
         {
@@ -28,6 +28,7 @@ namespace DurableTask.RelationalDb
             new SqlMetaData("PayloadText", SqlDbType.NVarChar, -1 /* max */),
             new SqlMetaData("CustomStatusText", SqlDbType.NVarChar, -1 /* max */),
             new SqlMetaData("IsPlayed", SqlDbType.Bit),
+            new SqlMetaData("LockedBy", SqlDbType.NVarChar, 100),
             new SqlMetaData("LockExpiration", SqlDbType.DateTime2),
             new SqlMetaData("CompletedTime", SqlDbType.DateTime2),
         };
@@ -54,13 +55,13 @@ namespace DurableTask.RelationalDb
         {
             return new TaskMessage
             {
-                SequenceNumber = (long)reader["SequenceNumber"],
+                SequenceNumber = GetSequenceNumber(reader),
                 Event = reader.GetHistoryEvent(),
                 OrchestrationInstance = new OrchestrationInstance
                 {
                     InstanceId = GetInstanceId(reader),
                     ExecutionId = GetExecutionId(reader),
-                }
+                },
             };
         }
 
@@ -214,6 +215,28 @@ namespace DurableTask.RelationalDb
             return new[] { taskMessage.Populate(new SqlDataRecord(TaskEventSchema), onlyMessageId) };
         }
 
+        public static IEnumerable<SqlDataRecord>? ToTableValueParameter(
+            this IEnumerable<DbTaskEvent> events)
+        {
+            if (!events.Any())
+            {
+                return null;
+            }
+
+            var record = new SqlDataRecord(TaskEventSchema);
+            return events.Select(e => e.Populate(record));
+        }
+
+        public static SqlDataRecord Populate(
+            this DbTaskEvent taskEvent,
+            SqlDataRecord record)
+        {
+            taskEvent.Message.Populate(record);
+            record.SetSqlString(TaskEventFields.LockedBy, taskEvent.LockedBy ?? SqlString.Null);
+            record.SetSqlDateTime(TaskEventFields.LockExpiration, taskEvent.LockExpiration ?? SqlDateTime.Null);
+            return record;
+        }
+
         public static SqlDataRecord Populate(
             this TaskMessage taskMessage,
             SqlDataRecord record,
@@ -314,16 +337,6 @@ namespace DurableTask.RelationalDb
             return value;
         }
 
-        static SqlString StripJsonNulls(SqlString value)
-        {
-            if (value == SqlString.Null || value == "null")
-            {
-                return SqlString.Null;
-            }
-
-            return value;
-        }
-
         static SqlDateTime GetVisibleTime(HistoryEvent historyEvent)
         {
             return historyEvent.EventType switch
@@ -336,27 +349,12 @@ namespace DurableTask.RelationalDb
 
         static SqlString GetRuntimeStatus(HistoryEvent historyEvent)
         {
-            switch (historyEvent.EventType)
-            {
-                case EventType.ExecutionCompleted:
-                case EventType.ExecutionFailed:
-                    return ((ExecutionCompletedEvent)historyEvent).OrchestrationStatus.ToString();
-                default:
-                    return SqlString.Null;
-            }
+            return DTUtils.GetRuntimeStatus(historyEvent)?.ToString() ?? SqlString.Null;
         }
 
         static SqlString GetName(HistoryEvent historyEvent)
         {
-            return historyEvent.EventType switch
-            {
-                EventType.EventRaised => ((EventRaisedEvent)historyEvent).Name,
-                EventType.EventSent => ((EventSentEvent)historyEvent).Name,
-                EventType.ExecutionStarted => ((ExecutionStartedEvent)historyEvent).Name,
-                EventType.SubOrchestrationInstanceCreated => ((SubOrchestrationInstanceCreatedEvent)historyEvent).Name,
-                EventType.TaskScheduled => ((TaskScheduledEvent)historyEvent).Name,
-                _ => SqlString.Null,
-            };
+            return DTUtils.GetName(historyEvent) ?? SqlString.Null;
         }
 
         static string? GetName(DbDataReader reader)
@@ -367,24 +365,20 @@ namespace DurableTask.RelationalDb
 
         static SqlInt32 GetTaskId(HistoryEvent historyEvent)
         {
-            return historyEvent.EventType switch
-            {
-                EventType.TaskCompleted => ((TaskCompletedEvent)historyEvent).TaskScheduledId,
-                EventType.TaskScheduled => ((TaskScheduledEvent)historyEvent).EventId,
-                EventType.TaskFailed => ((TaskFailedEvent)historyEvent).TaskScheduledId,
-                EventType.SubOrchestrationInstanceCompleted => ((SubOrchestrationInstanceCompletedEvent)historyEvent).TaskScheduledId,
-                EventType.SubOrchestrationInstanceCreated => ((SubOrchestrationInstanceCreatedEvent)historyEvent).EventId,
-                EventType.SubOrchestrationInstanceFailed => ((SubOrchestrationInstanceFailedEvent)historyEvent).TaskScheduledId,
-                EventType.TimerCreated => ((TimerCreatedEvent)historyEvent).EventId,
-                EventType.TimerFired => ((TimerFiredEvent)historyEvent).TimerId,
-                _ => SqlInt32.Null,
-            };
+            int taskEventId = DTUtils.GetTaskEventId(historyEvent);
+            return taskEventId >= 0 ? new SqlInt32(taskEventId) : SqlInt32.Null;
         }
 
-        static int GetTaskId(DbDataReader reader)
+        public static int GetTaskId(DbDataReader reader)
         {
             int ordinal = reader.GetOrdinal("TaskID");
             return reader.IsDBNull(ordinal) ? -1 : reader.GetInt32(ordinal);
+        }
+
+        public static long GetSequenceNumber(DbDataReader reader)
+        {
+            int ordinal = reader.GetOrdinal("SequenceNumber");
+            return reader.IsDBNull(ordinal) ? -1 : reader.GetInt64(ordinal);
         }
 
         static SqlString GetReason(HistoryEvent historyEvent)
@@ -405,27 +399,8 @@ namespace DurableTask.RelationalDb
 
         static SqlString GetPayloadText(HistoryEvent e)
         {
-            SqlString payload = e.EventType switch
-            {
-                EventType.ContinueAsNew => ((ContinueAsNewEvent)e).Result,
-                EventType.EventRaised => ((EventRaisedEvent)e).Input,
-                EventType.EventSent => ((EventSentEvent)e).Input,
-                EventType.ExecutionCompleted => ((ExecutionCompletedEvent)e).Result,
-                EventType.ExecutionFailed => ((ExecutionCompletedEvent)e).Result,
-                EventType.ExecutionStarted => ((ExecutionStartedEvent)e).Input,
-                EventType.ExecutionTerminated => ((ExecutionTerminatedEvent)e).Input,
-                EventType.GenericEvent => ((GenericEvent)e).Data,
-                EventType.SubOrchestrationInstanceCompleted => ((SubOrchestrationInstanceCompletedEvent)e).Result,
-                EventType.SubOrchestrationInstanceCreated => ((SubOrchestrationInstanceCreatedEvent)e).Input,
-                EventType.SubOrchestrationInstanceFailed => ((SubOrchestrationInstanceFailedEvent)e).Details,
-                EventType.TaskCompleted => ((TaskCompletedEvent)e).Result,
-                EventType.TaskFailed => ((TaskFailedEvent)e).Details,
-                EventType.TaskScheduled => ((TaskScheduledEvent)e).Input,
-                _ => SqlString.Null,
-            };
-
-            // DTFx serializes null values as "null", which we don't want to save in the DB
-            return StripJsonNulls(payload);
+            DTUtils.TryGetPayloadText(e, out string? payloadText);
+            return payloadText ?? SqlString.Null;
         }
 
         static string? GetPayloadText(DbDataReader reader)
@@ -449,6 +424,7 @@ namespace DurableTask.RelationalDb
         static class TaskEventFields
         {
             // NOTE: These numbers must be kept in sync with the TaskEvent SQL type
+            // NOTE: Also, these must be kept in sync with the static TaskEventSchema above
             public const int SequenceNumber = 0;
             public const int VisibleTime = 1;
             public const int InstanceID = 2;
@@ -461,8 +437,9 @@ namespace DurableTask.RelationalDb
             public const int PayloadText = 9;
             public const int CustomStatusText = 10;
             public const int IsPlayed = 11;
-            public const int LockExpiration = 12;
-            public const int CompletedTime = 13;
+            public const int LockedBy = 12;
+            public const int LockExpiration = 13;
+            public const int CompletedTime = 14;
         }
     }
 }

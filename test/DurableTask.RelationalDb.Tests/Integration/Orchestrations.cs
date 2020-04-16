@@ -1,26 +1,36 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using DurableTask.Core;
-using DurableTask.RelationalDb.SqlServer;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
-using Xunit;
-using Xunit.Sdk;
-
-namespace DurableTask.RelationalDb.Tests.Integration
+﻿namespace DurableTask.RelationalDb.Tests.Integration
 {
+    using System;
+    using System.Collections.Generic;
+    using System.Diagnostics;
+    using System.Threading.Tasks;
+    using DurableTask.Core;
+    using DurableTask.RelationalDb.Tests.Logging;
+    using Microsoft.Extensions.Logging;
+    using Newtonsoft.Json;
+    using Newtonsoft.Json.Linq;
+    using Xunit;
+    using Xunit.Abstractions;
+
     public class Orchestrations : IAsyncLifetime
     {
+        readonly SqlServerProviderOptions options;
+
         TaskHubWorker worker;
         TaskHubClient client;
 
+        public Orchestrations(ITestOutputHelper output)
+        {
+            var logProvider = new TestLogProvider(output);
+            this.options = new SqlServerProviderOptions
+            {
+                LoggerFactory = LoggerFactory.Create(builder => builder.AddProvider(logProvider)),
+            };
+        }
+
         async Task IAsyncLifetime.InitializeAsync()
         {
-            RelationalDbOrchestrationService provider = new SqlServerProvider();
+            var provider = new SqlServerOrchestrationService(this.options);
             this.worker = await new TaskHubWorker(provider).StartAsync();
             this.client = new TaskHubClient(provider);
         }
@@ -143,7 +153,6 @@ namespace DurableTask.RelationalDb.Tests.Integration
                 expectedStatus: OrchestrationStatus.Failed);
         }
 
-
         [Fact]
         public async Task OrchestrationWithActivityFailure_Fails()
         {
@@ -160,6 +169,32 @@ namespace DurableTask.RelationalDb.Tests.Integration
                 expectedOutput: null); // TODO: Test for error message in output
         }
 
+        [Fact]
+        public async Task OrchestrationWithActivityFanOut()
+        {
+            StartedInstance<string> instance = await this.RunOrchestration<string[], string>(
+                null,
+                implementation: async (ctx, _) =>
+                {
+                    var tasks = new List<Task<string>>();
+                    for (int i = 0; i < 10; i++)
+                    {
+                        tasks.Add(ctx.ScheduleTask<string>("ToString", "", i));
+                    }
+
+                    string[] results = await Task.WhenAll(tasks);
+                    Array.Sort(results);
+                    Array.Reverse(results);
+                    return results;
+                },
+                activities: new[] {
+                    ("ToString", MakeActivity((TaskContext ctx, int input) => input.ToString())),
+                });
+
+            OrchestrationState state = await instance.WaitForCompletion(
+                expectedOutput: new[] { "9", "8", "7", "6", "5", "4", "3", "2", "1", "0" });
+
+        }
 
         async Task<StartedInstance<TInput>> RunOrchestration<TOutput, TInput>(
             TInput input,
