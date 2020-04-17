@@ -1,4 +1,4 @@
-﻿namespace DurableTask.RelationalDb.Tests.Logging
+﻿namespace DurableTask.SqlServer.Tests.Logging
 {
     using System;
     using System.Collections.Concurrent;

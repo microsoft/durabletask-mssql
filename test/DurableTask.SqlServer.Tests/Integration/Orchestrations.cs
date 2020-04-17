@@ -1,11 +1,11 @@
-﻿namespace DurableTask.RelationalDb.Tests.Integration
+﻿namespace DurableTask.SqlServer.Tests.Integration
 {
     using System;
     using System.Collections.Generic;
     using System.Diagnostics;
     using System.Threading.Tasks;
     using DurableTask.Core;
-    using DurableTask.RelationalDb.Tests.Logging;
+    using DurableTask.SqlServer.Tests.Logging;
     using Microsoft.Extensions.Logging;
     using Newtonsoft.Json;
     using Newtonsoft.Json.Linq;

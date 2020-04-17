@@ -1,4 +1,4 @@
-﻿namespace DurableTask.RelationalDb
+﻿namespace DurableTask.SqlServer
 {
     using System;
     using System.Diagnostics;

@@ -4,6 +4,8 @@
     <TargetFramework>netcoreapp3.1</TargetFramework>
     <IsPackable>false</IsPackable>
     <SignAssembly>true</SignAssembly>
+    <LangVersion>8.0</LangVersion>
+    <Nullable>enable</Nullable>
     <AssemblyOriginatorKeyFile>..\..\sign.snk</AssemblyOriginatorKeyFile>
   </PropertyGroup>
 
@@ -14,7 +16,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\DurableTask.RelationalDb\DurableTask.RelationalDb.csproj" />
+    <ProjectReference Include="..\..\src\DurableTask.SqlServer\DurableTask.SqlServer.csproj" />
   </ItemGroup>
 
 </Project>

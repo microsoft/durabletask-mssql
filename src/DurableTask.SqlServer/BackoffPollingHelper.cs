@@ -2,7 +2,7 @@
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace DurableTask.RelationalDb
+namespace DurableTask.SqlServer
 {
     /// <summary>
     /// Utility for implementing semi-intelligent backoff polling for Azure queues.

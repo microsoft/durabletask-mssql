@@ -5,7 +5,7 @@ using System.Text;
 using DurableTask.Core;
 using DurableTask.Core.History;
 
-namespace DurableTask.RelationalDb
+namespace DurableTask.SqlServer
 {
     static class DTUtils
     {

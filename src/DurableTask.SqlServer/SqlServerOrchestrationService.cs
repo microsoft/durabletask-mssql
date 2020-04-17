@@ -1,4 +1,4 @@
-﻿namespace DurableTask.RelationalDb
+﻿namespace DurableTask.SqlServer
 {
     using System;
     using System.Collections.Generic;
@@ -11,7 +11,7 @@
     using System.Threading.Tasks;
     using DurableTask.Core;
     using DurableTask.Core.History;
-    using DurableTask.RelationalDb.Utils;
+    using DurableTask.SqlServer.Utils;
 
     public class SqlServerOrchestrationService :
         IOrchestrationService,

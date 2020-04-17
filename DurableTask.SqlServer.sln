@@ -3,9 +3,9 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 16
 VisualStudioVersion = 16.0.29806.167
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DurableTask.RelationalDb", "src\DurableTask.RelationalDb\DurableTask.RelationalDb.csproj", "{FC7FB0AF-2322-4356-AF64-A8E2EB7D1EF8}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DurableTask.SqlServer", "src\DurableTask.SqlServer\DurableTask.SqlServer.csproj", "{FC7FB0AF-2322-4356-AF64-A8E2EB7D1EF8}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DurableTask.RelationalDb.Tests", "test\DurableTask.RelationalDb.Tests\DurableTask.RelationalDb.Tests.csproj", "{3D282458-56C8-4022-A37C-6B67F4EF9BF4}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DurableTask.SqlServer.Tests", "test\DurableTask.SqlServer.Tests\DurableTask.SqlServer.Tests.csproj", "{3D282458-56C8-4022-A37C-6B67F4EF9BF4}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{FFF00AD0-D467-4D12-AB79-BEF19BA527C0}"
 	ProjectSection(SolutionItems) = preProject

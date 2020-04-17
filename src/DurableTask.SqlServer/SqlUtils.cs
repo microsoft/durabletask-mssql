@@ -8,7 +8,7 @@ using DurableTask.Core;
 using DurableTask.Core.History;
 using Microsoft.SqlServer.Server;
 
-namespace DurableTask.RelationalDb
+namespace DurableTask.SqlServer
 {
     // TODO: Refactor this file
     // TODO: Separate out SQL Server-specific APIs

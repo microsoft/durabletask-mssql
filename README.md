@@ -1,13 +1,13 @@
 ﻿# Introduction
 
-DurableTask.RelationalDb (final name TBD) is a backend storage provider for the Durable Task Framework (DTFx).
+DurableTask.SqlServer (final name TBD) is a backend storage provider for the Durable Task Framework (DTFx).
 It persists all task hub state in a SQL Server database, which can be hosted in Azure or in your own infrastructure.
 This provider includes support for all DTFx features, including orchestrations, activities, and entities.
 
-## When to choose DurableTask.RelationalDb
+## When to choose DurableTask.SqlServer
 
 Each DTFx storage provider has unique strengths and weaknesses. The specific provider you choose will depend
-on many factors that are specific to your technical domain. We recommend you choose DurableTask.RelationalDB if
+on many factors that are specific to your technical domain. We recommend you choose DurableTask.SqlServer if
 the following factors are important to you:
 
 1. **Strong consistency**: All data stored in the task hub is transactionally consistent, minimizing the chance of
@@ -24,7 +24,7 @@ volume licensing. Managed offerings also allow you to scale up or down your data
 5. **Enterprise capabilities**: SQL Server is a highly scalable relational database designed for mission-critical workloads.
 It includes many features around disaster recovery, replication, and security that are not available in other storage providers.
 
-DurableTask.RelationalDb may not be appropriate if you workload has extreme throughput requirements that aren't suitable
+DurableTask.SqlServer may not be appropriate if you workload has extreme throughput requirements that aren't suitable
 for relational databases like SQL Server.
 
 ## Getting started
@@ -39,5 +39,5 @@ You will also need an instance of a SQL database named `TaskHub` (future updates
 The recommended database collation is `Latin1_General_100_BIN2_UTF8`.
 
 The database itself must be manually created. Then, using SQL Server Management Studio, open it and execute the contents of
-the `src/DurableTask.RelationalDb/Scripts/create-schema.sql` script file. At this point, you should be able to build and run
+the `src/DurableTask.SqlServer/Scripts/create-schema.sql` script file. At this point, you should be able to build and run
 the automated tests against a local SQL Server instance.

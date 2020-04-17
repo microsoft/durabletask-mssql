@@ -1,4 +1,4 @@
-﻿namespace DurableTask.RelationalDb.Utils
+﻿namespace DurableTask.SqlServer.Utils
 {
     using System;
     using System.Collections.Concurrent;
