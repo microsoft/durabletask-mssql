@@ -20,7 +20,7 @@
 
         public bool TryGetLogs(string category, out IEnumerable<LogEntry> logs)
         {
-            if (this.loggers.TryGetValue(category, out TestLogger? logger))
+            if (this.loggers.TryGetValue(category, out TestLogger logger))
             {
                 logs = logger.GetLogs();
                 return true;
@@ -28,6 +28,14 @@
 
             logs = Enumerable.Empty<LogEntry>();
             return false;
+        }
+
+        public void Clear()
+        {
+            foreach (TestLogger logger in this.loggers.Values.OfType<TestLogger>())
+            {
+                logger.ClearLogs();
+            }
         }
 
         ILogger ILoggerProvider.CreateLogger(string categoryName)
@@ -53,7 +61,9 @@
 
             public IReadOnlyCollection<LogEntry> GetLogs() => this.entries.AsReadOnly();
 
-            IDisposable? ILogger.BeginScope<TState>(TState state) => null;
+            public void ClearLogs() => this.entries.Clear();
+
+            IDisposable ILogger.BeginScope<TState>(TState state) => null;
 
             bool ILogger.IsEnabled(LogLevel logLevel) => true;
 
@@ -64,7 +74,7 @@
                 Exception exception,
                 Func<TState, Exception, string> formatter)
             {
-                var entry = new LogEntry(level, formatter(state, exception));
+                var entry = new LogEntry(level, eventId, formatter(state, exception));
                 this.entries.Add(entry);
                 this.output.WriteLine(entry.ToString());
             }

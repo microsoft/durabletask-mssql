@@ -5,14 +5,17 @@
 
     class LogEntry
     {
-        public LogEntry(LogLevel level, string message)
+        public LogEntry(LogLevel level, EventId eventId, string message)
         {
             this.LogLevel = level;
+            this.EventId = eventId;
             this.Message = message;
             this.Timestamp = DateTime.Now;
         }
 
         public DateTime Timestamp { get; }
+
+        public EventId EventId { get; }
 
         public LogLevel LogLevel { get; }
 

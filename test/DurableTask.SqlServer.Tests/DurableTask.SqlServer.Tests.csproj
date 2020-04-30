@@ -5,7 +5,6 @@
     <IsPackable>false</IsPackable>
     <SignAssembly>true</SignAssembly>
     <LangVersion>8.0</LangVersion>
-    <Nullable>enable</Nullable>
     <AssemblyOriginatorKeyFile>..\..\sign.snk</AssemblyOriginatorKeyFile>
   </PropertyGroup>
 

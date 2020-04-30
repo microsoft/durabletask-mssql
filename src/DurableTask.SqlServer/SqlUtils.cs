@@ -1,15 +1,19 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Data;
-using System.Data.Common;
-using System.Data.SqlTypes;
-using System.Linq;
-using DurableTask.Core;
-using DurableTask.Core.History;
-using Microsoft.SqlServer.Server;
-
-namespace DurableTask.SqlServer
+﻿namespace DurableTask.SqlServer
 {
+    using System;
+    using System.Collections.Generic;
+    using System.Data;
+    using System.Data.Common;
+    using System.Data.SqlTypes;
+    using System.Diagnostics;
+    using System.Linq;
+    using System.Threading;
+    using System.Threading.Tasks;
+    using DurableTask.Core;
+    using DurableTask.Core.History;
+    using Microsoft.Data.SqlClient.Server;
+    using SemVersion;
+
     // TODO: Refactor this file
     // TODO: Separate out SQL Server-specific APIs
     static class SqlUtils
@@ -381,6 +385,12 @@ namespace DurableTask.SqlServer
             return reader.IsDBNull(ordinal) ? -1 : reader.GetInt64(ordinal);
         }
 
+        public static SemanticVersion GetVersion(DbDataReader reader)
+        {
+            string versionString = reader.GetString("SemanticVersion");
+            return SemanticVersion.Parse(versionString);
+        }
+
         static SqlString GetReason(HistoryEvent historyEvent)
         {
             return historyEvent.EventType switch
@@ -419,6 +429,39 @@ namespace DurableTask.SqlServer
         {
             int ordinal = reader.GetOrdinal("ExecutionID");
             return reader.IsDBNull(ordinal) ? null : reader.GetString(ordinal);
+        }
+
+        public static Task<DbDataReader> ExecuteReaderAsync(
+            DbCommand command,
+            TraceHelper traceHelper,
+            CancellationToken cancellationToken = default)
+        {
+            return ExecuteSprocAndTraceAsync(command, traceHelper, cmd => cmd.ExecuteReaderAsync(cancellationToken));
+        }
+
+        public static Task<int> ExecuteNonQueryAsync(
+            DbCommand command,
+            TraceHelper traceHelper,
+            CancellationToken cancellationToken = default)
+        {
+            return ExecuteSprocAndTraceAsync(command, traceHelper, cmd => cmd.ExecuteNonQueryAsync(cancellationToken));
+        }
+
+        static async Task<T> ExecuteSprocAndTraceAsync<T>(
+            DbCommand command,
+            TraceHelper traceHelper,
+            Func<DbCommand, Task<T>> executor)
+        {
+            var latencyStopwatch = Stopwatch.StartNew();
+            try
+            {
+                return await executor(command);
+            }
+            finally
+            {
+                latencyStopwatch.Stop();
+                traceHelper.SprocCompleted(command.CommandText, latencyStopwatch);
+            }
         }
 
         static class TaskEventFields

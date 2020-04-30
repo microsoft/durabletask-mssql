@@ -11,7 +11,7 @@
 
     public class PartitionedQueueTests
     {
-        [Fact]
+        [Fact(Skip = "Not used")]
         public async Task BasicPartitioning()
         {
             var queue = new PartitionedQueue<int, int>(i => i % 10);
@@ -35,7 +35,7 @@
             Assert.Equal(0, queue.PartitionCount);
         }
 
-        [Theory]
+        [Theory(Skip = "Not used")]
         [InlineData(1)]
         [InlineData(2)]
         [InlineData(4)]
@@ -73,7 +73,7 @@
             Assert.Equal(Enumerable.Range(0, itemCount), output.Keys.OrderBy(key => key));
         }
 
-        [Theory]
+        [Theory(Skip = "Not used")]
         [InlineData(1)]
         [InlineData(2)]
         [InlineData(4)]

@@ -292,8 +292,8 @@
                 }
 
                 OrchestrationState state = await this.client.WaitForOrchestrationAsync(this.instance, timeout);
-
-                Assert.Equal(expectedStatus, state?.OrchestrationStatus);
+                Assert.NotNull(state);
+                Assert.Equal(expectedStatus, state.OrchestrationStatus);
 
                 if (this.input != null)
                 {

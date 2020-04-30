@@ -1,6 +1,7 @@
 ﻿namespace DurableTask.SqlServer
 {
     using System;
+    using Microsoft.Data.SqlClient;
     using Microsoft.Extensions.Logging;
 
     public class SqlServerProviderOptions
@@ -16,5 +17,7 @@
         public TimeSpan TaskEventLockTimeout { get; set; } = TimeSpan.FromMinutes(2);
 
         public string AppName { get; set; } = Environment.MachineName;
+
+        internal SqlConnection CreateConnection() => new SqlConnection(this.ConnectionString);
     }
 }

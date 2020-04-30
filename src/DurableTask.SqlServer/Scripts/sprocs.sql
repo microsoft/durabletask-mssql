@@ -1,142 +1,12 @@
-﻿-- Drop stored procedures
-IF OBJECT_ID('LockNextOrchestration') IS NOT NULL
-    DROP PROCEDURE LockNextOrchestration
+﻿-- STORED PROCEDURES (a.k.a. "sprocs")
+-- 
+-- This file always contains the latest version of the procedure code.
+--
+-- This file must be idempotent i.e. can be run multiple times with the 
+-- exact same outcome. It also must be executable without any downtime.
+-- This can be achieved using the CREATE OR ALTER PROCEDURE syntax.
 
-IF OBJECT_ID('AddNewEvents') IS NOT NULL
-    DROP PROCEDURE AddNewEvents
-
-IF OBJECT_ID('CheckpointOrchestration') IS NOT NULL
-    DROP PROCEDURE CheckpointOrchestration
-
-IF OBJECT_ID('CreateInstances') IS NOT NULL
-    DROP PROCEDURE CreateInstances
-
-IF OBJECT_ID('QuerySingleOrchestration') IS NOT NULL
-    DROP PROCEDURE QuerySingleOrchestration
-
-IF OBJECT_ID('CompleteTasks') IS NOT NULL
-    DROP PROCEDURE CompleteTasks
-
--- Drop tables
-IF OBJECT_ID(N'NewEvents', 'U') IS NOT NULL
-    DROP TABLE NewEvents
-
-IF OBJECT_ID(N'NewTasks', 'U') IS NOT NULL
-    DROP TABLE NewTasks
-
-IF OBJECT_ID(N'History', 'U') IS NOT NULL
-    DROP TABLE History
-
-IF OBJECT_ID(N'Instances', 'U') IS NOT NULL
-    DROP TABLE Instances
-
--- Drop custom types
-IF TYPE_ID(N'TaskEvents') IS NOT NULL
-    DROP TYPE TaskEvents
-GO
-
--- Create custom types
--- WARNING: Reordering fields is a breaking change!
-IF TYPE_ID(N'TaskEvents') IS NULL
-    CREATE TYPE TaskEvents AS TABLE (
-        SequenceNumber bigint NULL,
-        VisibleTime datetime2 NULL,
-        InstanceID nvarchar(100) NULL,
-        ExecutionID nvarchar(100) NULL,
-        EventType varchar(30) NULL,
-        [Name] nvarchar(256) NULL,
-        RuntimeStatus varchar(30) NULL,
-        TaskID int NULL,
-        Reason nvarchar(max) NULL,
-        PayloadText nvarchar(max) NULL,
-        CustomStatusText nvarchar(max) NULL,
-        IsPlayed bit NULL,
-        LockedBy nvarchar(100) NULL,
-        LockExpiration datetime2 NULL,
-        CompletedTime datetime2 NULL
-    )
-GO
-
--- Create tables
-
-IF OBJECT_ID(N'dbo.Instances', 'U') IS NULL
-	CREATE TABLE Instances (
-		ID nvarchar(100) NOT NULL CONSTRAINT PK_Instances PRIMARY KEY,
-		ExecutionID nvarchar(100) NOT NULL,
-        [Name] nvarchar(256) NOT NULL,
-		CreatedTime datetime2 NOT NULL CONSTRAINT DF_Instances_CreatedTime DEFAULT SYSUTCDATETIME(),
-		LastUpdatedTime datetime2 NULL,
-        CompletedTime datetime2 NULL,
-		RuntimeStatus varchar(20) NOT NULL,
-		CustomStatusText nvarchar(max) NULL,
-		InputText nvarchar(max) NULL,
-		OutputText nvarchar(max) NULL,
-        LockedBy nvarchar(100) NULL,
-        LockExpiration datetime2 NULL,
-	)
-
-
-IF OBJECT_ID(N'dbo.NewEvents', 'U') IS NULL
-    CREATE TABLE NewEvents (
-        -- Metadata columns
-        SequenceNumber bigint IDENTITY NOT NULL,
-        [Timestamp] datetime2 NOT NULL CONSTRAINT DF_NewEvents_Timestamp DEFAULT SYSUTCDATETIME(),
-        VisibleTime datetime2 NULL,
-        DequeueCount int NOT NULL CONSTRAINT DF_NewEvents_DequeueCount DEFAULT 0,
-        -- Orchestration columns
-        InstanceID nvarchar(100) NOT NULL CONSTRAINT FK_NewEvents_Instances_ID FOREIGN KEY REFERENCES Instances(ID) ON DELETE CASCADE,
-        ExecutionID nvarchar(100) NULL,
-        EventType varchar(30) NOT NULL,
-        [Name] nvarchar(256) NULL,
-        RuntimeStatus varchar(30) NULL,
-        TaskID int NULL,
-        Reason nvarchar(max) NULL,
-        PayloadText nvarchar(max) NULL,
-    )
-
-CREATE CLUSTERED INDEX IX_NewEvents_InstanceId_SequenceNumber ON NewEvents (InstanceID, SequenceNumber)
-
-IF OBJECT_ID(N'NewTasks', 'U') IS NULL
-    CREATE TABLE NewTasks (
-        -- Metadata columns
-        SequenceNumber bigint CONSTRAINT PK_NewTasks_SequenceNumber PRIMARY KEY IDENTITY NOT NULL,
-        [Timestamp] datetime2 NOT NULL CONSTRAINT DF_NewTasks_Timestamp DEFAULT SYSUTCDATETIME(),
-        VisibleTime datetime2 NULL,
-        DequeueCount int NOT NULL CONSTRAINT DF_NewTasks_DequeueCount DEFAULT 0,
-        LockedBy nvarchar(100) NULL,
-        LockExpiration datetime2 NULL,
-        -- Orchestration columns
-        InstanceID nvarchar(100) NOT NULL CONSTRAINT FK_NewTasks_Instances_ID FOREIGN KEY REFERENCES Instances(ID) ON DELETE CASCADE,
-        ExecutionID nvarchar(100) NULL,
-        EventType varchar(30) NOT NULL,
-        [Name] nvarchar(256) NULL,
-        TaskID int NOT NULL,
-        PayloadText nvarchar(max) NULL,
-    )
-
-IF OBJECT_ID(N'dbo.History', 'U') IS NULL
-    CREATE TABLE History (
-	    InstanceID nvarchar(100) NOT NULL CONSTRAINT FK_History_Instances_ID FOREIGN KEY REFERENCES Instances(ID) ON DELETE CASCADE,
-	    ExecutionID nvarchar(100) NOT NULL,
-        SequenceNumber bigint NOT NULL,
-	    EventType varchar(30) NOT NULL,
-	    TaskID int NULL,
-	    IsPlayed bit NOT NULL CONSTRAINT DF_History_IsPlayed DEFAULT 0,
-	    [Timestamp] datetime2 NOT NULL CONSTRAINT DF_History_Timestamp DEFAULT SYSUTCDATETIME(),
-	    [Name] nvarchar(256) NULL,
-	    PayloadText nvarchar(max) NULL,
-	    RuntimeStatus varchar(20) NULL,
-        VisibleTime datetime2 NULL,
-        CONSTRAINT PK_History_InstanceID_ExecutionID_SequenceNumber PRIMARY KEY (InstanceID, ExecutionID, SequenceNumber)
-    )
-
-GO
-
-IF OBJECT_ID('CreateInstances') IS NULL
-    EXEC('CREATE PROCEDURE CreateInstances AS SET NOCOUNT ON')
-GO
-
-ALTER PROCEDURE CreateInstances
+CREATE OR ALTER PROCEDURE dt.CreateInstances
     @NewInstanceEvents TaskEvents READONLY
 AS
 BEGIN
@@ -187,11 +57,7 @@ END
 GO
 
 
-IF OBJECT_ID('QuerySingleOrchestration') IS NULL
-    EXEC('CREATE PROCEDURE QuerySingleOrchestration AS SET NOCOUNT ON')
-GO
-
-ALTER PROCEDURE QuerySingleOrchestration
+CREATE OR ALTER PROCEDURE dt.QuerySingleOrchestration
     @InstanceID nvarchar(100),
     @ExecutionID nvarchar(100),
     @FetchInput bit = 1,
@@ -216,11 +82,8 @@ BEGIN
 END
 GO
 
-IF OBJECT_ID('LockNextOrchestration') IS NULL
-    EXEC('CREATE PROCEDURE LockNextOrchestration AS SET NOCOUNT ON')
-GO
 
-ALTER PROCEDURE LockNextOrchestration
+CREATE OR ALTER PROCEDURE dt.LockNextOrchestration
     @BatchSize int,
     @LockedBy nvarchar(100),
     @LockExpiration datetime2
@@ -274,11 +137,7 @@ END
 GO
 
 
-IF OBJECT_ID('CheckpointOrchestration') IS NULL
-    EXEC('CREATE PROCEDURE CheckpointOrchestration AS SET NOCOUNT ON');
-GO
-
-ALTER PROCEDURE CheckpointOrchestration
+CREATE OR ALTER PROCEDURE dt.CheckpointOrchestration
     @NewOrchestrationEvents TaskEvents READONLY,
     @NewHistoryEvents TaskEvents READONLY,
     @NewTaskEvents TaskEvents READONLY,
@@ -392,11 +251,7 @@ END
 GO
 
 
-IF OBJECT_ID('LockNextTask') IS NULL
-    EXEC('CREATE PROCEDURE LockNextTask AS SET NOCOUNT ON')
-GO
-
-ALTER PROCEDURE LockNextTask
+CREATE OR ALTER PROCEDURE dt.LockNextTask
     @LockedBy nvarchar(100),
     @LockExpiration datetime2
 AS
@@ -405,6 +260,7 @@ BEGIN
 
     -- Update (lock) and return a single row.
     -- The PK_NewTasks_SequenceNumber hint is specified to help ensure in-order selection.
+    -- TODO: Filter out tasks for instances that are in a non-running state (terminated, suspended, etc.)
     UPDATE TOP (1) NewTasks WITH (READPAST)
     SET
         LockedBy = @LockedBy,
@@ -422,11 +278,7 @@ END
 GO
 
 
-IF OBJECT_ID('CompleteTasks') IS NULL
-    EXEC('CREATE PROCEDURE CompleteTasks AS SET NOCOUNT ON');
-GO
-
-ALTER PROCEDURE CompleteTasks
+CREATE OR ALTER PROCEDURE dt.CompleteTasks
     @CompletedTasks TaskEvents READONLY,
     @Results TaskEvents READONLY
 AS
@@ -462,3 +314,25 @@ BEGIN
 
     COMMIT TRANSACTION
 END
+GO
+
+
+CREATE OR ALTER PROCEDURE dt.GetVersions
+AS
+BEGIN
+    SELECT SemanticVersion, UpgradeTime
+    FROM Versions
+    ORDER BY UpgradeTime DESC
+END
+GO
+
+
+CREATE OR ALTER PROCEDURE dt.UpdateVersion
+    @SemanticVersion nvarchar(100)
+AS
+BEGIN
+    -- Duplicates are ignored (per the schema definition of dt.Versions)
+    INSERT INTO Versions (SemanticVersion)
+    VALUES (@SemanticVersion)
+END
+GO
