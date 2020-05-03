@@ -1,9 +1,9 @@
-﻿using System;
-using System.Threading;
-using System.Threading.Tasks;
-
-namespace DurableTask.SqlServer
+﻿namespace DurableTask.SqlServer
 {
+    using System;
+    using System.Threading;
+    using System.Threading.Tasks;
+
     /// <summary>
     /// Utility for implementing semi-intelligent backoff polling for Azure queues.
     /// </summary>

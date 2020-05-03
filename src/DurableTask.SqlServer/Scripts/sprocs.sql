@@ -59,7 +59,7 @@ GO
 
 CREATE OR ALTER PROCEDURE dt.QuerySingleOrchestration
     @InstanceID nvarchar(100),
-    @ExecutionID nvarchar(100),
+    @ExecutionID nvarchar(100) = NULL,
     @FetchInput bit = 1,
     @FetchOutput bit = 1
 AS

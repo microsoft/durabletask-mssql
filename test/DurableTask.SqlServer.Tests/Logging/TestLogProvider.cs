@@ -7,7 +7,7 @@
     using Microsoft.Extensions.Logging;
     using Xunit.Abstractions;
 
-    sealed class TestLogProvider : ILoggerProvider
+    public sealed class TestLogProvider : ILoggerProvider
     {
         readonly ITestOutputHelper output;
         readonly ConcurrentDictionary<string, TestLogger> loggers;
@@ -40,7 +40,7 @@
 
         ILogger ILoggerProvider.CreateLogger(string categoryName)
         {
-            return this.loggers.GetOrAdd(categoryName, _ => new TestLogger(this.output));
+            return this.loggers.GetOrAdd(categoryName, _ => new TestLogger(categoryName, this.output));
         }
 
         void IDisposable.Dispose()
@@ -50,11 +50,13 @@
 
         class TestLogger : ILogger
         {
+            readonly string category;
             readonly ITestOutputHelper output;
             readonly List<LogEntry> entries;
 
-            public TestLogger(ITestOutputHelper output)
+            public TestLogger(string category, ITestOutputHelper output)
             {
+                this.category = category;
                 this.output = output;
                 this.entries = new List<LogEntry>();
             }
@@ -74,9 +76,17 @@
                 Exception exception,
                 Func<TState, Exception, string> formatter)
             {
-                var entry = new LogEntry(level, eventId, formatter(state, exception));
+                var entry = new LogEntry(this.category, level, eventId, formatter(state, exception));
                 this.entries.Add(entry);
-                this.output.WriteLine(entry.ToString());
+
+                try
+                {
+                    this.output.WriteLine(entry.ToString());
+                }
+                catch (InvalidOperationException)
+                {
+                    // Expected when tests are shutting down
+                }
             }
         }
     }

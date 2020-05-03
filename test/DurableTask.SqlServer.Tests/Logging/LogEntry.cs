@@ -3,15 +3,18 @@
     using System;
     using Microsoft.Extensions.Logging;
 
-    class LogEntry
+    public class LogEntry
     {
-        public LogEntry(LogLevel level, EventId eventId, string message)
+        public LogEntry(string category, LogLevel level, EventId eventId, string message)
         {
+            this.Category = category;
             this.LogLevel = level;
             this.EventId = eventId;
             this.Message = message;
             this.Timestamp = DateTime.Now;
         }
+
+        public string Category { get; }
 
         public DateTime Timestamp { get; }
 
@@ -23,7 +26,7 @@
 
         public override string ToString()
         {
-            return $"{this.Timestamp:o}: {this.Message}";
+            return $"{this.Timestamp:o} [{this.Category}] {this.Message}";
         }
     }
 }

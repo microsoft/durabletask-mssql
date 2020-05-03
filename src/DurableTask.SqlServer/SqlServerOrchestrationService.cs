@@ -284,14 +284,59 @@
             throw new NotImplementedException();
         }
 
-        Task<IList<OrchestrationState>> IOrchestrationServiceClient.GetOrchestrationStateAsync(string instanceId, bool allExecutions)
+        async Task<IList<OrchestrationState>> IOrchestrationServiceClient.GetOrchestrationStateAsync(
+            string instanceId,
+            bool allExecutions)
         {
-            throw new NotImplementedException();
+            OrchestrationState? state = await this.GetOrchestrationStateAsync(
+                instanceId,
+                null /* executionId */,
+                CancellationToken.None);
+            if (state == null)
+            {
+                return Array.Empty<OrchestrationState>();
+            }
+
+            return new[] { state };
         }
 
-        Task<OrchestrationState> IOrchestrationServiceClient.GetOrchestrationStateAsync(string instanceId, string executionId)
+        Task<OrchestrationState?> IOrchestrationServiceClient.GetOrchestrationStateAsync(
+            string instanceId,
+            string executionId)
         {
-            throw new NotImplementedException();
+            return this.GetOrchestrationStateAsync(
+                instanceId,
+                executionId,
+                CancellationToken.None);
+        }
+
+        async Task<OrchestrationState?> GetOrchestrationStateAsync(
+            string instanceId,
+            string? executionId,
+            CancellationToken cancellationToken)
+        {
+            using DbConnection connection = this.GetConnection();
+            using SqlCommand command = (SqlCommand)connection.CreateCommand();
+            await connection.OpenAsync(cancellationToken);
+
+            command.CommandType = CommandType.StoredProcedure;
+            command.CommandText = "dt.QuerySingleOrchestration";
+
+            command.Parameters.AddWithValue("@InstanceID", instanceId);
+            command.Parameters.AddWithValue("@ExecutionID", executionId);
+
+            using DbDataReader reader = await SqlUtils.ExecuteReaderAsync(
+                command,
+                this.traceHelper,
+                cancellationToken);
+
+            if (await reader.ReadAsync(cancellationToken))
+            {
+                OrchestrationState state = reader.GetOrchestrationState();
+                return state;
+            }
+
+            return null;
         }
 
         bool IOrchestrationService.IsMaxMessageCountExceeded(int currentMessageCount, OrchestrationRuntimeState runtimeState) => false;
@@ -336,46 +381,22 @@
             CancellationToken cancellationToken)
         {
             using var timeoutCts = new CancellationTokenSource(timeout);
-            using var combinedCts = CancellationTokenSource.CreateLinkedTokenSource(timeoutCts.Token, cancellationToken);
+            using var combinedCts = CancellationTokenSource.CreateLinkedTokenSource(
+                timeoutCts.Token,
+                cancellationToken);
 
             while (true)
             {
-                using (DbConnection connection = this.GetConnection())
-                using (SqlCommand command = (SqlCommand)connection.CreateCommand())
+                OrchestrationState? state = await this.GetOrchestrationStateAsync(
+                    instanceId,
+                    executionId,
+                    combinedCts.Token);
+
+                if (state?.OrchestrationStatus == OrchestrationStatus.Completed ||
+                    state?.OrchestrationStatus == OrchestrationStatus.Failed ||
+                    state?.OrchestrationStatus == OrchestrationStatus.Terminated)
                 {
-                    await connection.OpenAsync(combinedCts.Token);
-
-                    command.CommandType = CommandType.StoredProcedure;
-                    command.CommandText = "dt.QuerySingleOrchestration";
-
-                    command.Parameters.AddWithValue("@InstanceID", instanceId);
-                    command.Parameters.AddWithValue("@ExecutionID", executionId);
-
-                    DbDataReader reader;
-
-                    try
-                    {
-                        reader = await SqlUtils.ExecuteReaderAsync(command, this.traceHelper, combinedCts.Token);
-                    }
-                    catch (Exception e)
-                    {
-                        this.traceHelper.ProcessingError(e, new OrchestrationInstance { InstanceId = instanceId, ExecutionId = executionId });
-                        throw;
-                    }
-
-                    using (reader)
-                    {
-                        if (await reader.ReadAsync(combinedCts.Token))
-                        {
-                            OrchestrationState state = reader.GetOrchestrationState();
-                            if (state.OrchestrationStatus == OrchestrationStatus.Completed ||
-                                state.OrchestrationStatus == OrchestrationStatus.Failed ||
-                                state.OrchestrationStatus == OrchestrationStatus.Terminated)
-                            {
-                                return state;
-                            }
-                        }
-                    }
+                    return state;
                 }
 
                 await Task.Delay(TimeSpan.FromSeconds(1), combinedCts.Token);
