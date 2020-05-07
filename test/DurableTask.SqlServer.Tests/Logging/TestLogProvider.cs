@@ -76,7 +76,12 @@
                 Exception exception,
                 Func<TState, Exception, string> formatter)
             {
-                var entry = new LogEntry(this.category, level, eventId, formatter(state, exception));
+                var entry = new LogEntry(
+                    this.category,
+                    level,
+                    eventId,
+                    exception,
+                    formatter(state, exception));
                 this.entries.Add(entry);
 
                 try

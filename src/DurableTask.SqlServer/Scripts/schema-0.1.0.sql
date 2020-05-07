@@ -40,6 +40,7 @@ IF OBJECT_ID(N'dt.Versions', 'U') IS NULL
 
 
 IF OBJECT_ID(N'dt.Instances', 'U') IS NULL
+BEGIN
 	CREATE TABLE dt.Instances (
 		ID nvarchar(100) NOT NULL CONSTRAINT PK_Instances PRIMARY KEY,
 		ExecutionID nvarchar(100) NOT NULL,
@@ -54,6 +55,9 @@ IF OBJECT_ID(N'dt.Instances', 'U') IS NULL
         LockedBy nvarchar(100) NULL,
         LockExpiration datetime2 NULL,
 	)
+
+    -- TODO: Indexes to improve search performance
+END
 
 IF OBJECT_ID(N'dt.NewEvents', 'U') IS NULL
 BEGIN

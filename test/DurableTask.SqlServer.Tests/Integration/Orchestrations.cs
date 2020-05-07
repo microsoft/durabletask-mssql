@@ -3,6 +3,7 @@
     using System;
     using System.Collections.Generic;
     using System.Diagnostics;
+    using System.Reflection;
     using System.Threading.Tasks;
     using DurableTask.Core;
     using DurableTask.SqlServer.Tests.Logging;
@@ -21,9 +22,14 @@
 
         public Orchestrations(ITestOutputHelper output)
         {
+            Type type = output.GetType();
+            FieldInfo testMember = type.GetField("test", BindingFlags.Instance | BindingFlags.NonPublic);
+            var test = (ITest)testMember.GetValue(output);
+            
             var logProvider = new TestLogProvider(output);
             this.options = new SqlServerProviderOptions
             {
+                AppName = test.DisplayName,
                 LoggerFactory = LoggerFactory.Create(builder => builder.AddProvider(logProvider)),
             };
         }

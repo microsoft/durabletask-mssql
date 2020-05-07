@@ -10,14 +10,15 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{FFF00AD0-D467-4D12-AB79-BEF19BA527C0}"
 	ProjectSection(SolutionItems) = preProject
 		.editorconfig = .editorconfig
+		.gitignore = .gitignore
 		sign.snk = sign.snk
 	EndProjectSection
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DurableTask.SqlServer.AzureFunctions", "src\DurableTask.SqlServer.AzureFunctions\DurableTask.SqlServer.AzureFunctions.csproj", "{FC03BDA8-8A73-45F4-8D21-25F739BFF9E1}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DurableTask.SqlServer.AzureFunctions.Tests", "test\DurableTask.SqlServer.AzureFunctions.Tests\DurableTask.SqlServer.AzureFunctions.Tests.csproj", "{1809EEF7-0772-404A-96C2-D76D80F1D191}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DurableTask.SqlServer.AzureFunctions.Tests", "test\DurableTask.SqlServer.AzureFunctions.Tests\DurableTask.SqlServer.AzureFunctions.Tests.csproj", "{1809EEF7-0772-404A-96C2-D76D80F1D191}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PerformanceTests", "test\PerformanceTests\PerformanceTests.csproj", "{DD1E1B3F-4FA2-4F3A-9AE1-6B2A0B864AAF}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "PerformanceTests", "test\PerformanceTests\PerformanceTests.csproj", "{DD1E1B3F-4FA2-4F3A-9AE1-6B2A0B864AAF}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{D33AB157-04B9-4BAD-B580-C3C87C17828C}"
 EndProject

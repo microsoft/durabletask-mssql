@@ -136,24 +136,5 @@
 
             return value;
         }
-
-        public static void GetTaskCompletionStatus(TaskMessage responseMessage, out int taskEventId, out bool succeeded)
-        {
-            HistoryEvent @event = responseMessage.Event;
-            if (@event is TaskCompletedEvent taskCompletedEvent)
-            {
-                succeeded = true;
-                taskEventId = taskCompletedEvent.TaskScheduledId;
-            }
-            else if (@event is TaskFailedEvent taskFailedEvent)
-            {
-                succeeded = false;
-                taskEventId = taskFailedEvent.TaskScheduledId;
-            }
-            else
-            {
-                throw new ArgumentException($"{@event.GetType().Name} is not a known task completion history event.");
-            }
-        }
     }
 }

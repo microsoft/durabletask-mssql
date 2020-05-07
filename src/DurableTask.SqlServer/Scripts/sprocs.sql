@@ -148,6 +148,13 @@ BEGIN
     SET NOCOUNT ON
     BEGIN TRANSACTION
     
+    /* Lock order
+       1. Instances (X)
+       2. NewEvents (U,X)
+       3. History (?)
+       4. NewTasks (?)
+    */
+
     UPDATE Instances
     SET
         ExecutionID = new.ExecutionID,
@@ -162,9 +169,7 @@ BEGIN
         INNER JOIN @UpdatedInstanceStatus new ON new.InstanceID = existing.ID
 
     INSERT INTO NewEvents (
-        -- Metadata columns
         VisibleTime,
-        -- Orchestration columns
         InstanceID,
         ExecutionID,
         EventType,
@@ -284,27 +289,30 @@ CREATE OR ALTER PROCEDURE dt.CompleteTasks
 AS
 BEGIN
     BEGIN TRANSACTION
-    
+    /* Lock order:
+       1. Instances (S) - the inner join is important to ensure Instances is selected first!
+       2. NewEvents (X)
+       3. NewTasks  (X)
+     */
     INSERT INTO NewEvents (
-        -- Metadata columns
-        VisibleTime,
-        -- Orchestration columns
-        InstanceID,
-        ExecutionID,
-        EventType,
-        [Name],
-        TaskID,
-        PayloadText
+        R.VisibleTime,
+        R.InstanceID,
+        R.ExecutionID,
+        R.EventType,
+        R.[Name],
+        R.TaskID,
+        R.PayloadText
     ) 
     SELECT 
-        VisibleTime,
-        InstanceID,
-        ExecutionID,
-        EventType,
-        [Name],
-        TaskID,
-        PayloadText
-    FROM @Results
+        R.VisibleTime,
+        R.InstanceID,
+        R.ExecutionID,
+        R.EventType,
+        R.[Name],
+        R.TaskID,
+        R.PayloadText
+    FROM @Results R
+        INNER JOIN Instances I ON I.ID = R.InstanceID AND I.ExecutionID = R.ExecutionID
 
     -- We return the list of deleted messages so that the caller can issue a 
     -- warning about missing messages

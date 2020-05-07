@@ -412,7 +412,7 @@
 
             int batchSize = 10; // TODO: Configurable
             DateTime lockExpiration = DateTime.UtcNow.AddMinutes(2); // TODO: Configurable
-            string lockedBy = Environment.MachineName; //  TODO: Configurable
+            string lockedBy = this.GetLockedByValue();
 
             using DbCommand command = connection.CreateCommand();
             command.CommandType = CommandType.StoredProcedure;
@@ -484,7 +484,7 @@
                 
                 this.traceHelper.ResumingOrchestration(orchestrationName, instance, longestWaitTime);
 
-                return new TaskOrchestrationWorkItem
+                return new ExtendedOrchestrationWorkItem(orchestrationName, instance)
                 {
                     InstanceId = messages[0].OrchestrationInstance.InstanceId,
                     LockedUntilUtc = lockExpiration,
@@ -496,6 +496,8 @@
 
         Task IOrchestrationService.AbandonTaskOrchestrationWorkItemAsync(TaskOrchestrationWorkItem workItem)
         {
+            var orchestrationWorkItem = (ExtendedOrchestrationWorkItem)workItem;
+            this.traceHelper.AbandoningOrchestration(orchestrationWorkItem.Name, orchestrationWorkItem.Instance);
             return Task.CompletedTask;
         }
 
@@ -510,7 +512,7 @@
         {
             this.traceHelper.CheckpointingOrchestration(orchestrationState);
 
-            var dbTaskEvents = new List<DbTaskEvent>(capacity: Math.Min(outboundMessages.Count, this.options.MaxActivityConcurrency - this.inFlightActivities));
+            var dbTaskEvents = new List<DbTaskEvent>(capacity: outboundMessages.Count);
             foreach (TaskMessage message in outboundMessages)
             {
                 string? lockedBy = null;
@@ -521,7 +523,7 @@
                 {
                     if (Interlocked.Increment(ref this.inFlightActivities) <= this.options.MaxActivityConcurrency)
                     {
-                        lockedBy = this.options.AppName;
+                        lockedBy = this.GetLockedByValue();
                         lockExpiration = DateTime.UtcNow.Add(this.options.TaskEventLockTimeout);
                         isLocal = true;
                     }
@@ -639,7 +641,7 @@
             await connection.OpenAsync(shutdownToken);
 
             DateTime lockExpiration = DateTime.UtcNow.Add(this.options.TaskEventLockTimeout);
-            string lockedBy = this.options.AppName;
+            string lockedBy = this.GetLockedByValue();
 
             using DbCommand command = connection.CreateCommand();
             command.CommandType = CommandType.StoredProcedure;
@@ -659,96 +661,128 @@
                 throw;
             }
 
+            TaskMessage message;
+            int waitTimeMs;
+            bool isLocal = false;
             if (await reader.ReadAsync(shutdownToken))
             {
-                TaskMessage taskMessage = reader.GetTaskMessage();
-                int waitTime = reader.GetInt32("WaitTime");
+                message = reader.GetTaskMessage();
+                waitTimeMs = reader.GetInt32("WaitTime");
+            }
+            else
+            {
+                // Didn't find any read activity task events in the DB, so wait for notifications.
+                // TODO: Need to revisit timeout strategy, and make sure it's not possible for us to block while
+                //       work items are running in the DB.
+                using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+                using var combinedCts = CancellationTokenSource.CreateLinkedTokenSource(timeoutCts.Token, shutdownToken);
 
-                this.traceHelper.StartingActivity((TaskScheduledEvent)taskMessage.Event, taskMessage.OrchestrationInstance, waitTime);
+                try
+                {
+                    DbTaskEvent taskEvent = await this.activityQueue.DequeueAsync(combinedCts.Token);
+                    message = taskEvent.Message;
+                    waitTimeMs = 0;
+                    isLocal = true;
+                }
+                catch (OperationCanceledException)
+                {
+                    // timed-out waiting for work.
+                    return null;
+                }
+            }
 
+            var scheduledEvent = (TaskScheduledEvent)message.Event;
+            this.traceHelper.StartingActivity(scheduledEvent, message.OrchestrationInstance, waitTimeMs);
+
+            if (!isLocal)
+            {
+                // Local activities are counted against the in-flight limit at the time they are scheduled.
+                // Activities picked up from the database are incremented at the time they are dequeued.
                 Interlocked.Increment(ref this.inFlightActivities);
-
-                return new TaskActivityWorkItem
-                {
-                    Id = $"{taskMessage.OrchestrationInstance.InstanceId}::{taskMessage.SequenceNumber:X8}",
-                    TaskMessage = taskMessage,
-                    LockedUntilUtc = lockExpiration,
-                };
             }
 
-            // Didn't find any read activity task events in the DB, so wait for notifications.
-            // TODO: Need to revisit timeout strategy, and make sure it's not possible for us to block while
-            //       work items are running in the DB.
-            using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-            using var combinedCts = CancellationTokenSource.CreateLinkedTokenSource(timeoutCts.Token, shutdownToken);
-
-            try
+            return new ExtendedActivityWorkItem(scheduledEvent)
             {
-                DbTaskEvent taskEvent = await this.activityQueue.DequeueAsync(combinedCts.Token);
-                this.traceHelper.StartingActivity((TaskScheduledEvent)taskEvent.Message.Event, taskEvent.Message.OrchestrationInstance, 0);
-                return new TaskActivityWorkItem
-                {
-                    Id = $"{taskEvent.Message.OrchestrationInstance.InstanceId}::{taskEvent.Message.SequenceNumber:X8}",
-                    TaskMessage = taskEvent.Message,
-                    // TODO: Assert that taskEvent.LockExpiration is never null
-                    LockedUntilUtc = taskEvent.LockExpiration ?? DateTime.UtcNow.Add(this.options.TaskEventLockTimeout),
-                };
-            }
-            catch (OperationCanceledException)
-            {
-                // ignore
-            }
-
-            // timed-out waiting for work.
-            return null;
+                Id = $"{message.OrchestrationInstance.InstanceId}::{message.SequenceNumber:X8}",
+                TaskMessage = message,
+                LockedUntilUtc = lockExpiration,
+            };
         }
 
         Task IOrchestrationService.AbandonTaskActivityWorkItemAsync(TaskActivityWorkItem workItem)
         {
             Interlocked.Decrement(ref this.inFlightActivities);
-            return Task.CompletedTask; // TODO
+
+            TaskScheduledEvent scheduledEvent = ((ExtendedActivityWorkItem)workItem).ScheduledEvent;
+            this.traceHelper.AbandoningActivity(scheduledEvent, workItem.TaskMessage.OrchestrationInstance);
+
+            return Task.CompletedTask;
         }
 
         async Task IOrchestrationService.CompleteTaskActivityWorkItemAsync(
             TaskActivityWorkItem workItem,
             TaskMessage responseMessage)
         {
-            DTUtils.GetTaskCompletionStatus(responseMessage, out int taskEventId, out bool succeeded);
-            this.traceHelper.CompletingActivity(workItem.TaskMessage.OrchestrationInstance, taskEventId, succeeded);
-
-            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30)); // TODO: Configurable
-            using DbConnection connection = this.GetConnection();
-            await connection.OpenAsync(timeout.Token);
-
-            using SqlCommand command = (SqlCommand)connection.CreateCommand();
-            command.CommandType = CommandType.StoredProcedure;
-            command.CommandText = "dt.CompleteTasks";
-
-            SqlParameter p1 = command.Parameters.Add("@CompletedTasks", SqlDbType.Structured);
-            p1.TypeName = " dt.TaskEvents";
-            p1.Value = workItem.TaskMessage.ToTableValueParameter(onlyMessageId: true);
-
-            SqlParameter p2 = command.Parameters.Add("@Results", SqlDbType.Structured);
-            p2.TypeName = " dt.TaskEvents";
-            p2.Value = responseMessage.ToTableValueParameter();
-
-            Stopwatch latencyStopwatch = Stopwatch.StartNew();
             try
             {
-                await SqlUtils.ExecuteNonQueryAsync(command, this.traceHelper, timeout.Token);
-            }
-            catch (Exception e)
-            {
-                this.traceHelper.ProcessingError(e, workItem.TaskMessage.OrchestrationInstance);
-                throw;
+                TaskScheduledEvent scheduledEvent = ((ExtendedActivityWorkItem)workItem).ScheduledEvent;
+                GetTaskCompletionStatus(responseMessage, out ActivityStatus status);
+                this.traceHelper.CompletingActivity(scheduledEvent, status, workItem.TaskMessage.OrchestrationInstance);
+
+                using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30)); // TODO: Configurable
+                using DbConnection connection = this.GetConnection();
+                await connection.OpenAsync(timeout.Token);
+
+                using SqlCommand command = (SqlCommand)connection.CreateCommand();
+                command.CommandType = CommandType.StoredProcedure;
+                command.CommandText = "dt.CompleteTasks";
+
+                SqlParameter p1 = command.Parameters.Add("@CompletedTasks", SqlDbType.Structured);
+                p1.TypeName = " dt.TaskEvents";
+                p1.Value = workItem.TaskMessage.ToTableValueParameter(onlyMessageId: true);
+
+                SqlParameter p2 = command.Parameters.Add("@Results", SqlDbType.Structured);
+                p2.TypeName = " dt.TaskEvents";
+                p2.Value = responseMessage.ToTableValueParameter();
+
+                Stopwatch latencyStopwatch = Stopwatch.StartNew();
+                try
+                {
+                    await SqlUtils.ExecuteNonQueryAsync(command, this.traceHelper, timeout.Token);
+                }
+                catch (Exception e)
+                {
+                    this.traceHelper.ProcessingError(e, workItem.TaskMessage.OrchestrationInstance);
+                    throw;
+                }
+                finally
+                {
+                    this.traceHelper.SprocCompleted(command.CommandText, latencyStopwatch);
+                }
             }
             finally
             {
-                this.traceHelper.SprocCompleted(command.CommandText, latencyStopwatch);
+                Interlocked.Decrement(ref this.inFlightActivities);
             }
 
-            Interlocked.Decrement(ref this.inFlightActivities);
             this.backoffHelper.Reset();
+        }
+
+        static void GetTaskCompletionStatus(TaskMessage responseMessage, out ActivityStatus status)
+        {
+            HistoryEvent @event = responseMessage.Event;
+            if (@event is TaskCompletedEvent)
+            {
+                status = ActivityStatus.Completed;
+            }
+            else if (@event is TaskFailedEvent)
+            {
+                status = ActivityStatus.Failed;
+            }
+            else
+            {
+                throw new ArgumentException($"{@event.GetType().Name} is not a known task completion history event.");
+            }
         }
 
         Task IOrchestrationServiceClient.PurgeOrchestrationHistoryAsync(DateTime thresholdDateTimeUtc, OrchestrationStateTimeRangeFilterType timeRangeFilterType)
@@ -779,6 +813,12 @@
             }
 
             throw new NotImplementedException();
+        }
+
+        string GetLockedByValue()
+        {
+            // TODO: Configurable
+            return $"{Environment.MachineName}||{this.options.AppName}";
         }
 
         Task IOrchestrationService.StartAsync() => Task.CompletedTask; // TODO
@@ -825,5 +865,36 @@
                 await this.connection.CloseAsync();
             }
         }
+
+        class ExtendedOrchestrationWorkItem : TaskOrchestrationWorkItem
+        {
+            public ExtendedOrchestrationWorkItem(string name, OrchestrationInstance instance)
+            {
+                this.Name = name;
+                this.Instance = instance;
+            }
+
+            public string Name { get; }
+
+            public OrchestrationInstance Instance { get; }
+        }
+
+        class ExtendedActivityWorkItem : TaskActivityWorkItem
+        {
+            public ExtendedActivityWorkItem(TaskScheduledEvent scheduledEvent)
+            {
+                this.ScheduledEvent = scheduledEvent;
+            }
+
+            public TaskScheduledEvent ScheduledEvent { get; }
+        }
+    }
+
+    // TODO: Put this in it's own file?
+    enum ActivityStatus
+    {
+        Unknown = 0,
+        Completed,
+        Failed
     }
 }
