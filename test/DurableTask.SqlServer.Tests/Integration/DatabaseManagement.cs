@@ -146,9 +146,9 @@
             using TestDatabase testDb = this.CreateTestDb();
             IOrchestrationService service = this.CreateServiceWithTestDb(testDb);
 
-            // Simulate 10 workers starting up concurrently and trying to initialize
+            // Simulate 4 workers starting up concurrently and trying to initialize
             // the same database schema. It should just work with predictable output.
-            Parallel.For(0, 10, i =>
+            Parallel.For(0, 4, i =>
             {
                 service.CreateIfNotExistsAsync().GetAwaiter().GetResult();
             });
@@ -171,24 +171,6 @@
                 LogAssert.AcquiredAppLock(statusCode: 1),
                 LogAssert.SprocCompleted("dt.GetVersions"),
                 // 4th
-                LogAssert.AcquiredAppLock(statusCode: 1),
-                LogAssert.SprocCompleted("dt.GetVersions"),
-                // 5th
-                LogAssert.AcquiredAppLock(statusCode: 1),
-                LogAssert.SprocCompleted("dt.GetVersions"),
-                // 6th
-                LogAssert.AcquiredAppLock(statusCode: 1),
-                LogAssert.SprocCompleted("dt.GetVersions"),
-                // 7th
-                LogAssert.AcquiredAppLock(statusCode: 1),
-                LogAssert.SprocCompleted("dt.GetVersions"),
-                // 8th
-                LogAssert.AcquiredAppLock(statusCode: 1),
-                LogAssert.SprocCompleted("dt.GetVersions"),
-                // 9th
-                LogAssert.AcquiredAppLock(statusCode: 1),
-                LogAssert.SprocCompleted("dt.GetVersions"),
-                // 10th
                 LogAssert.AcquiredAppLock(statusCode: 1),
                 LogAssert.SprocCompleted("dt.GetVersions"));
         }
@@ -287,7 +269,8 @@
                 this.server = new Server(new ServerConnection(new SqlServerProviderOptions().CreateConnection()));
                 this.testDb = new Database(this.server, databaseName)
                 {
-                    Collation = "Latin1_General_100_BIN2_UTF8",
+                    // For SQL Server 2019, "Latin1_General_100_BIN2_UTF8" is preferred
+                    Collation = "Latin1_General_100_BIN2",
                 };
 
                 this.ConnectionString = 

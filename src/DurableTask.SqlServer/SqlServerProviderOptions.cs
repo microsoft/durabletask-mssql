@@ -20,11 +20,32 @@
         public string AppName { get; set; } = Environment.MachineName;
 
         // Not serializeable (security sensitive) - must be initializd in code
-        public string ConnectionString { get; set; } = "Server=localhost;Database=TaskHub;Trusted_Connection=True;";
+        public string ConnectionString { get; set; } = GetDefaultConnectionString();
 
         // Not serializeable (complex object) - must be initialized in code
         public ILoggerFactory LoggerFactory { get; set; } = new LoggerFactory();
 
         internal SqlConnection CreateConnection() => new SqlConnection(this.ConnectionString);
+
+        static string GetDefaultConnectionString()
+        {
+            // The default for local development on a Windows OS
+            string defaultConnectionString = "Server=localhost;Database=TaskHub;Trusted_Connection=True;";
+
+            string saPassword = Environment.GetEnvironmentVariable("SA_PASSWORD");
+            if (string.IsNullOrEmpty(saPassword))
+            {
+                return defaultConnectionString;
+            }
+
+            var builder = new SqlConnectionStringBuilder(defaultConnectionString)
+            {
+                IntegratedSecurity = false,
+                UserID = "sa",
+                Password = saPassword,
+            };
+
+            return builder.ToString();
+        }
     }
 }

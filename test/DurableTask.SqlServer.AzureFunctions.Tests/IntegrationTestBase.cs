@@ -28,8 +28,10 @@
             this.typeLocator = new TestFunctionTypeLocator();
             this.settingsResolver = new TestSettingsResolver();
 
-            // TODO: Make this configurable from an environment variable so that it can work properly in a CI
-            this.settingsResolver.AddSetting("SQLDB_Connection", "Server=localhost;Database=TaskHub;Trusted_Connection=True;");
+            // SqlServerProviderOptions resolves the default connection string from
+            // environment variables, or defaults to localhost.
+            var defaultOptions = new SqlServerProviderOptions();
+            this.settingsResolver.AddSetting("SQLDB_Connection", defaultOptions.ConnectionString);
 
             this.functionsHost = new HostBuilder()
                 .ConfigureLogging(
