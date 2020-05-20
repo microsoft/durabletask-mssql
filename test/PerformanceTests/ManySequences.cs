@@ -28,20 +28,18 @@ namespace PerformanceTests
 
             // Queue on a thread-pool thread to avoid problems with HTTP timeouts
             log.LogWarning($"Scheduling {count} orchestrations using background threads.");
-            ThreadPool.QueueUserWorkItem(delegate
+            DateTime utcNow = DateTime.UtcNow;
+            string prefix = utcNow.ToString("yyyyMMdd-hhmmss");
+            Parallel.For(0, count, i =>
             {
-                string prefix = DateTime.UtcNow.ToString("yyyyMMdd-hhmmss");
-                Parallel.For(0, count, i =>
-                {
-                    // Make unique instance IDs that are semi-ordered
-                    string instanceId = prefix + "-" + i.ToString("X16");
-                    starter.StartNewAsync(nameof(HelloSequence), instanceId).GetAwaiter().GetResult();
-                });
-
-                log.LogWarning($"All {count} orchestrations were scheduled successfully!");
+                // Make unique instance IDs that are semi-ordered
+                string instanceId = prefix + "-" + i.ToString("X16");
+                starter.StartNewAsync(nameof(HelloSequence), instanceId).GetAwaiter().GetResult();
             });
 
-            return new OkResult();
+            log.LogWarning($"All {count} orchestrations were scheduled successfully!");
+
+            return new OkObjectResult($"Scheduled {count} orchestrations starting at {utcNow:s}.");
         }
 
         [FunctionName(nameof(HelloSequence))]

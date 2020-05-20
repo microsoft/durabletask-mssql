@@ -2,20 +2,29 @@
 {
     using DurableTask.Core;
     using Microsoft.Azure.WebJobs.Extensions.DurableTask;
+    using Newtonsoft.Json.Linq;
 
     class SqlDurabilityProvider : DurabilityProvider
     {
-        public SqlDurabilityProvider(SqlServerOrchestrationService service, string connectionName)
-            : base("SQL Server", service, service, connectionName)
+        readonly SqlDurabilityOptions options;
+
+        public SqlDurabilityProvider(
+            SqlServerOrchestrationService service,
+            SqlDurabilityOptions options)
+            : base("SQL Server", service, service, options.ConnectionStringName)
         {
+            this.options = options;
         }
 
         public SqlDurabilityProvider(
             SqlServerOrchestrationService service,
-            IOrchestrationServiceClient client,
-            string connectionName)
-            : base("SQL Server", service, client, connectionName)
+            SqlDurabilityOptions options,
+            IOrchestrationServiceClient client)
+            : base("SQL Server", service, client, options.ConnectionStringName)
         {
+            this.options = options;
         }
+
+        public override JObject ConfigurationJson => JObject.FromObject(this.options);
     }
 }

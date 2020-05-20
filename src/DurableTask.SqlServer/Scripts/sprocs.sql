@@ -92,6 +92,12 @@ BEGIN
     DECLARE @now datetime2 = SYSUTCDATETIME()
     DECLARE @instanceID nvarchar(100)
 
+    BEGIN TRANSACTION
+    /* Lock order
+       1. Instances (U)
+       2. NewEvents (S)
+    */
+
     -- Lock the first active instance that has pending messages.
     -- Delayed events from durable timers will have a non-null VisibleTime value.
     -- Non-active instances will never have their messages or history read.
@@ -111,12 +117,10 @@ BEGIN
     -- IMPORTANT: DO NOT CHANGE THE ORDER OF RETURNED COLUMNS!
     -- TODO: Update the dequeue count
     SELECT TOP (@BatchSize)
-        -- Metadata columns
         SequenceNumber,
         Timestamp,
         VisibleTime,
         DequeueCount,
-        -- Orchestration columns
         InstanceID,
         ExecutionID,
         EventType,
@@ -126,13 +130,22 @@ BEGIN
         Reason,
         PayloadText,
         DATEDIFF(millisecond, [Timestamp], @now) AS WaitTime
-    FROM NewEvents WITH (READPAST)
+    FROM NewEvents --WITH (READPAST) -- This hint is to avoid deadlocking with CompleteTask
     WHERE InstanceID = @instanceID
+
+    -- Bail if no events are returned - this implies that another thread already took them (???)
+    IF @@ROWCOUNT = 0
+    BEGIN
+        ROLLBACK TRANSACTION
+        RETURN
+    END
 
     -- Result #2: The full event history for the locked instance
     SELECT *
     FROM History
     WHERE InstanceID = @instanceID
+
+    COMMIT TRANSACTION
 END
 GO
 
@@ -145,16 +158,14 @@ CREATE OR ALTER PROCEDURE dt.CheckpointOrchestration
     @DeletedControlMessages TaskEvents READONLY
 AS
 BEGIN
-    SET NOCOUNT ON
     BEGIN TRANSACTION
-    
     /* Lock order
        1. Instances (X)
-       2. NewEvents (U,X)
-       3. History (?)
-       4. NewTasks (?)
+       2. NewEvents (X) -- existing first, then new
+       3. Instances (S) -- FK constraint validation on NewEvents -> Instances
+       4. History   (X)
+       5. NewTasks  (X)
     */
-
     UPDATE Instances
     SET
         ExecutionID = new.ExecutionID,
@@ -167,6 +178,9 @@ BEGIN
     FROM
         Instances existing
         INNER JOIN @UpdatedInstanceStatus new ON new.InstanceID = existing.ID
+
+    IF @@ROWCOUNT = 0
+        THROW 50000, 'The instance does not exist.', 1;
 
     INSERT INTO NewEvents (
         VisibleTime,
@@ -191,6 +205,7 @@ BEGIN
         PayloadText
     FROM @NewOrchestrationEvents
 
+    
     -- We return the list of deleted messages so that the caller can issue a 
     -- warning about missing messages
     DELETE new
@@ -290,7 +305,7 @@ AS
 BEGIN
     BEGIN TRANSACTION
     /* Lock order:
-       1. Instances (S) - the inner join is important to ensure Instances is selected first!
+       1. Instances (S)
        2. NewEvents (X)
        3. NewTasks  (X)
      */

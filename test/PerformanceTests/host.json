@@ -2,14 +2,22 @@
   "version": "2.0",
   "extensions": {
     "durableTask": {
+      "maxConcurrentOrchestratorFunctions": 8,
+      "maxConcurrentActivityFunctions": 8,
       "storageProvider": {
         "connectionStringName": "SQLDB_Connection"
       }
-    },
+    }
   },
   "logging": {
     "logLevel": {
-      "default": "Warning"
-    } 
+      "default": "Warning",
+      "DurableTask.SqlServer": "Information"
+    },
+    "applicationInsights": {
+      "samplingSettings": {
+        "isEnabled": false
+      }
+    }
   }
 }

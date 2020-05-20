@@ -1,9 +1,16 @@
 ﻿namespace DurableTask.SqlServer.AzureFunctions
 {
+    using System;
+    using Newtonsoft.Json;
+
     public class SqlDurabilityOptions
     {
+        [JsonProperty("connectionStringName")]
         public string ConnectionStringName { get; set; } = "SQLDB_Connection";
 
-        public SqlServerProviderOptions ProviderOptions { get; } = new SqlServerProviderOptions();
+        [JsonProperty("taskEventLockTimeout")]
+        public TimeSpan TaskEventLockTimeout { get; set; } = TimeSpan.FromMinutes(2);
+
+        internal SqlServerProviderOptions ProviderOptions { get; set; } = new SqlServerProviderOptions();
     }
 }

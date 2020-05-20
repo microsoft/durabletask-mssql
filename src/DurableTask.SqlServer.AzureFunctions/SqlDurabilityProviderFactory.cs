@@ -34,7 +34,7 @@
 
             this.defaultOptions = this.GetSqlOptions(new DurableClientAttribute());
             this.service = new SqlServerOrchestrationService(this.defaultOptions.ProviderOptions);
-            this.defaultProvider = new SqlDurabilityProvider(this.service, this.defaultOptions.ConnectionStringName);
+            this.defaultProvider = new SqlDurabilityProvider(this.service, this.defaultOptions);
         }
 
         // Called by the Durable trigger binding infrastructure
@@ -63,8 +63,8 @@
                     new SqlServerOrchestrationService(clientOptions.ProviderOptions);
                 clientProvider = new SqlDurabilityProvider(
                     this.service,
-                    serviceClient,
-                    clientOptions.ConnectionStringName);
+                    clientOptions,
+                    serviceClient);
 
                 this.clientProviders.Add(key, clientProvider);
                 return clientProvider;
@@ -103,9 +103,12 @@
                 throw new ArgumentException("The provided connection string is invalid.", e);
             }
 
-            options.ProviderOptions.ConnectionString = connectionString;
-            options.ProviderOptions.LoggerFactory = this.loggerFactory;
-
+            SqlServerProviderOptions providerOptions = options.ProviderOptions;
+            providerOptions.ConnectionString = connectionString;
+            providerOptions.LoggerFactory = this.loggerFactory;
+            providerOptions.MaxActivityConcurrency = this.extensionOptions.MaxConcurrentActivityFunctions;
+            providerOptions.MaxOrchestrationConcurrency = this.extensionOptions.MaxConcurrentOrchestratorFunctions;
+            providerOptions.TaskEventLockTimeout = options.TaskEventLockTimeout;
             return options;
         }
     }

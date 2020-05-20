@@ -305,7 +305,18 @@
             record.SetSqlString(TaskEventFields.RuntimeStatus, orchestrationState.OrchestrationStatus.ToString());
             record.SetSqlString(TaskEventFields.PayloadText, StripJsonNulls(orchestrationState.Output));
             record.SetSqlDateTime(TaskEventFields.LockExpiration, lockExpiration ?? SqlDateTime.Null);
-            record.SetSqlDateTime(TaskEventFields.CompletedTime, orchestrationState.CompletedTime > default(DateTime) ? orchestrationState.CompletedTime : SqlDateTime.Null);
+
+            // The Durable Task Framework defaults the completed time to a point far in the future.
+            // It's not DateTime.MaxValue and we don't want to make specific assumptions about what it
+            // is, so we simply make sure it falls between the expected range.
+            SqlDateTime completedTime = SqlDateTime.Null;
+            if (orchestrationState.CompletedTime >= orchestrationState.CreatedTime &&
+                orchestrationState.CompletedTime <= DateTime.UtcNow)
+            {
+                completedTime = orchestrationState.CompletedTime;
+            }
+
+            record.SetSqlDateTime(TaskEventFields.CompletedTime, completedTime);
             return new[] { record };
         }
 

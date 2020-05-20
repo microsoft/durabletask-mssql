@@ -42,8 +42,8 @@
         public void SchedulingActivity(TaskScheduledEvent @event, OrchestrationInstance instance, bool isLocal)
             => Log.SchedulingActivity(this.log, @event, instance, isLocal);
 
-        public void StartingActivity(TaskScheduledEvent @event, OrchestrationInstance instance, int waitTimeMs)
-            => Log.StartingActivity(this.log, @event, instance, waitTimeMs);
+        public void StartingActivity(TaskScheduledEvent @event, OrchestrationInstance instance, bool isLocal, int waitTimeMs)
+            => Log.StartingActivity(this.log, @event, instance, isLocal, waitTimeMs);
 
         public void CompletingActivity(TaskScheduledEvent @event, ActivityStatus status, OrchestrationInstance instance)
             => Log.CompletingActivity(this.log, @event, status, instance);
@@ -107,11 +107,11 @@
                     Events.SchedulingActivity,
                     "Scheduling activity '{Name}' (TaskID = {TaskID}), InstanceId: {InstanceID}, ExecutionId: {ExecutionID}, IsLocal: {IsLocal}");
 
-            static readonly Action<ILogger, string, int, string, string, int, Exception?> LogStartingActivity =
-                LoggerMessage.Define<string, int, string, string, int>(
+            static readonly Action<ILogger, string, int, string, string, bool, int, Exception?> LogStartingActivity =
+                LoggerMessage.Define<string, int, string, string, bool, int>(
                     LogLevel.Information,
                     Events.StartingActivity,
-                    "Starting activity '{Name}' (TaskID = {TaskID}), InstanceId: {InstanceID}, ExecutionId: {ExecutionID}, WaitTime: {WaitTime}");
+                    "Starting activity '{Name}' (TaskID = {TaskID}), InstanceId: {InstanceID}, ExecutionId: {ExecutionID}, IsLocal: {IsLocal}, WaitTime: {WaitTime}");
 
             static readonly Action<ILogger, string, int, string, string, string, Exception?> LogCompletingActivity =
                 LoggerMessage.Define<string, int, string, string, string>(
@@ -152,8 +152,8 @@
             internal static void SchedulingActivity(ILogger log, TaskScheduledEvent @event, OrchestrationInstance instance, bool isLocal)
                 => LogSchedulingActivity(log, @event.Name, @event.EventId, instance.InstanceId, instance.ExecutionId, isLocal, null);
 
-            internal static void StartingActivity(ILogger log, TaskScheduledEvent @event, OrchestrationInstance instance, int waitTimeMs)
-                => LogStartingActivity(log, @event.Name, @event.EventId, instance.InstanceId, instance.ExecutionId, waitTimeMs, null);
+            internal static void StartingActivity(ILogger log, TaskScheduledEvent @event, OrchestrationInstance instance, bool isLocal, int waitTimeMs)
+                => LogStartingActivity(log, @event.Name, @event.EventId, instance.InstanceId, instance.ExecutionId, isLocal, waitTimeMs, null);
 
             internal static void AbandoningActivity(ILogger log, TaskScheduledEvent @event, OrchestrationInstance instance)
                 => LogAbandoningActivity(log, @event.Name, @event.EventId, instance.InstanceId, instance.ExecutionId, null);

@@ -22,10 +22,14 @@
         IOrchestrationService,
         IOrchestrationServiceClient
     {
-        readonly BackoffPollingHelper backoffHelper = new BackoffPollingHelper(
+        readonly BackoffPollingHelper orchestrationBackoffHelper = new BackoffPollingHelper(
             TimeSpan.FromMilliseconds(50),
             TimeSpan.FromSeconds(3)); // TODO: Configurable
-        
+        readonly BackoffPollingHelper activityBackoffHelper = new BackoffPollingHelper(
+        TimeSpan.FromMilliseconds(50),
+            TimeSpan.FromSeconds(3)); // TODO: Configurable
+
+        readonly SemaphoreSlim activitySemaphore = new SemaphoreSlim(1);
         readonly AsyncQueue<DbTaskEvent> activityQueue = new AsyncQueue<DbTaskEvent>();
 
         readonly SqlServerProviderOptions options;
@@ -45,13 +49,14 @@
 
         public SqlConnection GetConnection() => this.options.CreateConnection();
 
-        int IOrchestrationService.TaskOrchestrationDispatcherCount => Environment.ProcessorCount;
+        int IOrchestrationService.TaskOrchestrationDispatcherCount => Math.Min(4, Environment.ProcessorCount);
 
         int IOrchestrationService.MaxConcurrentTaskOrchestrationWorkItems => this.MaxOrchestrationConcurrency;
 
         BehaviorOnContinueAsNew IOrchestrationService.EventBehaviourForContinueAsNew => BehaviorOnContinueAsNew.Carryover;
 
-        int IOrchestrationService.TaskActivityDispatcherCount => Environment.ProcessorCount;
+        // TODO: Make this dynamic depending on load
+        int IOrchestrationService.TaskActivityDispatcherCount => Math.Min(2, Environment.ProcessorCount);
 
         int IOrchestrationService.MaxConcurrentTaskActivityWorkItems => this.MaxActivityConcurrency;
 
@@ -411,7 +416,7 @@
             await connection.OpenAsync(cancellationToken);
 
             int batchSize = 10; // TODO: Configurable
-            DateTime lockExpiration = DateTime.UtcNow.AddMinutes(2); // TODO: Configurable
+            DateTime lockExpiration = DateTime.UtcNow.Add(this.options.TaskEventLockTimeout);
             string lockedBy = this.GetLockedByValue();
 
             using DbCommand command = connection.CreateCommand();
@@ -446,11 +451,11 @@
 
                 if (messages.Count == 0)
                 {
-                    await this.backoffHelper.WaitAsync(cancellationToken);
+                    await this.orchestrationBackoffHelper.WaitAsync(cancellationToken);
                     return null;
                 }
 
-                this.backoffHelper.Reset();
+                this.orchestrationBackoffHelper.Reset();
 
                 // Result #2: The full event history for the locked instance
                 var history = new List<HistoryEvent>();
@@ -504,7 +509,7 @@
         async Task IOrchestrationService.CompleteTaskOrchestrationWorkItemAsync(
             TaskOrchestrationWorkItem workItem,
             OrchestrationRuntimeState newRuntimeState,
-            IList<TaskMessage> outboundMessages,
+            IList<TaskMessage> activityMessages,
             IList<TaskMessage> orchestratorMessages,
             IList<TaskMessage> timerMessages,
             TaskMessage continuedAsNewMessage,
@@ -512,8 +517,8 @@
         {
             this.traceHelper.CheckpointingOrchestration(orchestrationState);
 
-            var dbTaskEvents = new List<DbTaskEvent>(capacity: outboundMessages.Count);
-            foreach (TaskMessage message in outboundMessages)
+            var dbTaskEvents = new List<DbTaskEvent>(capacity: activityMessages.Count);
+            foreach (TaskMessage message in activityMessages)
             {
                 string? lockedBy = null;
                 DateTime? lockExpiration = null;
@@ -618,7 +623,15 @@
                 this.activityQueue.Enqueue(taskEvent);
             }
 
-            this.backoffHelper.Reset();
+            if (activityMessages.Count > 0)
+            {
+                this.activityBackoffHelper.Reset();
+            }
+
+            if (orchestratorMessages.Count > 0)
+            {
+                this.orchestrationBackoffHelper.Reset();
+            }
         }
 
         Task IOrchestrationService.ReleaseTaskOrchestrationWorkItemAsync(TaskOrchestrationWorkItem workItem) => Task.CompletedTask;
@@ -627,74 +640,80 @@
             TimeSpan receiveTimeout,
             CancellationToken shutdownToken)
         {
-            if (this.inFlightActivities > this.options.MaxActivityConcurrency)
-            {
-                // In theory the core framework shouldn't ever call this because it keeps track of concurrency
-                // settings itself. However, we have optimizations in place that can cause our value to differ
-                // slightly for short periods of time.
-                await Task.Delay(TimeSpan.FromSeconds(1));
-                return null;
-            }
-
-            // Slow path (polling)
-            using DbConnection connection = this.GetConnection();
-            await connection.OpenAsync(shutdownToken);
-
-            DateTime lockExpiration = DateTime.UtcNow.Add(this.options.TaskEventLockTimeout);
-            string lockedBy = this.GetLockedByValue();
-
-            using DbCommand command = connection.CreateCommand();
-            command.CommandType = CommandType.StoredProcedure;
-            command.CommandText = "dt.LockNextTask";
-            command.AddParameter("@LockedBy", lockedBy);
-            command.AddParameter("@LockExpiration", lockExpiration);
-
-            DbDataReader reader;
-
-            try
-            {
-                reader = await SqlUtils.ExecuteReaderAsync(command, this.traceHelper, shutdownToken);
-            }
-            catch (Exception e)
-            {
-                this.traceHelper.ProcessingError(e, new OrchestrationInstance());
-                throw;
-            }
+            ////if (this.inFlightActivities > this.options.MaxActivityConcurrency)
+            ////{
+            ////    // In theory the core framework shouldn't ever call this because it keeps track of concurrency
+            ////    // settings itself. However, we have optimizations in place that can cause our value to differ
+            ////    // slightly for short periods of time.
+            ////    await Task.Delay(TimeSpan.FromMilliseconds(50));
+            ////    return null;
+            ////}
 
             TaskMessage message;
             int waitTimeMs;
             bool isLocal = false;
-            if (await reader.ReadAsync(shutdownToken))
+            DateTime lockExpiration;
+
+            // One dispatcher thread will always block and wait for in-memory activity notifications.
+            // All other dispatcher threads will poll the database for work. This design requires a 
+            // minimum of two activity dispatcher threads.
+            if (this.activitySemaphore.Wait(0))
             {
-                message = reader.GetTaskMessage();
-                waitTimeMs = reader.GetInt32("WaitTime");
+                try
+                {
+                    DbTaskEvent taskEvent = await this.activityQueue.DequeueAsync(shutdownToken);
+                    message = taskEvent.Message;
+                    waitTimeMs = (int)taskEvent.GetAge().TotalMilliseconds;
+                    isLocal = true;
+                    lockExpiration = taskEvent.LockExpiration.GetValueOrDefault(
+                        DateTime.UtcNow.Add(this.options.TaskEventLockTimeout));
+                }
+                finally
+                {
+                    this.activitySemaphore.Release();
+                }
             }
             else
             {
-                // Didn't find any read activity task events in the DB, so wait for notifications.
-                // TODO: Need to revisit timeout strategy, and make sure it's not possible for us to block while
-                //       work items are running in the DB.
-                using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-                using var combinedCts = CancellationTokenSource.CreateLinkedTokenSource(timeoutCts.Token, shutdownToken);
+                // Slow path (polling)
+                using DbConnection connection = this.GetConnection();
+                await connection.OpenAsync(shutdownToken);
+
+                lockExpiration = DateTime.UtcNow.Add(this.options.TaskEventLockTimeout);
+                string lockedBy = this.GetLockedByValue();
+
+                using DbCommand command = connection.CreateCommand();
+                command.CommandType = CommandType.StoredProcedure;
+                command.CommandText = "dt.LockNextTask";
+                command.AddParameter("@LockedBy", lockedBy);
+                command.AddParameter("@LockExpiration", lockExpiration);
+
+                DbDataReader reader;
 
                 try
                 {
-                    DbTaskEvent taskEvent = await this.activityQueue.DequeueAsync(combinedCts.Token);
-                    message = taskEvent.Message;
-                    waitTimeMs = 0;
-                    isLocal = true;
+                    reader = await SqlUtils.ExecuteReaderAsync(command, this.traceHelper, shutdownToken);
                 }
-                catch (OperationCanceledException)
+                catch (Exception e)
                 {
-                    // timed-out waiting for work.
+                    this.traceHelper.ProcessingError(e, new OrchestrationInstance());
+                    throw;
+                }
+
+                if (!await reader.ReadAsync(shutdownToken))
+                {
+                    await this.activityBackoffHelper.WaitAsync(shutdownToken);
                     return null;
                 }
+
+                message = reader.GetTaskMessage();
+                waitTimeMs = reader.GetInt32("WaitTime");
             }
 
             var scheduledEvent = (TaskScheduledEvent)message.Event;
-            this.traceHelper.StartingActivity(scheduledEvent, message.OrchestrationInstance, waitTimeMs);
+            this.traceHelper.StartingActivity(scheduledEvent, message.OrchestrationInstance, isLocal, waitTimeMs);
 
-            if (!isLocal)
+            if (isLocal)
             {
                 // Local activities are counted against the in-flight limit at the time they are scheduled.
                 // Activities picked up from the database are incremented at the time they are dequeued.
@@ -765,7 +784,7 @@
                 Interlocked.Decrement(ref this.inFlightActivities);
             }
 
-            this.backoffHelper.Reset();
+            this.orchestrationBackoffHelper.Reset();
         }
 
         static void GetTaskCompletionStatus(TaskMessage responseMessage, out ActivityStatus status)

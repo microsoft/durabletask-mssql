@@ -3,6 +3,7 @@
     using System;
     using System.Collections.Generic;
     using System.Diagnostics;
+    using System.Linq;
     using System.Reflection;
     using System.Threading.Tasks;
     using DurableTask.Core;
@@ -123,11 +124,15 @@
                 expectedOutput: $"Hello, {input}!");
         }
 
-        [Fact]
-        public async Task OrchestrationWithActivityChain_Completes()
+        [Theory]
+        [InlineData(1)]
+        [InlineData(10)]
+        [InlineData(100)]
+        public async Task OrchestrationsWithActivityChain_Completes(int parallelCount)
         {
-            StartedInstance<string> instance = await this.RunOrchestration<int, string>(
-                null,
+            List<StartedInstance<string>> instances = await this.RunOrchestrations<int, string>(
+                parallelCount,
+                _ => null,
                 implementation: async (ctx, _) =>
                 {
                     int value = 0;
@@ -142,8 +147,11 @@
                     ("PlusOne", MakeActivity((TaskContext ctx, int input) => input + 1)),
                 });
 
-            OrchestrationState state = await instance.WaitForCompletion(
-                expectedOutput: 10);
+            IEnumerable<Task> tasks = instances.Select(
+                instance => instance.WaitForCompletion(
+                    timeout: TimeSpan.FromSeconds(30),
+                    expectedOutput: 10));
+            await Task.WhenAll(tasks);
         }
 
         [Fact]
@@ -205,8 +213,9 @@
 
         }
 
-        async Task<StartedInstance<TInput>> RunOrchestration<TOutput, TInput>(
-            TInput input,
+        async Task<List<StartedInstance<TInput>>> RunOrchestrations<TOutput, TInput>(
+            int count,
+            Func<int, TInput> inputGenerator,
             Func<OrchestrationContext, TInput, Task<TOutput>> implementation,
             params (string name, TaskActivity activity)[] activities)
         {
@@ -224,15 +233,37 @@
             // This static property is used to store the orchestration's implementation.
             // This will only work for one orchestration at a time, so tests must run serially.
             TestOrchestration<TOutput, TInput>.Implementation = implementation;
-            OrchestrationInstance instance = await this.client.CreateOrchestrationInstanceAsync(
-                orchestrationType,
-                input);
 
-            // Verify that the CreateOrchestrationInstanceAsync implementation set the InstanceID and ExecutionID fields
-            Assert.NotNull(instance.InstanceId);
-            Assert.NotNull(instance.ExecutionId);
+            var instances = new List<StartedInstance<TInput>>(count);
+            for (int i = 0; i < count; i++)
+            {
+                TInput input = inputGenerator(i);
+                OrchestrationInstance instance = await this.client.CreateOrchestrationInstanceAsync(
+                    orchestrationType,
+                    input);
 
-            return new StartedInstance<TInput>(this.client, instance, utcNow, input);
+                // Verify that the CreateOrchestrationInstanceAsync implementation set the InstanceID and ExecutionID fields
+                Assert.NotNull(instance.InstanceId);
+                Assert.NotNull(instance.ExecutionId);
+
+                instances.Add(new StartedInstance<TInput>(this.client, instance, utcNow, input));
+            }
+            
+            return instances;
+        }
+
+        async Task<StartedInstance<TInput>> RunOrchestration<TOutput, TInput>(
+            TInput input,
+            Func<OrchestrationContext, TInput, Task<TOutput>> implementation,
+            params (string name, TaskActivity activity)[] activities)
+        {
+            var instances = await this.RunOrchestrations(
+                count: 1,
+                inputGenerator: i => input,
+                implementation,
+                activities);
+
+            return instances.First();
         }
 
         // This is just a wrapper around the constructor for convenience. It allows us to write 

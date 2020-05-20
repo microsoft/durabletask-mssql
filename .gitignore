@@ -434,3 +434,6 @@ $RECYCLE.BIN/
 
 # Other
 .ionide/
+
+# The build keeps auto-generating this file. We do not want this.
+/.nuget/NuGet.Config
