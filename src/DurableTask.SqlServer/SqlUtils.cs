@@ -444,7 +444,7 @@
 
         public static Task<DbDataReader> ExecuteReaderAsync(
             DbCommand command,
-            TraceHelper traceHelper,
+            LogHelper traceHelper,
             CancellationToken cancellationToken = default)
         {
             return ExecuteSprocAndTraceAsync(command, traceHelper, cmd => cmd.ExecuteReaderAsync(cancellationToken));
@@ -452,7 +452,7 @@
 
         public static Task<int> ExecuteNonQueryAsync(
             DbCommand command,
-            TraceHelper traceHelper,
+            LogHelper traceHelper,
             CancellationToken cancellationToken = default)
         {
             return ExecuteSprocAndTraceAsync(command, traceHelper, cmd => cmd.ExecuteNonQueryAsync(cancellationToken));
@@ -460,7 +460,7 @@
 
         static async Task<T> ExecuteSprocAndTraceAsync<T>(
             DbCommand command,
-            TraceHelper traceHelper,
+            LogHelper traceHelper,
             Func<DbCommand, Task<T>> executor)
         {
             var latencyStopwatch = Stopwatch.StartNew();

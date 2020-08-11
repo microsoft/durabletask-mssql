@@ -33,14 +33,14 @@
         readonly AsyncQueue<DbTaskEvent> activityQueue = new AsyncQueue<DbTaskEvent>();
 
         readonly SqlServerProviderOptions options;
-        readonly TraceHelper traceHelper;
+        readonly LogHelper traceHelper;
 
         int inFlightActivities = 0;
 
         public SqlServerOrchestrationService(SqlServerProviderOptions options)
         {
             this.options = options ?? throw new ArgumentNullException(nameof(options));
-            this.traceHelper = new TraceHelper(this.options.LoggerFactory.CreateLogger("DurableTask.SqlServer"));
+            this.traceHelper = new LogHelper(this.options.LoggerFactory.CreateLogger("DurableTask.SqlServer"));
         }
 
         public int MaxOrchestrationConcurrency => this.options.MaxOrchestrationConcurrency;
@@ -353,8 +353,6 @@
             TaskMessage creationMessage,
             OrchestrationStatus[] dedupeStatuses)
         {
-            this.traceHelper.SchedulingOrchestration((ExecutionStartedEvent)creationMessage.Event);
-
             using DbConnection connection = this.GetConnection();
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30)); // TODO: Configurable
             await connection.OpenAsync(timeout.Token);
@@ -487,8 +485,6 @@
                     instance = new OrchestrationInstance();
                 }
                 
-                this.traceHelper.ResumingOrchestration(orchestrationName, instance, longestWaitTime);
-
                 return new ExtendedOrchestrationWorkItem(orchestrationName, instance)
                 {
                     InstanceId = messages[0].OrchestrationInstance.InstanceId,
@@ -501,8 +497,7 @@
 
         Task IOrchestrationService.AbandonTaskOrchestrationWorkItemAsync(TaskOrchestrationWorkItem workItem)
         {
-            var orchestrationWorkItem = (ExtendedOrchestrationWorkItem)workItem;
-            this.traceHelper.AbandoningOrchestration(orchestrationWorkItem.Name, orchestrationWorkItem.Instance);
+            // CONSIDER: Update the database?
             return Task.CompletedTask;
         }
 
@@ -522,15 +517,16 @@
             {
                 string? lockedBy = null;
                 DateTime? lockExpiration = null;
-                bool isLocal = false;
+                var taskEvent = (TaskScheduledEvent)message.Event;
 
                 if (this.inFlightActivities <= this.options.MaxActivityConcurrency)
                 {
                     if (Interlocked.Increment(ref this.inFlightActivities) <= this.options.MaxActivityConcurrency)
                     {
+                        // Commit this as "locked" so that we can schedule it to run locally
                         lockedBy = this.GetLockedByValue();
                         lockExpiration = DateTime.UtcNow.Add(this.options.TaskEventLockTimeout);
-                        isLocal = true;
+                        this.traceHelper.SchedulingLocalActivity(taskEvent, message.OrchestrationInstance);
                     }
                     else
                     {
@@ -539,10 +535,7 @@
                     }
                 }
 
-                TaskScheduledEvent taskEvent = (TaskScheduledEvent)message.Event;
                 dbTaskEvents.Add(new DbTaskEvent(message, taskEvent.EventId, lockedBy, lockExpiration));
-             
-                this.traceHelper.SchedulingActivity(taskEvent, message.OrchestrationInstance, isLocal);
             }
 
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30)); // TODO: Configurable
@@ -711,7 +704,7 @@
             }
 
             var scheduledEvent = (TaskScheduledEvent)message.Event;
-            this.traceHelper.StartingActivity(scheduledEvent, message.OrchestrationInstance, isLocal, waitTimeMs);
+            this.traceHelper.StartingLocalActivity(scheduledEvent, message.OrchestrationInstance, waitTimeMs);
 
             if (isLocal)
             {
@@ -732,8 +725,7 @@
         {
             Interlocked.Decrement(ref this.inFlightActivities);
 
-            TaskScheduledEvent scheduledEvent = ((ExtendedActivityWorkItem)workItem).ScheduledEvent;
-            this.traceHelper.AbandoningActivity(scheduledEvent, workItem.TaskMessage.OrchestrationInstance);
+            // CONSDER: Update the database
 
             return Task.CompletedTask;
         }
@@ -746,7 +738,6 @@
             {
                 TaskScheduledEvent scheduledEvent = ((ExtendedActivityWorkItem)workItem).ScheduledEvent;
                 GetTaskCompletionStatus(responseMessage, out ActivityStatus status);
-                this.traceHelper.CompletingActivity(scheduledEvent, status, workItem.TaskMessage.OrchestrationInstance);
 
                 using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30)); // TODO: Configurable
                 using DbConnection connection = this.GetConnection();

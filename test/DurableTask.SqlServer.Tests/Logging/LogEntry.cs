@@ -10,7 +10,8 @@
             LogLevel level,
             EventId eventId,
             Exception exception,
-            string message)
+            string message,
+            object state)
         {
             this.Category = category;
             this.LogLevel = level;
@@ -18,6 +19,7 @@
             this.Exception = exception;
             this.Message = message;
             this.Timestamp = DateTime.Now;
+            this.State = state;
         }
 
         public string Category { get; }
@@ -31,6 +33,8 @@
         public Exception Exception { get; }
 
         public string Message { get; }
+
+        public object State { get; }
 
         public override string ToString()
         {

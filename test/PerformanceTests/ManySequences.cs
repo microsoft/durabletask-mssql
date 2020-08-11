@@ -2,7 +2,6 @@ namespace PerformanceTests
 {
     using System;
     using System.Collections.Generic;
-    using System.Threading;
     using System.Threading.Tasks;
     using Microsoft.AspNetCore.Http;
     using Microsoft.AspNetCore.Mvc;
@@ -15,7 +14,7 @@ namespace PerformanceTests
     {
         [FunctionName(nameof(StartManySequences))]
         public static IActionResult StartManySequences(
-            [HttpTrigger(AuthorizationLevel.Function, "post", Route = null)] HttpRequest req,
+            [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = null)] HttpRequest req,
             [DurableClient] IDurableClient starter,
             ILogger log)
         {
@@ -26,20 +25,8 @@ namespace PerformanceTests
                 return new BadRequestObjectResult("A 'count' query string parameter is required and it must contain a positive number.");
             }
 
-            // Queue on a thread-pool thread to avoid problems with HTTP timeouts
-            log.LogWarning($"Scheduling {count} orchestrations using background threads.");
-            DateTime utcNow = DateTime.UtcNow;
-            string prefix = utcNow.ToString("yyyyMMdd-hhmmss");
-            Parallel.For(0, count, i =>
-            {
-                // Make unique instance IDs that are semi-ordered
-                string instanceId = prefix + "-" + i.ToString("X16");
-                starter.StartNewAsync(nameof(HelloSequence), instanceId).GetAwaiter().GetResult();
-            });
-
-            log.LogWarning($"All {count} orchestrations were scheduled successfully!");
-
-            return new OkObjectResult($"Scheduled {count} orchestrations starting at {utcNow:s}.");
+            string prefix = Common.ScheduleManyInstances(starter, nameof(HelloSequence), count, log);
+            return new OkObjectResult($"Scheduled {count} orchestrations prefixed with '{prefix}'.");
         }
 
         [FunctionName(nameof(HelloSequence))]
@@ -48,20 +35,14 @@ namespace PerformanceTests
         {
             var outputs = new List<string>
             {
-                await context.CallActivityAsync<string>(nameof(SayHello), "Tokyo"),
-                await context.CallActivityAsync<string>(nameof(SayHello), "Seattle"),
-                await context.CallActivityAsync<string>(nameof(SayHello), "London"),
-                await context.CallActivityAsync<string>(nameof(SayHello), "Amsterdam"),
-                await context.CallActivityAsync<string>(nameof(SayHello), "Mumbai")
+                await context.CallActivityAsync<string>(nameof(Common.SayHello), "Tokyo"),
+                await context.CallActivityAsync<string>(nameof(Common.SayHello), "Seattle"),
+                await context.CallActivityAsync<string>(nameof(Common.SayHello), "London"),
+                await context.CallActivityAsync<string>(nameof(Common.SayHello), "Amsterdam"),
+                await context.CallActivityAsync<string>(nameof(Common.SayHello), "Mumbai")
             };
 
             return outputs;
-        }
-
-        [FunctionName(nameof(SayHello))]
-        public static string SayHello([ActivityTrigger] string name)
-        {
-            return $"Hello {name}!";
         }
     }
 }

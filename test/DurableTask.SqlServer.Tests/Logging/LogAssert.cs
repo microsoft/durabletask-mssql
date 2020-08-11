@@ -3,6 +3,7 @@
     using System;
     using System.Collections.Generic;
     using System.Linq;
+    using DurableTask.SqlServer.Logging;
     using Microsoft.Extensions.Logging;
     using Xunit;
 
@@ -32,21 +33,34 @@
         public static void NoWarningsOrErrors(TestLogProvider logProvider)
             => Assert.Empty(GetLogs(logProvider).Where(entry => entry.LogLevel > LogLevel.Information));
 
+        // WARNING: Changing any of these hardcoded LogAssert constructor parameters is potentially breaking!
         public static LogAssert AcquiredAppLock(int statusCode = 0) =>
-            new LogAssert(300, "AcquiredAppLock", LogLevel.Information, $"Acquired app lock. Status code: {statusCode}");
+            new LogAssert(300, "AcquiredAppLock", LogLevel.Information, $"status code = {statusCode}");
 
         public static LogAssert ExecutedSqlScript(string scriptName) =>
             new LogAssert(301, "ExecutedSqlScript", LogLevel.Information, scriptName);
 
         public static LogAssert SprocCompleted(string sprocName) =>
-            new LogAssert(302, "SprocCompleted", LogLevel.Trace, sprocName);
+            new LogAssert(302, "SprocCompleted", LogLevel.Debug, sprocName);
+
+        public static LogAssert ProcessingError(string detailsSubstring) =>
+            new LogAssert(303, "ProcessingError", LogLevel.Error, detailsSubstring);
+
+        public static LogAssert SchedulingLocalActivityEvent(string name) =>
+            new LogAssert(304, "SchedulingLocalActivity", LogLevel.Information, name);
+
+        public static LogAssert StartingLocalActivity(string name) =>
+            new LogAssert(305, "StartingLocalActivity", LogLevel.Information, name);
+
+        public static LogAssert CheckpointingOrchestration(string name) =>
+            new LogAssert(306, "CheckpointingOrchestration", LogLevel.Information, name);
 
         public static void LogEntryCount(TestLogProvider logProvider, int expected) =>
             Assert.Equal(expected, GetLogs(logProvider).Count());
 
         static IEnumerable<LogEntry> GetLogs(TestLogProvider logProvider)
         {
-            Assert.True(logProvider.TryGetLogs("DurableTask.SqlServer", out IEnumerable<LogEntry> logs));
+            Assert.True(logProvider.TryGetLogs("DurableTask.SqlServer", out IReadOnlyCollection<LogEntry> logs));
             return logs;
         }
 
@@ -65,12 +79,46 @@
                 Assert.Equal(asserts[i].EventId, actualLogs[i].EventId.Id);
                 Assert.Equal(asserts[i].Level, actualLogs[i].LogLevel);
                 Assert.Contains(asserts[i].MessageSubstring, actualLogs[i].Message);
+
+                ValidateStructuredLogFields(actualLogs[i]);
             }
 
             // If this fails, it means that more logs were expected.
             Assert.True(
                 asserts.Length == actualLogs.Length,
                 $"{asserts.Length} log entries were expected but only {actualLogs.Length} were found. Expected:{expected}Actual:{actual}");
+        }
+
+        static void ValidateStructuredLogFields(LogEntry log)
+        {
+            // All log entries are expected to have dictionary state
+            var fields = log.State as IReadOnlyDictionary<string, object>;
+            Assert.NotNull(fields);
+            Assert.NotEmpty(fields);
+
+            switch (log.EventId.Id)
+            {
+                case EventIds.AcquiredAppLock:
+                    Assert.True(fields.ContainsKey("StatusCode"));
+                    Assert.True(fields.ContainsKey("LatencyMs"));
+                    break;
+                case EventIds.ExecutedSqlScript:
+                    Assert.True(fields.ContainsKey("Name"));
+                    Assert.True(fields.ContainsKey("LatencyMs"));
+                    break;
+                case EventIds.SprocCompleted:
+                    Assert.True(fields.ContainsKey("Name"));
+                    Assert.True(fields.ContainsKey("LatencyMs"));
+                    break;
+                case EventIds.CheckpointingOrchestration:
+                    Assert.True(fields.ContainsKey("Name"));
+                    Assert.True(fields.ContainsKey("InstanceId"));
+                    Assert.True(fields.ContainsKey("ExecutionId"));
+                    Assert.True(fields.ContainsKey("Status"));
+                    break;
+                default:
+                    throw new ArgumentException($"Log event {log.EventId} is not known. Does it need to be added to the log validator?", nameof(log));
+            }
         }
     }
 }

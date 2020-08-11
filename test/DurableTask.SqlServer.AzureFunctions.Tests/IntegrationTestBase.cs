@@ -113,7 +113,7 @@
 
         protected IEnumerable<string> GetLogs(string category)
         {
-            bool loggerExists = this.logProvider.TryGetLogs(category, out IEnumerable<LogEntry> logs);
+            bool loggerExists = this.logProvider.TryGetLogs(category, out IReadOnlyCollection<LogEntry> logs);
             Assert.True(loggerExists, $"No logger was found for '{category}'.");
 
             return logs.Select(entry => entry.Message).ToArray();

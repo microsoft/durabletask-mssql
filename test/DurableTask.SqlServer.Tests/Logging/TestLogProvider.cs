@@ -18,7 +18,7 @@
             this.loggers = new ConcurrentDictionary<string, TestLogger>(StringComparer.OrdinalIgnoreCase);
         }
 
-        public bool TryGetLogs(string category, out IEnumerable<LogEntry> logs)
+        public bool TryGetLogs(string category, out IReadOnlyCollection<LogEntry> logs)
         {
             if (this.loggers.TryGetValue(category, out TestLogger logger))
             {
@@ -26,7 +26,7 @@
                 return true;
             }
 
-            logs = Enumerable.Empty<LogEntry>();
+            logs = Array.Empty<LogEntry>();
             return false;
         }
 
@@ -81,7 +81,8 @@
                     level,
                     eventId,
                     exception,
-                    formatter(state, exception));
+                    formatter(state, exception),
+                    state);
                 this.entries.Add(entry);
 
                 try

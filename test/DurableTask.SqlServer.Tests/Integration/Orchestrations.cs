@@ -3,10 +3,12 @@
     using System;
     using System.Collections.Generic;
     using System.Diagnostics;
+    using System.Diagnostics.Tracing;
     using System.Linq;
     using System.Reflection;
     using System.Threading.Tasks;
     using DurableTask.Core;
+    using DurableTask.SqlServer.Logging;
     using DurableTask.SqlServer.Tests.Logging;
     using Microsoft.Extensions.Logging;
     using Newtonsoft.Json;
@@ -17,6 +19,8 @@
     public class Orchestrations : IAsyncLifetime
     {
         readonly SqlServerProviderOptions options;
+        readonly TestLogProvider logProvider;
+        readonly ILoggerFactory loggerFactory;
 
         TaskHubWorker worker;
         TaskHubClient client;
@@ -27,11 +31,16 @@
             FieldInfo testMember = type.GetField("test", BindingFlags.Instance | BindingFlags.NonPublic);
             var test = (ITest)testMember.GetValue(output);
             
-            var logProvider = new TestLogProvider(output);
+            this.logProvider = new TestLogProvider(output);
+            this.loggerFactory = LoggerFactory.Create(builder =>
+            {
+                builder.AddProvider(this.logProvider);
+            });
+
             this.options = new SqlServerProviderOptions
             {
                 AppName = test.DisplayName,
-                LoggerFactory = LoggerFactory.Create(builder => builder.AddProvider(logProvider)),
+                LoggerFactory = this.loggerFactory,
             };
         }
 
@@ -40,8 +49,8 @@
             var provider = new SqlServerOrchestrationService(this.options);
             await ((IOrchestrationService)provider).CreateIfNotExistsAsync();
 
-            this.worker = await new TaskHubWorker(provider).StartAsync();
-            this.client = new TaskHubClient(provider);
+            this.worker = await new TaskHubWorker(provider, this.loggerFactory).StartAsync();
+            this.client = new TaskHubClient(provider, loggerFactory: this.loggerFactory);
         }
 
         async Task IAsyncLifetime.DisposeAsync()
@@ -54,41 +63,61 @@
         public async Task EmptyOrchestration_Completes()
         {
             string input = $"Hello {DateTime.UtcNow:o}";
+            string orchestrationName = "EmptyOrchestration";
 
             // Does nothing except return the original input
             StartedInstance<string> instance = await this.RunOrchestration(
                 input,
+                orchestrationName,
                 implementation: (ctx, input) => Task.FromResult(input));
 
             await instance.WaitForCompletion(
                 expectedOutput: input);
+
+            // Validate logs
+            LogAssert.NoWarningsOrErrors(this.logProvider);
+            LogAssert.Sequence(
+                this.logProvider,
+                LogAssert.AcquiredAppLock(),
+                LogAssert.CheckpointingOrchestration(orchestrationName));
         }
 
         [Fact]
         public async Task OrchestrationWithTimer_Completes()
         {
             string input = $"Hello {DateTime.UtcNow:o}";
+            string orchestrationName = "OrchestrationWithTimer";
             TimeSpan delay = TimeSpan.FromSeconds(3);
 
             // Performs a delay and then returns the input
             StartedInstance<string> instance = await this.RunOrchestration(
                 input,
+                orchestrationName,
                 implementation: (ctx, input) => ctx.CreateTimer(ctx.CurrentUtcDateTime.Add(delay), input));
 
+            TimeSpan timeout = TimeSpan.FromSeconds(10);
             OrchestrationState state = await instance.WaitForCompletion(
-                timeout: TimeSpan.FromSeconds(10),
+                timeout,
                 expectedOutput: input);
 
             // Verify that the delay actually happened
             Assert.True(state.CreatedTime.Add(delay) <= state.CompletedTime);
-        }
 
+            // Validate logs
+            LogAssert.NoWarningsOrErrors(this.logProvider);
+            LogAssert.Sequence(
+                this.logProvider,
+                LogAssert.AcquiredAppLock(),
+                LogAssert.CheckpointingOrchestration(orchestrationName),
+                LogAssert.CheckpointingOrchestration(orchestrationName));
+        }
 
         [Fact]
         public async Task Orchestration_IsReplaying_Works()
         {
             StartedInstance<string> instance = await this.RunOrchestration<List<bool>, string>(
                 null,
+                orchestrationName: "TwoTimerReplayTester",
                 implementation: async (ctx, _) =>
                 {
                     var list = new List<bool>();
@@ -115,6 +144,7 @@
 
             StartedInstance<string> instance = await this.RunOrchestration(
                 input,
+                orchestrationName: "OrchestrationWithActivity",
                 implementation: (ctx, input) => ctx.ScheduleTask<string>("SayHello", "", input),
                 activities: new[] {
                     ("SayHello", MakeActivity((TaskContext ctx, string input) => $"Hello, {input}!")),
@@ -133,6 +163,7 @@
             List<StartedInstance<string>> instances = await this.RunOrchestrations<int, string>(
                 parallelCount,
                 _ => null,
+                orchestrationName: "OrchestrationsWithActivityChain",
                 implementation: async (ctx, _) =>
                 {
                     int value = 0;
@@ -162,6 +193,7 @@
             // The exception is expected to fail the orchestration execution
             StartedInstance<string> instance = await this.RunOrchestration<string, string>(
                 null,
+                orchestrationName: "OrchestrationWithException",
                 implementation: (ctx, input) => throw new Exception(errorMessage));
 
             await instance.WaitForCompletion(
@@ -176,6 +208,7 @@
             // Performs a delay and then returns the input
             StartedInstance<string> instance = await this.RunOrchestration(
                 null as string,
+                orchestrationName: "OrchestrationWithActivityFailure",
                 implementation: (ctx, input) => ctx.ScheduleTask<string>("Throw", ""),
                 activities: new[] {
                     ("Throw", MakeActivity<string, string>((ctx, input) => throw new Exception("Kah-BOOOOOM!!!"))),
@@ -191,6 +224,7 @@
         {
             StartedInstance<string> instance = await this.RunOrchestration<string[], string>(
                 null,
+                orchestrationName: "OrchestrationWithActivityFanOut",
                 implementation: async (ctx, _) =>
                 {
                     var tasks = new List<Task<string>>();
@@ -216,12 +250,16 @@
         async Task<List<StartedInstance<TInput>>> RunOrchestrations<TOutput, TInput>(
             int count,
             Func<int, TInput> inputGenerator,
+            string orchestrationName,
             Func<OrchestrationContext, TInput, Task<TOutput>> implementation,
             params (string name, TaskActivity activity)[] activities)
         {
             // Register the inline orchestration - note that this will only work once per test
             Type orchestrationType = typeof(TestOrchestration<TOutput, TInput>);
-            this.worker.AddTaskOrchestrations(orchestrationType);
+            
+            this.worker.AddTaskOrchestrations(new TestObjectCreator<TaskOrchestration>(
+                orchestrationName,
+                (TaskOrchestration)Activator.CreateInstance(orchestrationType)));
 
             foreach ((string name, TaskActivity activity) in activities)
             {
@@ -239,7 +277,8 @@
             {
                 TInput input = inputGenerator(i);
                 OrchestrationInstance instance = await this.client.CreateOrchestrationInstanceAsync(
-                    orchestrationType,
+                    orchestrationName,
+                    string.Empty /* version */,
                     input);
 
                 // Verify that the CreateOrchestrationInstanceAsync implementation set the InstanceID and ExecutionID fields
@@ -254,12 +293,14 @@
 
         async Task<StartedInstance<TInput>> RunOrchestration<TOutput, TInput>(
             TInput input,
+            string orchestrationName,
             Func<OrchestrationContext, TInput, Task<TOutput>> implementation,
             params (string name, TaskActivity activity)[] activities)
         {
             var instances = await this.RunOrchestrations(
                 count: 1,
                 inputGenerator: i => input,
+                orchestrationName,
                 implementation,
                 activities);
 
@@ -272,6 +313,31 @@
             Func<TaskContext, TInput, TOutput> implementation)
         {
             return new ActivityShim<TInput, TOutput>(implementation);
+        }
+
+        static string GetFriendlyTypeName(Type type)
+        {
+            string friendlyName = type.Name;
+            if (type.IsGenericType)
+            {
+                int iBacktick = friendlyName.IndexOf('`');
+                if (iBacktick > 0)
+                {
+                    friendlyName = friendlyName.Remove(iBacktick);
+                }
+
+                friendlyName += "<";
+                Type[] typeParameters = type.GetGenericArguments();
+                for (int i = 0; i < typeParameters.Length; ++i)
+                {
+                    string typeParamName = GetFriendlyTypeName(typeParameters[i]);
+                    friendlyName += (i == 0 ? typeParamName : "," + typeParamName);
+                }
+
+                friendlyName += ">";
+            }
+
+            return friendlyName;
         }
 
         class ActivityShim<TInput, TOutput> : TaskActivity<TInput, TOutput>
