@@ -1,0 +1,29 @@
+name: Publish Release
+
+on:
+  push:
+    tags:
+      - v* #version is cut
+
+env:
+  DOTNET_VERSION: "3.1.403"
+  GITHUB_SOURCE: "https://nuget.pkg.github.com/cgillum/index.json"
+  CONFIGURATION: Release
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: Setup .NET Core ${{ env.DOTNET_VERSION }}
+      uses: actions/setup-dotnet@v1
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+    - name: Install dependencies
+      run: dotnet restore
+    - name: Build
+      run: dotnet build --configuration ${{ env.CONFIGURATION }} --no-restore
+    - name: Publish
+      run: dotnet nuget push --api-key ${{ secrets.GITHUB_TOKEN }} --source ${{ env.GITHUB_SOURCE }} "**/*.nupkg"
