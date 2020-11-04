@@ -2,6 +2,7 @@
 {
     using System;
     using System.Threading.Tasks;
+    using Microsoft.AspNetCore.Http;
     using Microsoft.Azure.WebJobs;
     using Microsoft.Azure.WebJobs.Extensions.DurableTask;
     using Microsoft.Extensions.Logging;
@@ -30,5 +31,10 @@
 
         [FunctionName(nameof(SayHello))]
         public static string SayHello([ActivityTrigger] string name) => $"Hello {name}!";
+
+        public static bool TryGetPositiveIntQueryStringParam(this HttpRequest req, string name, out int value)
+        {
+            return int.TryParse(req.Query[name], out value) && value > 0;
+        }
     }
 }

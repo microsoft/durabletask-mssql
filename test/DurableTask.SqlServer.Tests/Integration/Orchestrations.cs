@@ -3,12 +3,10 @@
     using System;
     using System.Collections.Generic;
     using System.Diagnostics;
-    using System.Diagnostics.Tracing;
     using System.Linq;
     using System.Reflection;
     using System.Threading.Tasks;
     using DurableTask.Core;
-    using DurableTask.SqlServer.Logging;
     using DurableTask.SqlServer.Tests.Logging;
     using Microsoft.Extensions.Logging;
     using Newtonsoft.Json;
@@ -18,7 +16,7 @@
 
     public class Orchestrations : IAsyncLifetime
     {
-        readonly SqlServerProviderOptions options;
+        readonly SqlProviderOptions options;
         readonly TestLogProvider logProvider;
         readonly ILoggerFactory loggerFactory;
 
@@ -37,7 +35,7 @@
                 builder.AddProvider(this.logProvider);
             });
 
-            this.options = new SqlServerProviderOptions
+            this.options = new SqlProviderOptions
             {
                 AppName = test.DisplayName,
                 LoggerFactory = this.loggerFactory,
@@ -46,7 +44,7 @@
 
         async Task IAsyncLifetime.InitializeAsync()
         {
-            var provider = new SqlServerOrchestrationService(this.options);
+            var provider = new SqlOrchestrationService(this.options);
             await ((IOrchestrationService)provider).CreateIfNotExistsAsync();
 
             this.worker = await new TaskHubWorker(provider, this.loggerFactory).StartAsync();
@@ -93,7 +91,11 @@
             StartedInstance<string> instance = await this.RunOrchestration(
                 input,
                 orchestrationName,
-                implementation: (ctx, input) => ctx.CreateTimer(ctx.CurrentUtcDateTime.Add(delay), input));
+                implementation: async (ctx, input) =>
+                {
+                    var result = await ctx.CreateTimer(ctx.CurrentUtcDateTime.Add(delay), input);
+                    return result;
+                });
 
             TimeSpan timeout = TimeSpan.FromSeconds(10);
             OrchestrationState state = await instance.WaitForCompletion(
@@ -216,7 +218,7 @@
 
             OrchestrationState state = await instance.WaitForCompletion(
                 expectedStatus: OrchestrationStatus.Failed,
-                expectedOutput: null); // TODO: Test for error message in output
+                expectedOutputRegex: ".*(Kah-BOOOOOM!!!).*"); // TODO: Test for error message in output
         }
 
         [Fact]
@@ -244,7 +246,101 @@
 
             OrchestrationState state = await instance.WaitForCompletion(
                 expectedOutput: new[] { "9", "8", "7", "6", "5", "4", "3", "2", "1", "0" });
+        }
 
+        [Theory]
+        [InlineData(1)]
+        [InlineData(100)]
+        public async Task OrchestrationWithExternalEvents(int eventCount)
+        {
+            TaskCompletionSource<int> tcs = null;
+
+            StartedInstance<string> instance = await this.RunOrchestration<int, string>(
+                null,
+                orchestrationName: "OrchestrationWithExternalEvents",
+                implementation: async (ctx, _) =>
+                {
+                    tcs = new TaskCompletionSource<int>();
+
+                    int i;
+                    for (i = 0; i < eventCount; i++)
+                    {
+                        await tcs.Task;
+                        tcs = new TaskCompletionSource<int>();
+                    }
+
+                    return i;
+                },
+                onEvent: (ctx, name, value) =>
+                {
+                    Assert.Equal("Event" + value, name);
+                    tcs.SetResult(int.Parse(value));
+                });
+
+            for (int i = 0; i < eventCount; i++)
+            {
+                await instance.RaiseEventAsync($"Event{i}", i);
+            }
+
+            OrchestrationState state = await instance.WaitForCompletion(
+                timeout: TimeSpan.FromSeconds(15),
+                expectedOutput: eventCount);
+        }
+
+        [Fact]
+        public async Task TerminateOrchestration()
+        {
+            string input = $"Hello {DateTime.UtcNow:o}";
+            string orchestrationName = "OrchestrationWithTimer";
+            TimeSpan delay = TimeSpan.FromSeconds(30);
+
+            // Performs a delay and then returns the input
+            StartedInstance<string> instance = await this.RunOrchestration(
+                input,
+                orchestrationName,
+                implementation: (ctx, input) => ctx.CreateTimer(ctx.CurrentUtcDateTime.Add(delay), input));
+
+            // Give the orchestration one second to start and then terminate it.
+            // We wait to ensure that the log output we expect is deterministic.
+            await Task.Delay(TimeSpan.FromSeconds(1));
+
+            await instance.TerminateAsync("Bye!");
+
+            TimeSpan timeout = TimeSpan.FromSeconds(5);
+            OrchestrationState state = await instance.WaitForCompletion(
+                timeout,
+                expectedStatus: OrchestrationStatus.Terminated,
+                expectedOutput: "Bye!");
+
+            // Validate logs
+            LogAssert.NoWarningsOrErrors(this.logProvider);
+            LogAssert.Sequence(
+                this.logProvider,
+                LogAssert.AcquiredAppLock(),
+                LogAssert.CheckpointingOrchestration(orchestrationName),
+                LogAssert.CheckpointingOrchestration(orchestrationName));
+        }
+
+
+        [Fact]
+        public async Task ContinueAsNew()
+        {
+            StartedInstance<int> instance = await this.RunOrchestration(
+                input: 0,
+                orchestrationName: "ContinueAsNewTest",
+                implementation: async (ctx, input) =>
+                {
+                    if (input < 10)
+                    {
+                        await ctx.CreateTimer<object>(ctx.CurrentUtcDateTime, null);
+                        ctx.ContinueAsNew(input + 1);
+                    }
+
+                    return input;
+                });
+
+            TimeSpan timeout = TimeSpan.FromSeconds(5);
+            await instance.WaitForCompletion(timeout, expectedOutput: 10, continuedAsNew: true);
         }
 
         async Task<List<StartedInstance<TInput>>> RunOrchestrations<TOutput, TInput>(
@@ -252,14 +348,15 @@
             Func<int, TInput> inputGenerator,
             string orchestrationName,
             Func<OrchestrationContext, TInput, Task<TOutput>> implementation,
+            Action<OrchestrationContext, string, string> onEvent = null,
             params (string name, TaskActivity activity)[] activities)
         {
             // Register the inline orchestration - note that this will only work once per test
-            Type orchestrationType = typeof(TestOrchestration<TOutput, TInput>);
-            
+            Type orchestrationType = typeof(OrchestrationShim<TOutput, TInput>);
+
             this.worker.AddTaskOrchestrations(new TestObjectCreator<TaskOrchestration>(
                 orchestrationName,
-                (TaskOrchestration)Activator.CreateInstance(orchestrationType)));
+                MakeOrchestration(implementation, onEvent)));
 
             foreach ((string name, TaskActivity activity) in activities)
             {
@@ -267,10 +364,6 @@
             }
 
             DateTime utcNow = DateTime.UtcNow;
-
-            // This static property is used to store the orchestration's implementation.
-            // This will only work for one orchestration at a time, so tests must run serially.
-            TestOrchestration<TOutput, TInput>.Implementation = implementation;
 
             var instances = new List<StartedInstance<TInput>>(count);
             for (int i = 0; i < count; i++)
@@ -295,6 +388,7 @@
             TInput input,
             string orchestrationName,
             Func<OrchestrationContext, TInput, Task<TOutput>> implementation,
+            Action<OrchestrationContext, string, string> onEvent = null,
             params (string name, TaskActivity activity)[] activities)
         {
             var instances = await this.RunOrchestrations(
@@ -302,9 +396,17 @@
                 inputGenerator: i => input,
                 orchestrationName,
                 implementation,
+                onEvent,
                 activities);
 
             return instances.First();
+        }
+
+        static TaskOrchestration MakeOrchestration<TOutput, TInput>(
+            Func<OrchestrationContext, TInput, Task<TOutput>> implementation,
+            Action<OrchestrationContext, string, string> onEvent = null)
+        {
+            return new OrchestrationShim<TOutput, TInput>(implementation, onEvent);
         }
 
         // This is just a wrapper around the constructor for convenience. It allows us to write 
@@ -355,12 +457,25 @@
             }
         }
 
-        class TestOrchestration<TOutput, TInput> : TaskOrchestration<TOutput, TInput>
+        class OrchestrationShim<TOutput, TInput> : TaskOrchestration<TOutput, TInput>
         {
-            public static Func<OrchestrationContext, TInput, Task<TOutput>> Implementation { get; set; }
+            public OrchestrationShim(
+                Func<OrchestrationContext, TInput, Task<TOutput>> implementation,
+                Action<OrchestrationContext, string, string> onEvent = null)
+            {
+                this.Implementation = implementation;
+                this.OnEventRaised = onEvent;
+            }
+
+            public Func<OrchestrationContext, TInput, Task<TOutput>> Implementation { get; set; }
+
+            public Action<OrchestrationContext, string, string> OnEventRaised { get; set; }
 
             public override Task<TOutput> RunTask(OrchestrationContext context, TInput input)
-                => Implementation(context, input);
+                => this.Implementation(context, input);
+
+            public override void RaiseEvent(OrchestrationContext context, string name, string input)
+                => this.OnEventRaised(context, name, input);
         }
 
         class StartedInstance<T>
@@ -382,10 +497,17 @@
                 this.input = input;
             }
 
+            OrchestrationInstance GetInstanceForAnyExecution() => new OrchestrationInstance
+            {
+                InstanceId = this.instance.InstanceId,
+            };
+
             public async Task<OrchestrationState> WaitForCompletion(
                 TimeSpan timeout = default,
                 OrchestrationStatus expectedStatus = OrchestrationStatus.Completed,
-                object expectedOutput = null)
+                object expectedOutput = null,
+                string expectedOutputRegex = null,
+                bool continuedAsNew = false)
             {
                 if (timeout == default)
                 {
@@ -397,7 +519,7 @@
                     timeout = timeout.Add(TimeSpan.FromMinutes(5));
                 }
 
-                OrchestrationState state = await this.client.WaitForOrchestrationAsync(this.instance, timeout);
+                OrchestrationState state = await this.client.WaitForOrchestrationAsync(this.GetInstanceForAnyExecution(), timeout);
                 Assert.NotNull(state);
                 Assert.Equal(expectedStatus, state.OrchestrationStatus);
 
@@ -416,10 +538,19 @@
                 Assert.True(state.CompletedTime > state.CreatedTime);
                 Assert.NotNull(state.OrchestrationInstance);
                 Assert.Equal(this.instance.InstanceId, state.OrchestrationInstance.InstanceId);
-                Assert.Equal(this.instance.ExecutionId, state.OrchestrationInstance.ExecutionId);
+
+                if (continuedAsNew)
+                {
+                    Assert.NotEqual(this.instance.ExecutionId, state.OrchestrationInstance.ExecutionId);
+                }
+                else
+                {
+                    Assert.Equal(this.instance.ExecutionId, state.OrchestrationInstance.ExecutionId);
+                }
 
                 if (expectedOutput != null)
                 {
+                    Assert.NotNull(state.Output);
                     try
                     {
                         // DTFx usually encodes outputs as JSON values. The exception is error messages.
@@ -433,7 +564,22 @@
                     }
                 }
 
+                if (expectedOutputRegex != null)
+                {
+                    Assert.Matches(expectedOutputRegex, state.Output);
+                }
+
                 return state;
+            }
+
+            internal Task RaiseEventAsync(string name, object value)
+            {
+                return this.client.RaiseEventAsync(this.instance, name, value);
+            }
+
+            internal Task TerminateAsync(string reason)
+            {
+                return this.client.TerminateInstanceAsync(this.instance, reason);
             }
         }
 

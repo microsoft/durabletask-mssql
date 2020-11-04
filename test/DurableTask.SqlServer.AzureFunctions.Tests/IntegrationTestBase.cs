@@ -30,7 +30,7 @@
 
             // SqlServerProviderOptions resolves the default connection string from
             // environment variables, or defaults to localhost.
-            var defaultOptions = new SqlServerProviderOptions();
+            var defaultOptions = new SqlProviderOptions();
             this.settingsResolver.AddSetting("SQLDB_Connection", defaultOptions.ConnectionString);
 
             this.functionsHost = new HostBuilder()

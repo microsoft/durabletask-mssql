@@ -11,6 +11,6 @@
         [JsonProperty("taskEventLockTimeout")]
         public TimeSpan TaskEventLockTimeout { get; set; } = TimeSpan.FromMinutes(2);
 
-        internal SqlServerProviderOptions ProviderOptions { get; set; } = new SqlServerProviderOptions();
+        internal SqlProviderOptions ProviderOptions { get; set; } = new SqlProviderOptions();
     }
 }

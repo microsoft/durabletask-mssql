@@ -12,7 +12,8 @@
   "logging": {
     "logLevel": {
       "default": "Warning",
-      "DurableTask.SqlServer": "Information"
+      "DurableTask.SqlServer": "Warning",
+      "DurableTask.Core": "Warning"
     },
     "applicationInsights": {
       "samplingSettings": {

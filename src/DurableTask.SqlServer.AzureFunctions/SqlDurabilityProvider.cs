@@ -9,7 +9,7 @@
         readonly SqlDurabilityOptions options;
 
         public SqlDurabilityProvider(
-            SqlServerOrchestrationService service,
+            SqlOrchestrationService service,
             SqlDurabilityOptions options)
             : base("SQL Server", service, service, options.ConnectionStringName)
         {
@@ -17,7 +17,7 @@
         }
 
         public SqlDurabilityProvider(
-            SqlServerOrchestrationService service,
+            SqlOrchestrationService service,
             SqlDurabilityOptions options,
             IOrchestrationServiceClient client)
             : base("SQL Server", service, client, options.ConnectionStringName)

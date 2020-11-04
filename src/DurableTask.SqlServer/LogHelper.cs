@@ -3,7 +3,6 @@
     using System;
     using System.Diagnostics;
     using DurableTask.Core;
-    using DurableTask.Core.History;
     using DurableTask.Core.Logging;
     using DurableTask.SqlServer.Logging;
     using Microsoft.Extensions.Logging;
@@ -44,6 +43,18 @@
             this.WriteLog(logEvent);
         }
 
+        public void ProcessingError(Exception e, OrchestrationInstance instance)
+        {
+            var logEvent = new LogEvents.ProcessingErrorEvent(e, instance);
+            this.WriteLog(logEvent);
+        }
+
+        public void GenericWarning(string details, string? instanceId)
+        {
+            var logEvent = new LogEvents.GenericWarning(details, instanceId);
+            this.WriteLog(logEvent);
+        }
+
         public void CheckpointingOrchestration(OrchestrationState state)
         {
             var logEvent = new LogEvents.CheckpointingOrchestrationEvent(
@@ -51,27 +62,6 @@
                 state.OrchestrationInstance,
                 state.OrchestrationStatus);
 
-            this.WriteLog(logEvent);
-        }
-
-        public void ProcessingError(Exception e, OrchestrationInstance instance)
-        {
-            var logEvent = new LogEvents.ProcessingErrorEvent(e, instance);
-            this.WriteLog(logEvent);
-        }
-
-        public void SchedulingLocalActivity(TaskScheduledEvent @event, OrchestrationInstance instance)
-        {
-            var logEvent = new LogEvents.SchedulingLocalActivityEvent(@event, instance);
-            this.WriteLog(logEvent);
-        }
-
-        public void StartingLocalActivity(
-            TaskScheduledEvent @event,
-            OrchestrationInstance instance,
-            int waitTimeMs)
-        {
-            var logEvent = new LogEvents.StartingLocalActivityEvent(@event, instance, waitTimeMs);
             this.WriteLog(logEvent);
         }
 

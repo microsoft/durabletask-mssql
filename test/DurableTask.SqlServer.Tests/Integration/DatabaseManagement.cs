@@ -33,16 +33,16 @@
         [Fact]
         public void CanEnumerateEmbeddedSqlScripts()
         {
-            // Elements can be added but must NEVER be removed!
+            // Starting in 1.0.0, elements can be added but must NEVER be removed!
             var expectedScriptFiles = new HashSet<string>
             {
                 "drop-schema.sql",
-                "schema-0.1.0.sql",
-                "sprocs.sql",
+                "schema-0.2.0.sql",
+                "logic.sql",
             };
 
             // The actual prefix value may change if the project structure changes.
-            Assembly productAssembly = typeof(SqlServerOrchestrationService).Assembly;
+            Assembly productAssembly = typeof(SqlOrchestrationService).Assembly;
             string prefix = $"{productAssembly.GetName().Name}.Scripts.";
 
             // Consider only the non-prefixed part of the file name (should match the source code name)
@@ -78,9 +78,9 @@
                 this.logProvider,
                 LogAssert.AcquiredAppLock(),
                 LogAssert.ExecutedSqlScript("drop-schema.sql"),
-                LogAssert.ExecutedSqlScript("schema-0.1.0.sql"),
-                LogAssert.ExecutedSqlScript("sprocs.sql"),
-                LogAssert.SprocCompleted("dt.UpdateVersion"));
+                LogAssert.ExecutedSqlScript("schema-0.2.0.sql"),
+                LogAssert.ExecutedSqlScript("logic.sql"),
+                LogAssert.SprocCompleted("dt._UpdateVersion"));
 
             ValidateDatabaseSchema(testDb);
 
@@ -95,7 +95,7 @@
             LogAssert.Sequence(
                 this.logProvider,
                 LogAssert.AcquiredAppLock(),
-                LogAssert.SprocCompleted("dt.GetVersions"));
+                LogAssert.SprocCompleted("dt._GetVersions"));
 
             // Delete the database and validate
             this.logProvider.Clear();
@@ -128,10 +128,10 @@
             LogAssert.Sequence(
                 this.logProvider,
                 LogAssert.AcquiredAppLock(),
-                LogAssert.SprocCompleted("dt.GetVersions"),
-                LogAssert.ExecutedSqlScript("schema-0.1.0.sql"),
-                LogAssert.ExecutedSqlScript("sprocs.sql"),
-                LogAssert.SprocCompleted("dt.UpdateVersion"));
+                LogAssert.SprocCompleted("dt._GetVersions"),
+                LogAssert.ExecutedSqlScript("schema-0.2.0.sql"),
+                LogAssert.ExecutedSqlScript("logic.sql"),
+                LogAssert.SprocCompleted("dt._UpdateVersion"));
 
             ValidateDatabaseSchema(testDb);
         }
@@ -160,19 +160,19 @@
                 this.logProvider,
                 // 1st
                 LogAssert.AcquiredAppLock(statusCode: 0),
-                LogAssert.SprocCompleted("dt.GetVersions"),
-                LogAssert.ExecutedSqlScript("schema-0.1.0.sql"),
-                LogAssert.ExecutedSqlScript("sprocs.sql"),
-                LogAssert.SprocCompleted("dt.UpdateVersion"),
+                LogAssert.SprocCompleted("dt._GetVersions"),
+                LogAssert.ExecutedSqlScript("schema-0.2.0.sql"),
+                LogAssert.ExecutedSqlScript("logic.sql"),
+                LogAssert.SprocCompleted("dt._UpdateVersion"),
                 // 2nd
                 LogAssert.AcquiredAppLock(statusCode: 1),
-                LogAssert.SprocCompleted("dt.GetVersions"),
+                LogAssert.SprocCompleted("dt._GetVersions"),
                 // 3rd
                 LogAssert.AcquiredAppLock(statusCode: 1),
-                LogAssert.SprocCompleted("dt.GetVersions"),
+                LogAssert.SprocCompleted("dt._GetVersions"),
                 // 4th
                 LogAssert.AcquiredAppLock(statusCode: 1),
-                LogAssert.SprocCompleted("dt.GetVersions"));
+                LogAssert.SprocCompleted("dt._GetVersions"));
         }
 
         TestDatabase CreateTestDb()
@@ -184,7 +184,7 @@
 
         IOrchestrationService CreateServiceWithTestDb(TestDatabase testDb)
         {
-            var options = new SqlServerProviderOptions
+            var options = new SqlProviderOptions
             {
                 ConnectionString = testDb.ConnectionString,
                 LoggerFactory = LoggerFactory.Create(builder =>
@@ -194,7 +194,7 @@
                 }),
             };
 
-            return new SqlServerOrchestrationService(options);
+            return new SqlOrchestrationService(options);
         }
 
         static void ValidateDatabaseSchema(TestDatabase database)
@@ -205,24 +205,29 @@
                 "dt.NewTasks",
                 "dt.History",
                 "dt.Instances",
+                "dt.Payloads",
                 "dt.Versions",
             };
 
             var expectedSprocNames = new HashSet<string>(StringComparer.Ordinal)
             {
-                "dt.LockNextOrchestration",
-                "dt.CheckpointOrchestration",
-                "dt.CreateInstances",
+                "dt.CreateInstance",
                 "dt.QuerySingleOrchestration",
-                "dt.CompleteTasks",
-                "dt.LockNextTask",
-                "dt.GetVersions",
-                "dt.UpdateVersion",
+                "dt.RaiseEvent",
+                "dt.TerminateInstance",
+                "dt._AddOrchestrationEvents",
+                "dt._CheckpointOrchestration",
+                "dt._CompleteTasks",
+                "dt._GetVersions",
+                "dt._LockNextOrchestration",
+                "dt._LockNextTask",
+                "dt._UpdateVersion",
             };
 
             var expectedViewNames = new HashSet<string>(StringComparer.Ordinal)
             {
-                // TODO: Add view names here
+                "dt.vHistory",
+                "dt.vInstances",
             };
 
             // Ensure the schema exists
@@ -266,7 +271,7 @@
             {
                 string databaseName = $"TestDB_{DateTime.UtcNow:yyyyMMddhhmmssfffffff}";
 
-                this.server = new Server(new ServerConnection(new SqlServerProviderOptions().CreateConnection()));
+                this.server = new Server(new ServerConnection(new SqlProviderOptions().CreateConnection()));
                 this.testDb = new Database(this.server, databaseName)
                 {
                     // For SQL Server 2019, "Latin1_General_100_BIN2_UTF8" is preferred

@@ -19,7 +19,7 @@
         readonly IConnectionStringResolver connectionStringResolver;
 
         readonly SqlDurabilityOptions defaultOptions;
-        readonly SqlServerOrchestrationService service;
+        readonly SqlOrchestrationService service;
         readonly SqlDurabilityProvider defaultProvider;
 
         // Called by the Azure Functions runtime dependency injection infrastructure
@@ -33,7 +33,7 @@
             this.connectionStringResolver = connectionStringResolver ?? throw new ArgumentNullException(nameof(connectionStringResolver));
 
             this.defaultOptions = this.GetSqlOptions(new DurableClientAttribute());
-            this.service = new SqlServerOrchestrationService(this.defaultOptions.ProviderOptions);
+            this.service = new SqlOrchestrationService(this.defaultOptions.ProviderOptions);
             this.defaultProvider = new SqlDurabilityProvider(this.service, this.defaultOptions);
         }
 
@@ -60,7 +60,7 @@
 
                 SqlDurabilityOptions clientOptions = this.GetSqlOptions(attribute);
                 IOrchestrationServiceClient serviceClient = 
-                    new SqlServerOrchestrationService(clientOptions.ProviderOptions);
+                    new SqlOrchestrationService(clientOptions.ProviderOptions);
                 clientProvider = new SqlDurabilityProvider(
                     this.service,
                     clientOptions,
@@ -103,11 +103,9 @@
                 throw new ArgumentException("The provided connection string is invalid.", e);
             }
 
-            SqlServerProviderOptions providerOptions = options.ProviderOptions;
+            SqlProviderOptions providerOptions = options.ProviderOptions;
             providerOptions.ConnectionString = connectionString;
             providerOptions.LoggerFactory = this.loggerFactory;
-            providerOptions.MaxActivityConcurrency = this.extensionOptions.MaxConcurrentActivityFunctions;
-            providerOptions.MaxOrchestrationConcurrency = this.extensionOptions.MaxConcurrentOrchestratorFunctions;
             providerOptions.TaskEventLockTimeout = options.TaskEventLockTimeout;
             return options;
         }

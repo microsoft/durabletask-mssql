@@ -119,42 +119,18 @@
                 ExtensionVersion);
         }
 
-        [Event(EventIds.SchedulingLocalActivity, Level = EventLevel.Informational)]
-        public void SchedulingLocalActivity(
-            string Name,
-            int TaskId,
+        [Event(EventIds.GenericWarning, Level = EventLevel.Warning)]
+        internal void GenericWarning(
+            string Details,
             string InstanceId,
-            string ExecutionId,
             string AppName,
             string ExtensionVersion)
         {
             // TODO: Use WriteEventCore for better performance
             this.WriteEvent(
-                EventIds.SchedulingLocalActivity,
-                Name,
-                TaskId,
+                EventIds.GenericWarning,
+                Details,
                 InstanceId,
-                ExecutionId,
-                AppName,
-                ExtensionVersion);
-        }
-
-        [Event(EventIds.StartingLocalActivity, Level = EventLevel.Informational)]
-        public void StartingLocalActivity(
-            string Name,
-            int TaskId,
-            string InstanceId,
-            string ExecutionId,
-            int WaitTimeMs, string AppName, string ExtensionVersion)
-        {
-            // TODO: Use WriteEventCore for better performance
-            this.WriteEvent(
-                EventIds.StartingLocalActivity,
-                Name,
-                TaskId,
-                InstanceId,
-                ExecutionId,
-                WaitTimeMs,
                 AppName,
                 ExtensionVersion);
         }

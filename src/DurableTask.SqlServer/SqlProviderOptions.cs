@@ -3,16 +3,11 @@
     using System;
     using Microsoft.Data.SqlClient;
     using Microsoft.Extensions.Logging;
+    using Microsoft.Extensions.Logging.Abstractions;
     using Newtonsoft.Json;
 
-    public class SqlServerProviderOptions
+    public class SqlProviderOptions
     {
-        [JsonProperty("maxActivityConcurrency")]
-        public int MaxActivityConcurrency { get; set; } = Environment.ProcessorCount;
-
-        [JsonProperty("maxOrchestrationConcurrency")]
-        public int MaxOrchestrationConcurrency { get; set; } = Environment.ProcessorCount;
-
         [JsonProperty("taskEventLockTimeout")]
         public TimeSpan TaskEventLockTimeout { get; set; } = TimeSpan.FromMinutes(2);
 
@@ -23,14 +18,14 @@
         public string ConnectionString { get; set; } = GetDefaultConnectionString();
 
         // Not serializeable (complex object) - must be initialized in code
-        public ILoggerFactory LoggerFactory { get; set; } = new LoggerFactory();
+        public ILoggerFactory LoggerFactory { get; set; } = NullLoggerFactory.Instance;
 
         internal SqlConnection CreateConnection() => new SqlConnection(this.ConnectionString);
 
         static string GetDefaultConnectionString()
         {
             // The default for local development on a Windows OS
-            string defaultConnectionString = "Server=localhost;Database=TaskHub;Trusted_Connection=True;";
+            string defaultConnectionString = "Server=localhost;Database=DurableDB;Trusted_Connection=True;";
 
             string saPassword = Environment.GetEnvironmentVariable("SA_PASSWORD");
             if (string.IsNullOrEmpty(saPassword))

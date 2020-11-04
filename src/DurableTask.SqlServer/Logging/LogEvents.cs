@@ -138,89 +138,36 @@
                     DTUtils.ExtensionVersionString);
         }
 
-        internal class SchedulingLocalActivityEvent : StructuredLogEvent, IEventSourceEvent
+        internal class GenericWarning : StructuredLogEvent, IEventSourceEvent
         {
-            public SchedulingLocalActivityEvent(TaskScheduledEvent e, OrchestrationInstance instance)
+            public GenericWarning(
+                string details,
+                string? instanceId)
             {
-                this.Name = e.Name;
-                this.TaskEventId = e.EventId;
-                this.InstanceId = instance.InstanceId;
-                this.ExecutionId = instance.ExecutionId ?? string.Empty;
+                this.Details = details;
+                this.InstanceId = instanceId;
             }
 
             [StructuredLogField]
-            public string Name { get; }
+            public string Details { get; }
 
             [StructuredLogField]
-            public int TaskEventId { get; }
-
-            [StructuredLogField]
-            public string InstanceId { get; }
-
-            [StructuredLogField]
-            public string ExecutionId { get; }
+            public string? InstanceId { get; }
 
             public override EventId EventId => new EventId(
-                EventIds.SchedulingLocalActivity,
-                nameof(EventIds.SchedulingLocalActivity));
+                EventIds.GenericWarning,
+                nameof(EventIds.GenericWarning));
 
-            public override LogLevel Level => LogLevel.Information;
+            public override LogLevel Level => LogLevel.Warning;
 
-            protected override string CreateLogMessage() =>
-                $"{this.InstanceId}: Scheduling activity '{this.Name}' (TaskID = {this.TaskEventId}) for local execution.";
-
-            void IEventSourceEvent.WriteEventSource() =>
-                DefaultEventSource.Log.SchedulingLocalActivity(
-                    this.Name,
-                    this.TaskEventId,
-                    this.InstanceId,
-                    this.ExecutionId,
-                    DTUtils.AppName,
-                    DTUtils.ExtensionVersionString);
-        }
-
-        internal class StartingLocalActivityEvent : StructuredLogEvent, IEventSourceEvent
-        {
-            public StartingLocalActivityEvent(TaskScheduledEvent e, OrchestrationInstance instance, int waitTimeMs)
-            {
-                this.Name = e.Name;
-                this.TaskEventId = e.EventId;
-                this.InstanceId = instance.InstanceId;
-                this.ExecutionId = instance.ExecutionId ?? string.Empty;
-                this.WaitTimeMs = waitTimeMs;
-            }
-
-            [StructuredLogField]
-            public string Name { get; }
-
-            [StructuredLogField]
-            public int TaskEventId { get; }
-
-            [StructuredLogField]
-            public string InstanceId { get; }
-
-            [StructuredLogField]
-            public string ExecutionId { get; }
-
-            [StructuredLogField]
-            public int WaitTimeMs { get; }
-
-            public override EventId EventId => new EventId(
-                EventIds.StartingLocalActivity,
-                nameof(EventIds.StartingLocalActivity));
-
-            public override LogLevel Level => LogLevel.Information;
-
-            protected override string CreateLogMessage() =>
-                $"Activity '{this.Name}' (TaskID = {this.TaskEventId}) started executing.";
+            protected override string CreateLogMessage() => string.IsNullOrEmpty(this.InstanceId) ?
+                this.Details :
+                $"{this.InstanceId}: {this.Details}";
 
             void IEventSourceEvent.WriteEventSource() =>
-                DefaultEventSource.Log.StartingLocalActivity(
-                    this.Name,
-                    this.TaskEventId,
-                    this.InstanceId,
-                    this.ExecutionId,
-                    this.WaitTimeMs,
+                DefaultEventSource.Log.GenericWarning(
+                    this.Details,
+                    this.InstanceId ?? string.Empty,
                     DTUtils.AppName,
                     DTUtils.ExtensionVersionString);
         }
