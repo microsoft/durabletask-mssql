@@ -49,11 +49,11 @@
         public static LogAssert SchedulingLocalActivityEvent(string name) =>
             new LogAssert(304, "SchedulingLocalActivity", LogLevel.Information, name);
 
-        public static LogAssert StartingLocalActivity(string name) =>
-            new LogAssert(305, "StartingLocalActivity", LogLevel.Information, name);
+        public static LogAssert CheckpointStarting(string name) =>
+            new LogAssert(305, "CheckpointStarting", LogLevel.Information, name);
 
-        public static LogAssert CheckpointingOrchestration(string name) =>
-            new LogAssert(306, "CheckpointingOrchestration", LogLevel.Information, name);
+        public static LogAssert CheckpointCompleted(string name) =>
+            new LogAssert(306, "CheckpointCompleted", LogLevel.Information, name);
 
         public static void LogEntryCount(TestLogProvider logProvider, int expected) =>
             Assert.Equal(expected, GetLogs(logProvider).Count());
@@ -110,11 +110,17 @@
                     Assert.True(fields.ContainsKey("Name"));
                     Assert.True(fields.ContainsKey("LatencyMs"));
                     break;
-                case EventIds.CheckpointingOrchestration:
+                case EventIds.CheckpointStarting:
                     Assert.True(fields.ContainsKey("Name"));
                     Assert.True(fields.ContainsKey("InstanceId"));
                     Assert.True(fields.ContainsKey("ExecutionId"));
                     Assert.True(fields.ContainsKey("Status"));
+                    break;
+                case EventIds.CheckpointCompleted:
+                    Assert.True(fields.ContainsKey("Name"));
+                    Assert.True(fields.ContainsKey("InstanceId"));
+                    Assert.True(fields.ContainsKey("ExecutionId"));
+                    Assert.True(fields.ContainsKey("LatencyMs"));
                     break;
                 default:
                     throw new ArgumentException($"Log event {log.EventId} is not known. Does it need to be added to the log validator?", nameof(log));

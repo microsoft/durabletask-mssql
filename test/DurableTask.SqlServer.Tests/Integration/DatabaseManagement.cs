@@ -215,6 +215,7 @@
                 "dt.QuerySingleOrchestration",
                 "dt.RaiseEvent",
                 "dt.TerminateInstance",
+                "dt.PurgeInstanceState",
                 "dt._AddOrchestrationEvents",
                 "dt._CheckpointOrchestration",
                 "dt._CompleteTasks",

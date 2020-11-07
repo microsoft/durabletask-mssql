@@ -55,12 +55,23 @@
             this.WriteLog(logEvent);
         }
 
-        public void CheckpointingOrchestration(OrchestrationState state)
+        public void CheckpointStarting(OrchestrationState state)
         {
-            var logEvent = new LogEvents.CheckpointingOrchestrationEvent(
+            var logEvent = new LogEvents.CheckpointStartingEvent(
                 state.Name,
                 state.OrchestrationInstance,
                 state.OrchestrationStatus);
+
+            this.WriteLog(logEvent);
+        }
+
+
+        public void CheckpointCompleted(OrchestrationState state, Stopwatch latencyStopwatch)
+        {
+            var logEvent = new LogEvents.CheckpointCompletedEvent(
+                state.Name,
+                state.OrchestrationInstance,
+                latencyStopwatch.ElapsedMilliseconds);
 
             this.WriteLog(logEvent);
         }

@@ -82,8 +82,8 @@
             }
         }
 
-        [Event(EventIds.CheckpointingOrchestration, Level = EventLevel.Informational)]
-        public void CheckpointingOrchestration(
+        [Event(EventIds.CheckpointStarting, Level = EventLevel.Informational)]
+        public void CheckpointStarting(
             string Name,
             string InstanceId,
             string ExecutionId,
@@ -93,11 +93,31 @@
         {
             // TODO: Switch to WriteEventCore for better performance
             this.WriteEvent(
-                EventIds.CheckpointingOrchestration,
+                EventIds.CheckpointStarting,
                 Name,
                 InstanceId,
                 ExecutionId,
                 Status,
+                AppName,
+                ExtensionVersion);
+        }
+
+        [Event(EventIds.CheckpointCompleted, Level = EventLevel.Informational)]
+        public void CheckpointCompleted(
+            string Name,
+            string InstanceId,
+            string ExecutionId,
+            long LatencyMs,
+            string AppName,
+            string ExtensionVersion)
+        {
+            // TODO: Switch to WriteEventCore for better performance
+            this.WriteEvent(
+                EventIds.CheckpointCompleted,
+                Name,
+                InstanceId,
+                ExecutionId,
+                LatencyMs,
                 AppName,
                 ExtensionVersion);
         }

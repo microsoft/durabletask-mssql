@@ -123,12 +123,9 @@ BEGIN
         CONSTRAINT FK_Instances_CustomStatus_Payloads FOREIGN KEY (TaskHub, InstanceID, CustomStatusPayloadID) REFERENCES dt.Payloads(TaskHub, InstanceID, PayloadID)
 	)
 
-    -- This index is filtered to include only instances ready to be picked up for execution
-    CREATE INDEX IX_Instances_LockNext ON dt.Instances(TaskHub, RuntimeStatus)
-    INCLUDE ([LockExpiration])
-    WHERE [RuntimeStatus] IN ('Pending', 'Running')
-
-    -- TODO: Indexes to improve query search performance
+    -- This index is used by LockNext and Purge logic
+    CREATE INDEX IX_Instances_RuntimeStatus ON dt.Instances(TaskHub, RuntimeStatus)
+        INCLUDE ([LockExpiration], [CreatedTime], [CompletedTime])
 END
 
 IF OBJECT_ID(N'dt.NewEvents', 'U') IS NULL
@@ -192,4 +189,18 @@ IF OBJECT_ID(N'dt.NewTasks', 'U') IS NULL
         CONSTRAINT FK_NewTasks_Instances FOREIGN KEY (TaskHub, InstanceID) REFERENCES dt.Instances(TaskHub, InstanceID) ON DELETE CASCADE,
         CONSTRAINT FK_NewTasks_Payloads FOREIGN KEY (TaskHub, InstanceID, PayloadID) REFERENCES dt.Payloads(TaskHub, InstanceID, PayloadID)
     )
+GO
+
+-- Security 
+IF DATABASE_PRINCIPAL_ID('dt_runtime') IS NULL
+BEGIN
+    -- This is the role to which all low-priviledge user accounts should be associated using
+    -- the 'ALTER ROLE dt_runtime ADD MEMBER [<username>]' statement.
+    CREATE ROLE dt_runtime
+
+    -- This low-priviledge role will only have access to stored procedures in the dt schema.
+    -- Each stored procedure limits access to data based on the username, ensuring that no
+    -- database user can access data created by another database user.
+    GRANT EXECUTE ON SCHEMA::dt TO dt_runtime
+END
 GO

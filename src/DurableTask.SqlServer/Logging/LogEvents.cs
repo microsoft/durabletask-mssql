@@ -127,7 +127,7 @@
             public override LogLevel Level => LogLevel.Error;
 
             protected override string CreateLogMessage() =>
-                $"An error occurred while processing a work-item for instance '{this.InstanceId}': {this.Details}";
+                $"{this.InstanceId}: An error occurred while processing a work-item: {this.Details}";
 
             void IEventSourceEvent.WriteEventSource() =>
                 DefaultEventSource.Log.ProcessingError(
@@ -172,9 +172,9 @@
                     DTUtils.ExtensionVersionString);
         }
 
-        internal class CheckpointingOrchestrationEvent : StructuredLogEvent, IEventSourceEvent
+        internal class CheckpointStartingEvent : StructuredLogEvent, IEventSourceEvent
         {
-            public CheckpointingOrchestrationEvent(
+            public CheckpointStartingEvent(
                 string name,
                 OrchestrationInstance instance,
                 OrchestrationStatus status)
@@ -198,20 +198,64 @@
             public string Status { get; }
 
             public override EventId EventId => new EventId(
-                EventIds.CheckpointingOrchestration,
-                nameof(EventIds.CheckpointingOrchestration));
+                EventIds.CheckpointStarting,
+                nameof(EventIds.CheckpointStarting));
 
             public override LogLevel Level => LogLevel.Information;
 
             protected override string CreateLogMessage() =>
-                $"Checkpointing orchestration '{this.Name}' with ID {this.InstanceId} and status: {this.Status}";
+                $"{this.InstanceId}: Checkpointing orchestration '{this.Name}' with status: {this.Status}";
 
             void IEventSourceEvent.WriteEventSource() =>
-                DefaultEventSource.Log.CheckpointingOrchestration(
+                DefaultEventSource.Log.CheckpointStarting(
                     this.Name,
                     this.InstanceId,
                     this.ExecutionId,
                     this.Status,
+                    DTUtils.AppName,
+                    DTUtils.ExtensionVersionString);
+        }
+
+        internal class CheckpointCompletedEvent : StructuredLogEvent, IEventSourceEvent
+        {
+            public CheckpointCompletedEvent(
+                string name,
+                OrchestrationInstance instance,
+                long latencyMs)
+            {
+                this.Name = name;
+                this.InstanceId = instance.InstanceId;
+                this.ExecutionId = instance.ExecutionId ?? string.Empty;
+                this.LatencyMs = latencyMs;
+            }
+
+            [StructuredLogField]
+            public string Name { get; }
+
+            [StructuredLogField]
+            public string InstanceId { get; }
+
+            [StructuredLogField]
+            public string ExecutionId { get; }
+
+            [StructuredLogField]
+            public long LatencyMs { get; }
+
+            public override EventId EventId => new EventId(
+                EventIds.CheckpointCompleted,
+                nameof(EventIds.CheckpointCompleted));
+
+            public override LogLevel Level => LogLevel.Information;
+
+            protected override string CreateLogMessage() =>
+                $"{this.InstanceId}: Checkpoint of '{this.Name}' completed. Latency: {this.LatencyMs}ms";
+
+            void IEventSourceEvent.WriteEventSource() =>
+                DefaultEventSource.Log.CheckpointCompleted(
+                    this.Name,
+                    this.InstanceId,
+                    this.ExecutionId,
+                    this.LatencyMs,
                     DTUtils.AppName,
                     DTUtils.ExtensionVersionString);
         }

@@ -191,12 +191,25 @@
 
         internal static SqlDateTime GetVisibleTime(HistoryEvent historyEvent)
         {
-            return historyEvent.EventType switch
+            DateTime dateTime;
+            switch (historyEvent.EventType)
             {
-                EventType.TimerCreated => ((TimerCreatedEvent)historyEvent).FireAt,
-                EventType.TimerFired => ((TimerFiredEvent)historyEvent).FireAt,
-                _ => SqlDateTime.Null,
-            };
+                case EventType.TimerCreated:
+                    dateTime = ((TimerCreatedEvent)historyEvent).FireAt;
+                    break;
+                case EventType.TimerFired:
+                    dateTime = ((TimerFiredEvent)historyEvent).FireAt;
+                    break;
+                default:
+                    return SqlDateTime.Null;
+            }
+
+            if (dateTime < SqlDateTime.MinValue.Value)
+            {
+                return SqlDateTime.MinValue;
+            }
+
+            return dateTime;
         }
 
         internal static SqlString GetRuntimeStatus(HistoryEvent historyEvent)

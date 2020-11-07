@@ -22,11 +22,12 @@
 
         internal SqlConnection CreateConnection() => new SqlConnection(this.ConnectionString);
 
-        static string GetDefaultConnectionString()
+        internal static string GetDefaultConnectionString()
         {
             // The default for local development on a Windows OS
             string defaultConnectionString = "Server=localhost;Database=DurableDB;Trusted_Connection=True;";
 
+            // The use of SA_PASSWORD is intended for use with the mssql docker container
             string saPassword = Environment.GetEnvironmentVariable("SA_PASSWORD");
             if (string.IsNullOrEmpty(saPassword))
             {

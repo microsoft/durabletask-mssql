@@ -4,8 +4,15 @@
 AS
 BEGIN
     -- Implemented as a function to make it easier to customize
-    -- WARNING: Long usernames may be truncated
-    RETURN CONVERT(varchar(50), CURRENT_USER)
+    DECLARE @TaskHub varchar(50)
+    IF LEN(CURRENT_USER) <= 50
+        -- default behavior is to just use the username
+        SET @TaskHub = CONVERT(varchar(50), CURRENT_USER)
+    ELSE
+        -- if the username is too long, keep the first 16 characters and hash the rest
+        SET @TaskHub = CONVERT(varchar(16), CURRENT_USER) + '__' + CONVERT(varchar(32), HashBytes('MD5', CURRENT_USER), 2)
+
+    RETURN @TaskHub
 END
 GO
 
@@ -254,6 +261,50 @@ BEGIN
     END
 
     COMMIT TRANSACTION
+END
+GO
+
+
+CREATE OR ALTER PROCEDURE dt.PurgeInstanceState
+    @ThresholdTime datetime2,
+    @FilterType tinyint = 0
+AS
+BEGIN
+    DECLARE @TaskHub varchar(50) = dt.CurrentTaskHub()
+
+    DECLARE @InstanceIDs TABLE (InstanceID varchar(100))
+
+    IF @FilterType = 0 -- created time
+    BEGIN
+        INSERT INTO @InstanceIDs
+            SELECT [InstanceID] FROM Instances
+            WHERE [TaskHub] = @TaskHub AND [RuntimeStatus] IN ('Completed', 'Terminated', 'Failed')
+                AND [CreatedTime] >= @ThresholdTime
+    END
+    ELSE IF @FilterType = 1 -- completed time
+    BEGIN
+        INSERT INTO @InstanceIDs
+            SELECT [InstanceID] FROM Instances
+            WHERE [TaskHub] = @TaskHub AND [RuntimeStatus] IN ('Completed', 'Terminated', 'Failed')
+                AND [CompletedTime] >= @ThresholdTime
+    END
+    ELSE
+    BEGIN
+        DECLARE @msg nvarchar(100) = FORMATMESSAGE('Unknown or unsupported filter type: %d', @FilterType);
+        THROW 50000, @msg, 1;
+    END
+
+    BEGIN TRANSACTION
+
+    DELETE FROM NewEvents WHERE [TaskHub] = @TaskHub AND [InstanceID] IN (SELECT [InstanceID] FROM @InstanceIDs)
+    DELETE FROM Instances WHERE [TaskHub] = @TaskHub AND [InstanceID] IN (SELECT [InstanceID] FROM @InstanceIDs)
+    DELETE FROM Payloads WHERE [TaskHub] = @TaskHub AND [InstanceID] IN (SELECT [InstanceID] FROM @InstanceIDs)
+    -- Other relevant tables are expected to be cleaned up via cascade deletes
+
+    COMMIT TRANSACTION
+
+    -- return the number of deleted instances
+    RETURN (SELECT COUNT(*) FROM @InstanceIDs)
 END
 GO
 
@@ -510,7 +561,7 @@ BEGIN
     -- warning about missing messages
     DELETE E
     OUTPUT DELETED.InstanceID, DELETED.SequenceNumber
-    FROM dt.NewEvents E
+    FROM dt.NewEvents E WITH (FORCESEEK(PK_NewEvents(TaskHub, InstanceID, SequenceNumber)))
         INNER JOIN @DeletedEvents D ON 
             D.InstanceID = E.InstanceID AND
             D.SequenceNumber = E.SequenceNumber AND

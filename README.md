@@ -27,6 +27,18 @@ You have multiple options for setting up your SQL database:
 
 If setting up your SQL database manually or in Azure, make sure to select the `Latin1_General_100_BIN2_UTF8` collation. This setting might be hidden away in the "Additional settings" section of your chosen setup flow. This is taken care of for you if you use the Docker setup script mentioned previously.
 
+If you are setting up your SQL database on a locally installed version of SQL Server on Windows (not using a container image) AND if you plan on running the automated tests, then you will need to [enable SQL Server and Windows Authentication mode](https://docs.microsoft.com/sql/database-engine/configure-windows/change-server-authentication-mode).
+
+### Multitenancy
+
+Starting in v0.3.0, this provider supports [multitenancy](https://en.wikipedia.org/wiki/Multitenancy) in a single database. This is useful if you plan to host a single database that supports multiple teams in your organization. To enable multitenancy, each tenant must be given its own login and user ID for the target database. To ensure that each tenant can only access its own data, you should add each user to the `dt_runtime` role that is created automatically by the setup scripts using the following T-SQL syntax.
+
+```sql
+ALTER ROLE dt_runtime ADD MEMBER {username}
+```
+
+Each tenant should then use a SQL connection string with login credentials for their assigned user account. See [this SQL Server documentation](https://docs.microsoft.co/sql/relational-databases/security/authentication-access/create-a-database-user) for details on how to create and manage database users.
+
 ### Azure Functions-hosted
 
 For local development using Azure Functions, select one of the [tools available for local development](https://docs.microsoft.com/azure/azure-functions/functions-develop-local). To configure the SQL provider, you'll need to add the following NuGet package reference to your .csproj file.

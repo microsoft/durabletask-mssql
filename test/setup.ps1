@@ -4,7 +4,8 @@ param(
     [string]$tag="2019-latest",
     [int]$port=1433,
     [string]$dbname="DurableDB",
-    [string]$collation="Latin1_General_100_BIN2_UTF8"
+    [string]$collation="Latin1_General_100_BIN2_UTF8",
+    [string]$additinalRunFlags=""
 )
 
 Write-Host "Pulling down the mcr.microsoft.com/mssql/server:$tag image..."
@@ -12,11 +13,11 @@ docker pull mcr.microsoft.com/mssql/server:$tag
 
 # Start the SQL Server docker container with the specified edition
 Write-Host "Starting SQL Server $tag $sqlpid docker container on port $port" -ForegroundColor DarkYellow
-docker run --name mssql-server -e 'ACCEPT_EULA=Y' -e "SA_PASSWORD=$pw" -e "MSSQL_PID=$sqlpid" -p ${port}:1433 -d mcr.microsoft.com/mssql/server:$tag
+docker run $additinalRunFlags --name mssql-server -e 'ACCEPT_EULA=Y' -e "SA_PASSWORD=$pw" -e "MSSQL_PID=$sqlpid" -p ${port}:1433 -d mcr.microsoft.com/mssql/server:$tag
 
 # The container needs a bit more time before it can start accepting commands
-Write-Host "Sleeping for 10 seconds to let the container finish initializing..." -ForegroundColor Yellow
-Start-Sleep -Seconds 10
+Write-Host "Sleeping for 30 seconds to let the container finish initializing..." -ForegroundColor Yellow
+Start-Sleep -Seconds 30
 
 # Check to see what containers are running
 docker ps
