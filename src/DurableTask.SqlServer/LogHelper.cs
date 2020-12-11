@@ -76,6 +76,15 @@
             this.WriteLog(logEvent);
         }
 
+        public void DuplicateExecutionDetected(OrchestrationInstance instance, string name)
+        {
+            var logEvent = new LogEvents.DuplicateExecutionDetected(
+                instance.InstanceId,
+                instance.ExecutionId,
+                name);
+            this.WriteLog(logEvent);
+        }
+
         void WriteLog(ILogEvent logEvent)
         {
             // LogDurableEvent is an extension method defined in DurableTask.Core

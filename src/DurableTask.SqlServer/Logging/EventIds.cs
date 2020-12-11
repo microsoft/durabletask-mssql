@@ -13,5 +13,6 @@
         public const int GenericWarning = 304;
         public const int CheckpointStarting = 305;
         public const int CheckpointCompleted = 306;
+        public const int DuplicateExecutionDetected = 307;
     }
 }

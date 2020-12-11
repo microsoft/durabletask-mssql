@@ -8,8 +8,8 @@
 
     public class SqlProviderOptions
     {
-        [JsonProperty("taskEventLockTimeout")]
-        public TimeSpan TaskEventLockTimeout { get; set; } = TimeSpan.FromMinutes(2);
+        [JsonProperty("workItemLockTimeout")]
+        public TimeSpan WorkItemLockTimeout { get; set; } = TimeSpan.FromMinutes(2);
 
         [JsonProperty("appName")]
         public string AppName { get; set; } = Environment.MachineName;

@@ -55,6 +55,9 @@
         public static LogAssert CheckpointCompleted(string name) =>
             new LogAssert(306, "CheckpointCompleted", LogLevel.Information, name);
 
+        public static LogAssert DuplicateExecutionDetected(string name) =>
+            new LogAssert(307, "DuplicateExecutionDetected", LogLevel.Warning, name);
+
         public static void LogEntryCount(TestLogProvider logProvider, int expected) =>
             Assert.Equal(expected, GetLogs(logProvider).Count());
 
@@ -89,7 +92,28 @@
                 $"{asserts.Length} log entries were expected but only {actualLogs.Length} were found. Expected:{expected}Actual:{actual}");
         }
 
-        static void ValidateStructuredLogFields(LogEntry log)
+        public static void Contains(TestLogProvider logProvider, params LogAssert[] asserts)
+        {
+            var remaining = new HashSet<LogAssert>(asserts);
+
+            foreach (LogEntry logEntry in GetLogs(logProvider))
+            {
+                foreach (LogAssert assert in remaining.ToArray())
+                {
+                    if (string.Equals(assert.EventName, logEntry.EventId.Name) &&
+                        assert.EventId == logEntry.EventId.Id &&
+                        assert.Level == logEntry.LogLevel &&
+                        logEntry.Message.Contains(assert.MessageSubstring))
+                    {
+                        remaining.Remove(assert);
+                    }
+                }
+            }
+
+            Assert.Empty(remaining);
+        }
+
+        internal static void ValidateStructuredLogFields(LogEntry log)
         {
             // All log entries are expected to have dictionary state
             var fields = log.State as IReadOnlyDictionary<string, object>;
@@ -121,6 +145,11 @@
                     Assert.True(fields.ContainsKey("InstanceId"));
                     Assert.True(fields.ContainsKey("ExecutionId"));
                     Assert.True(fields.ContainsKey("LatencyMs"));
+                    break;
+                case EventIds.DuplicateExecutionDetected:
+                    Assert.True(fields.ContainsKey("Name"));
+                    Assert.True(fields.ContainsKey("InstanceId"));
+                    Assert.True(fields.ContainsKey("ExecutionId"));
                     break;
                 default:
                     throw new ArgumentException($"Log event {log.EventId} is not known. Does it need to be added to the log validator?", nameof(log));

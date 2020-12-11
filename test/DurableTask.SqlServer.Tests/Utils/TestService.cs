@@ -11,12 +11,12 @@
     using DurableTask.SqlServer.Tests.Logging;
     using Microsoft.Data.SqlClient;
     using Microsoft.Extensions.Logging;
+    using Moq;
     using Xunit;
     using Xunit.Abstractions;
 
     class TestService
     {
-        readonly SqlProviderOptions options;
         readonly ILoggerFactory loggerFactory;
         readonly string testName;
 
@@ -37,26 +37,30 @@
             });
 
             this.testName = test.TestCase.TestMethod.Method.Name;
-            this.options = new SqlProviderOptions
+            this.OrchestrationServiceOptions = new SqlProviderOptions
             {
                 LoggerFactory = this.loggerFactory,
             };
         }
+
+        public SqlProviderOptions OrchestrationServiceOptions { get; }
+
+        public Mock<SqlOrchestrationService> OrchestrationServiceMock { get; private set; }
 
         public TestLogProvider LogProvider { get; }
 
         public async Task InitializeAsync()
         {
             // The initialization requires administrative credentials (default)
-            await new SqlOrchestrationService(this.options).CreateIfNotExistsAsync();
+            await new SqlOrchestrationService(this.OrchestrationServiceOptions).CreateIfNotExistsAsync();
 
             // The runtime will use low-privilege credentials
             string taskHubConnectionString = await this.CreateTaskHubLoginAsync();
-            this.options.ConnectionString = taskHubConnectionString;
+            this.OrchestrationServiceOptions.ConnectionString = taskHubConnectionString;
 
-            var provider = new SqlOrchestrationService(this.options);
-            this.worker = await new TaskHubWorker(provider, this.loggerFactory).StartAsync();
-            this.client = new TaskHubClient(provider, loggerFactory: this.loggerFactory);
+            this.OrchestrationServiceMock = new Mock<SqlOrchestrationService>(this.OrchestrationServiceOptions) { CallBase = true };
+            this.worker = await new TaskHubWorker(this.OrchestrationServiceMock.Object, this.loggerFactory).StartAsync();
+            this.client = new TaskHubClient(this.OrchestrationServiceMock.Object, loggerFactory: this.loggerFactory);
         }
 
         public Task PurgeAsync(DateTime minimumThreshold, OrchestrationStateTimeRangeFilterType filterType)
@@ -173,6 +177,18 @@
             return friendlyName;
         }
 
+        public IEnumerable<LogEntry> GetAndValidateLogs()
+        {
+            if (this.LogProvider.TryGetLogs("DurableTask.SqlServer", out IReadOnlyCollection<LogEntry> logs))
+            {
+                foreach (LogEntry entry in logs)
+                {
+                    LogAssert.ValidateStructuredLogFields(entry);
+                    yield return entry;
+                }
+            }
+        }
+
         internal async Task<string> CreateTaskHubLoginAsync()
         {
             // NOTE: Max length for user IDs is 128 characters
@@ -184,7 +200,7 @@
             await ExecuteCommandAsync($"CREATE USER [testuser_{userId}] FOR LOGIN [testlogin_{userId}]");
             await ExecuteCommandAsync($"ALTER ROLE dt_runtime ADD MEMBER [testuser_{userId}]");
 
-            var existing = new SqlConnectionStringBuilder(this.options.ConnectionString);
+            var existing = new SqlConnectionStringBuilder(this.OrchestrationServiceOptions.ConnectionString);
             var builder = new SqlConnectionStringBuilder()
             {
                 UserID = $"testlogin_{userId}",
@@ -211,13 +227,24 @@
 
         static async Task ExecuteCommandAsync(string commandText)
         {
-            string connectionString = SqlProviderOptions.GetDefaultConnectionString();
-            await using SqlConnection connection = new SqlConnection(connectionString);
-            await using SqlCommand command = connection.CreateCommand();
-            await command.Connection.OpenAsync();
+            for (int retry = 0; retry < 3; retry++)
+            {
+                try
+                {
+                    string connectionString = SqlProviderOptions.GetDefaultConnectionString();
+                    await using SqlConnection connection = new SqlConnection(connectionString);
+                    await using SqlCommand command = connection.CreateCommand();
+                    await command.Connection.OpenAsync();
 
-            command.CommandText = commandText;
-            await command.ExecuteNonQueryAsync();
+                    command.CommandText = commandText;
+                    await command.ExecuteNonQueryAsync();
+                    break;
+                }
+                catch (SqlException e) when (e.Number == 15434)
+                {
+                    // 15434 : Could not drop login 'XXX' as the user is currently logged in.
+                }
+            }
         }
 
         static string GeneratePassword()

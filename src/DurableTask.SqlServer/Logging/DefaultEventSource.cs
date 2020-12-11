@@ -154,5 +154,23 @@
                 AppName,
                 ExtensionVersion);
         }
+
+        [Event(EventIds.DuplicateExecutionDetected, Level = EventLevel.Warning)]
+        internal void DuplicateExecutionDetected(
+            string InstanceId,
+            string ExecutionId,
+            string Name,
+            string AppName,
+            string ExtensionVersion)
+        {
+            // TODO: Use WriteEventCore for better performance
+            this.WriteEvent(
+                EventIds.DuplicateExecutionDetected,
+                InstanceId,
+                ExecutionId ?? string.Empty,
+                Name,
+                AppName,
+                ExtensionVersion);
+        }
     }
 }

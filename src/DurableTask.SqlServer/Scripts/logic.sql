@@ -393,12 +393,13 @@ BEGIN
         -- Optimization: Do not load the data payloads for these history events - they are not needed since they are never replayed
         (CASE WHEN [EventType] IN ('TaskScheduled', 'SubOrchestrationInstanceCreated') THEN NULL ELSE P.[Text] END) AS [PayloadText],
         [PayloadID]
-    FROM History H
+    FROM History H WITH (INDEX (PK_History))
         LEFT OUTER JOIN Payloads P ON
             P.[TaskHub] = @TaskHub AND
             P.[InstanceID] = H.[InstanceID] AND
             P.[PayloadID] = H.[DataPayloadID]
     WHERE H.[TaskHub] = @TaskHub AND H.[InstanceID] = @instanceID
+    ORDER BY H.[SequenceNumber] ASC
 
     COMMIT TRANSACTION
 END
@@ -567,6 +568,9 @@ BEGIN
             D.SequenceNumber = E.SequenceNumber AND
             E.TaskHub = @TaskHub
 
+    -- IMPORTANT: This insert is expected to fail with a primary key constraint violation in a
+    --            split-brain situation where two instances try to execute the same orchestration
+    --            at the same time. The SDK will check for this exact error condition.
     INSERT INTO History (
         [TaskHub],
         [InstanceID],
@@ -768,6 +772,22 @@ END
 GO
 
 
+CREATE OR ALTER PROCEDURE dt._RenewTaskLocks
+    @RenewingTasks MessageIDs READONLY,
+    @LockExpiration datetime2
+AS
+BEGIN
+    DECLARE @TaskHub varchar(50) = dt.CurrentTaskHub()
+
+    UPDATE N
+    SET [LockExpiration] = @LockExpiration
+    FROM NewTasks N INNER JOIN @RenewingTasks C ON
+        C.[SequenceNumber] = N.[SequenceNumber] AND
+        N.[TaskHub] = @TaskHub
+END
+GO
+
+
 CREATE OR ALTER PROCEDURE dt._CompleteTasks
     @CompletedTasks MessageIDs READONLY,
     @Results TaskEvents READONLY
@@ -827,7 +847,7 @@ BEGIN
     -- This can happen if the message was completed by another worker, in which
     -- case we don't want any of the side-effects to persist.
     IF @@ROWCOUNT <> (SELECT COUNT(*) FROM @CompletedTasks)
-        THROW 50001, N'Failed to delete the completed task events(s). They may have been deleted by another worker. Any pending side-effects will be discarded.', 1;
+        THROW 50002, N'Failed to delete the completed task events(s). They may have been deleted by another worker. Any pending side-effects will be discarded.', 1;
 
     COMMIT TRANSACTION
 END

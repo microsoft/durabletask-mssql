@@ -106,7 +106,7 @@
             SqlProviderOptions providerOptions = options.ProviderOptions;
             providerOptions.ConnectionString = connectionString;
             providerOptions.LoggerFactory = this.loggerFactory;
-            providerOptions.TaskEventLockTimeout = options.TaskEventLockTimeout;
+            providerOptions.WorkItemLockTimeout = options.TaskEventLockTimeout;
             return options;
         }
     }

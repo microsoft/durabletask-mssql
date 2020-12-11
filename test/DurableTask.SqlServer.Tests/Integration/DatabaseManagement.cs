@@ -222,6 +222,7 @@
                 "dt._GetVersions",
                 "dt._LockNextOrchestration",
                 "dt._LockNextTask",
+                "dt._RenewTaskLocks",
                 "dt._UpdateVersion",
             };
 

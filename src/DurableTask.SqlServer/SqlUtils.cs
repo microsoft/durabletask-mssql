@@ -5,10 +5,12 @@
     using System.Data.Common;
     using System.Data.SqlTypes;
     using System.Diagnostics;
+    using System.Linq;
     using System.Threading;
     using System.Threading.Tasks;
     using DurableTask.Core;
     using DurableTask.Core.History;
+    using Microsoft.Data.SqlClient;
     using SemVersion;
 
     static class SqlUtils
@@ -329,6 +331,11 @@
                 latencyStopwatch.Stop();
                 traceHelper.SprocCompleted(command.CommandText, latencyStopwatch);
             }
+        }
+
+        public static bool IsUniqueKeyViolation(SqlException exception)
+        {
+            return exception.Errors.Cast<SqlError>().Any(e => e.Class == 14 && (e.Number == 2601 || e.Number == 2627));
         }
     }
 }

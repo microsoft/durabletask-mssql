@@ -259,5 +259,44 @@
                     DTUtils.AppName,
                     DTUtils.ExtensionVersionString);
         }
+
+        internal class DuplicateExecutionDetected : StructuredLogEvent, IEventSourceEvent
+        {
+            public DuplicateExecutionDetected(
+                string instanceId,
+                string executionId,
+                string name)
+            {
+                this.InstanceId = instanceId;
+                this.ExecutionId = executionId;
+                this.Name = name;
+            }
+
+            [StructuredLogField]
+            public string InstanceId { get; }
+
+            [StructuredLogField]
+            public string ExecutionId { get; }
+
+            [StructuredLogField]
+            public string Name { get; }
+
+            public override EventId EventId => new EventId(
+                EventIds.DuplicateExecutionDetected,
+                nameof(EventIds.DuplicateExecutionDetected));
+
+            public override LogLevel Level => LogLevel.Warning;
+
+            protected override string CreateLogMessage() =>
+                $"{this.InstanceId}: Duplicate execution of '{this.Name}' was detected! This means two workers or threads tried to process the same work item simultaneously. The result of this execution will be discarded.";
+
+            void IEventSourceEvent.WriteEventSource() =>
+                DefaultEventSource.Log.DuplicateExecutionDetected(
+                    this.InstanceId,
+                    this.ExecutionId,
+                    this.Name,
+                    DTUtils.AppName,
+                    DTUtils.ExtensionVersionString);
+        }
     }
 }

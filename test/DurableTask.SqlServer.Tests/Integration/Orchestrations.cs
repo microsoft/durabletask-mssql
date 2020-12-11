@@ -3,10 +3,12 @@
     using System;
     using System.Collections.Generic;
     using System.Linq;
+    using System.Threading;
     using System.Threading.Tasks;
     using DurableTask.Core;
     using DurableTask.SqlServer.Tests.Logging;
     using DurableTask.SqlServer.Tests.Utils;
+    using Moq;
     using Newtonsoft.Json.Linq;
     using Xunit;
     using Xunit.Abstractions;
@@ -118,9 +120,7 @@
                 input,
                 orchestrationName: "OrchestrationWithActivity",
                 implementation: (ctx, input) => ctx.ScheduleTask<string>("SayHello", "", input),
-                activities: new[] {
-                    ("SayHello", TestService.MakeActivity((TaskContext ctx, string input) => $"Hello, {input}!")),
-                });
+                activities: ("SayHello", TestService.MakeActivity((TaskContext ctx, string input) => $"Hello, {input}!")));
 
             OrchestrationState state = await instance.WaitForCompletion(
                 expectedOutput: $"Hello, {input}!");
@@ -146,15 +146,48 @@
 
                     return value;
                 },
-                activities: new[] {
-                    ("PlusOne", TestService.MakeActivity((TaskContext ctx, int input) => input + 1)),
-                });
+                activities: ("PlusOne", TestService.MakeActivity((TaskContext ctx, int input) => input + 1)));
 
             IEnumerable<Task> tasks = instances.Select(
                 instance => instance.WaitForCompletion(
                     timeout: TimeSpan.FromSeconds(30),
                     expectedOutput: 10));
             await Task.WhenAll(tasks);
+        }
+
+        [Fact]
+        public async Task LongRunningActivity()
+        {
+            this.testService.OrchestrationServiceOptions.WorkItemLockTimeout = TimeSpan.FromSeconds(10);
+
+            int activityExecutions = 0;
+            TaskActivity longRunningActivity = TestService.MakeActivity((TaskContext ctx, string input) =>
+            {
+                Interlocked.Increment(ref activityExecutions);
+
+                // Sleeping for 15 seconds should cause work-item renewal to trigger at least twice.
+                Thread.Sleep(TimeSpan.FromSeconds(15));
+                return input;
+            });
+
+            string input = $"[{DateTime.UtcNow:o}]";
+            TestInstance<string> instance = await this.testService.RunOrchestration(
+                input,
+                orchestrationName: nameof(LongRunningActivity),
+                implementation: (ctx, input) => ctx.ScheduleTask<string>("LongRunning", "", input),
+                activities: ("LongRunning", longRunningActivity));
+
+            OrchestrationState state = await instance.WaitForCompletion(
+                timeout: TimeSpan.FromSeconds(30),
+                expectedOutput: input);
+
+            // Make sure the activity didn't get scheduled multiple times.
+            Assert.Equal(1, activityExecutions);
+
+            // Verify that the task renewal method was called at least once.
+            this.testService.OrchestrationServiceMock.Verify(
+                s => s.RenewTaskActivityWorkItemLockAsync(It.IsAny<TaskActivityWorkItem>()),
+                Times.AtLeastOnce());
         }
 
         [Fact]

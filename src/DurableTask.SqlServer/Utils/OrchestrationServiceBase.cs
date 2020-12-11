@@ -49,7 +49,7 @@ namespace DurableTask.SqlServer.Utils
 
         public abstract Task DeleteAsync(bool deleteInstanceStore);
 
-        public abstract Task<TaskOrchestrationWorkItem> LockNextTaskOrchestrationWorkItemAsync(
+        public abstract Task<TaskOrchestrationWorkItem?> LockNextTaskOrchestrationWorkItemAsync(
             TimeSpan receiveTimeout,
             CancellationToken cancellationToken);
 
@@ -89,22 +89,12 @@ namespace DurableTask.SqlServer.Utils
 
         public virtual int GetDelayInSecondsAfterOnFetchException(Exception exception)
         {
-            if (exception is OperationCanceledException)
-            {
-                return 0;
-            }
-
-            throw new NotImplementedException();
+            return exception is OperationCanceledException ? 0 : 1;
         }
 
         public virtual int GetDelayInSecondsAfterOnProcessException(Exception exception)
         {
-            if (exception is OperationCanceledException)
-            {
-                return 0;
-            }
-
-            throw new NotImplementedException();
+            return exception is OperationCanceledException ? 0 : 1;
         }
 
         public virtual Task CreateTaskOrchestrationAsync(TaskMessage creationMessage)

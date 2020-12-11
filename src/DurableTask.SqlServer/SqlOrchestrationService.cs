@@ -29,11 +29,29 @@
         readonly LogHelper traceHelper;
         readonly SqlDbManager dbManager;
 
-        public SqlOrchestrationService(SqlProviderOptions options)
+        public SqlOrchestrationService(SqlProviderOptions? options)
         {
-            this.options = options ?? throw new ArgumentNullException(nameof(options));
+            this.options = ValidateOptions(options) ?? throw new ArgumentNullException(nameof(options));
             this.traceHelper = new LogHelper(this.options.LoggerFactory.CreateLogger("DurableTask.SqlServer"));
             this.dbManager = new SqlDbManager(this.options, this.traceHelper);
+        }
+
+        static SqlProviderOptions? ValidateOptions(SqlProviderOptions? options)
+        {
+            if (options != null)
+            {
+                if (string.IsNullOrEmpty(options.ConnectionString))
+                {
+                    throw new ArgumentException(nameof(options), $"A value for {options.ConnectionString} must be provided.");
+                }
+
+                if (options.WorkItemLockTimeout < TimeSpan.FromSeconds(10))
+                {
+                    throw new ArgumentException(nameof(options), $"The {options.WorkItemLockTimeout} property value must be at least 10 seconds.");
+                }
+            }
+
+            return options;
         }
 
         async Task<SqlConnection> GetAndOpenConnectionAsync(CancellationToken cancelToken = default)
@@ -73,17 +91,18 @@
             return this.dbManager.DeleteSchemaAsync();
         }
 
-        public override async Task<TaskOrchestrationWorkItem> LockNextTaskOrchestrationWorkItemAsync(
+        public override async Task<TaskOrchestrationWorkItem?> LockNextTaskOrchestrationWorkItemAsync(
             TimeSpan receiveTimeout,
             CancellationToken cancellationToken)
         {
-            while (true)
+            Stopwatch stopwatch = Stopwatch.StartNew();
+            do
             {
                 using SqlConnection connection = await this.GetAndOpenConnectionAsync(cancellationToken);
                 using SqlCommand command = this.GetSprocCommand(connection, "dt._LockNextOrchestration");
 
                 int batchSize = 10; // TODO: Make configurable
-                DateTime lockExpiration = DateTime.UtcNow.Add(this.options.TaskEventLockTimeout);
+                DateTime lockExpiration = DateTime.UtcNow.Add(this.options.WorkItemLockTimeout);
 
                 command.Parameters.Add("@BatchSize", SqlDbType.Int).Value = batchSize;
                 command.Parameters.Add("@LockedBy", SqlDbType.VarChar, 100).Value = this.GetLockedByValue();
@@ -178,7 +197,9 @@
                         EventPayloadMappings = eventPayloadMappings,
                     };
                 }
-            }
+            } while (stopwatch.Elapsed < receiveTimeout);
+
+            return null;
         }
 
         public override Task RenewTaskOrchestrationWorkItemLockAsync(TaskOrchestrationWorkItem workItem)
@@ -227,7 +248,15 @@
                 continuedAsNewMessage);
             command.Parameters.AddTaskEventsParameter("@NewTaskEvents", outboundMessages);
 
-            await command.ExecuteNonQueryAsync();
+            try
+            {
+                await SqlUtils.ExecuteNonQueryAsync(command, this.traceHelper);
+            }
+            catch (SqlException e) when (SqlUtils.IsUniqueKeyViolation(e))
+            {
+                this.traceHelper.DuplicateExecutionDetected(instance, orchestrationState.Name);
+                return;
+            }
 
             // notify pollers that new messages may be available
             if (outboundMessages.Count > 0)
@@ -243,10 +272,9 @@
             this.traceHelper.CheckpointCompleted(orchestrationState, sw);
         }
 
-        public override Task AbandonTaskOrchestrationWorkItemAsync(TaskOrchestrationWorkItem workItem)
-        {
-            throw new NotImplementedException();
-        }
+        // We abandon work items by just letting their locks expire. The benefit of this "lazy" approach is that it
+        // removes the need for a DB access and also ensures that a work-item can't spam the error logs in a tight loop.
+        public override Task AbandonTaskOrchestrationWorkItemAsync(TaskOrchestrationWorkItem workItem) => Task.CompletedTask;
 
         public override async Task<TaskActivityWorkItem?> LockNextTaskActivityWorkItem(TimeSpan receiveTimeout, CancellationToken cancellationToken)
         {
@@ -255,12 +283,12 @@
                 using SqlConnection connection = await this.GetAndOpenConnectionAsync();
                 using SqlCommand command = this.GetSprocCommand(connection, "dt._LockNextTask");
 
-                DateTime lockExpiration = DateTime.UtcNow.Add(this.options.TaskEventLockTimeout);
+                DateTime lockExpiration = DateTime.UtcNow.Add(this.options.WorkItemLockTimeout);
 
                 command.Parameters.Add("@LockedBy", SqlDbType.VarChar, size: 100).Value = this.GetLockedByValue();
                 command.Parameters.Add("@LockExpiration", SqlDbType.DateTime2).Value = lockExpiration;
 
-                using SqlDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
+                using DbDataReader reader = await SqlUtils.ExecuteReaderAsync(command, this.traceHelper, cancellationToken);
                 if (!await reader.ReadAsync())
                 {
                     await this.activityBackoffHelper.WaitAsync(cancellationToken);
@@ -286,9 +314,20 @@
             return null;
         }
 
-        public override Task<TaskActivityWorkItem> RenewTaskActivityWorkItemLockAsync(TaskActivityWorkItem workItem)
+        public override async Task<TaskActivityWorkItem> RenewTaskActivityWorkItemLockAsync(TaskActivityWorkItem workItem)
         {
-            throw new NotImplementedException();
+            using SqlConnection connection = await this.GetAndOpenConnectionAsync();
+            using SqlCommand command = this.GetSprocCommand(connection, "dt._RenewTaskLocks");
+
+            DateTime lockExpiration = DateTime.UtcNow.Add(this.options.WorkItemLockTimeout);
+
+            command.Parameters.AddMessageIdParameter("@RenewingTasks", workItem.TaskMessage);
+            command.Parameters.Add("@LockExpiration", SqlDbType.DateTime2).Value = lockExpiration;
+
+            await SqlUtils.ExecuteNonQueryAsync(command, this.traceHelper);
+
+            workItem.LockedUntilUtc = lockExpiration;
+            return workItem;
         }
 
         public override async Task CompleteTaskActivityWorkItemAsync(TaskActivityWorkItem workItem, TaskMessage responseMessage)
@@ -299,16 +338,26 @@
             command.Parameters.AddMessageIdParameter("@CompletedTasks", workItem.TaskMessage);
             command.Parameters.AddTaskEventsParameter("@Results", responseMessage);
 
-            await command.ExecuteNonQueryAsync();
+            try
+            {
+                await SqlUtils.ExecuteNonQueryAsync(command, this.traceHelper);
+            }
+            catch (SqlException e) when (e.Number == 50002)
+            {
+                // 50002 is the error code when we fail to delete the source message. This is expected to mean that
+                // a task activity has executed twice, likely because of an unexpected lock expiration.
+                string taskName = DTUtils.GetName(workItem.TaskMessage.Event) ?? "Unknown";
+                this.traceHelper.DuplicateExecutionDetected(workItem.TaskMessage.OrchestrationInstance, taskName);
+                return;
+            }
 
             // signal the orchestration loop to poll immediately
             this.orchestrationBackoffHelper.Reset();
         }
 
-        public override Task AbandonTaskActivityWorkItemAsync(TaskActivityWorkItem workItem)
-        {
-            throw new NotImplementedException();
-        }
+        // We abandon work items by just letting their locks expire. The benefit of this "lazy" approach is that it
+        // removes the need for a DB access and also ensures that a work-item can't spam the error logs in a tight loop.
+        public override Task AbandonTaskActivityWorkItemAsync(TaskActivityWorkItem workItem) => Task.CompletedTask;
 
         public override async Task CreateTaskOrchestrationAsync(TaskMessage creationMessage, OrchestrationStatus[] dedupeStatuses)
         {
