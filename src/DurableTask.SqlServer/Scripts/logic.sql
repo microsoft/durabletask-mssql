@@ -170,10 +170,31 @@ BEGIN
 
     DECLARE @TaskHub varchar(50) = dt.CurrentTaskHub()
 
-    -- *** IMPORTANT ***
-    -- To prevent deadlocks, it is important to maintain consistent table access
-    -- order across all stored procedures that execute within a transaction.
-    -- Table order for this sproc: Payloads --> NewEvents
+    -- External event messages must target new instances or they must use
+    -- the "auto start" instance ID format of @orchestrationname@identifier.
+    IF NOT EXISTS (
+        SELECT 1
+        FROM Instances I
+        WHERE [TaskHub] = @TaskHub AND I.[InstanceID] = @InstanceID)
+    BEGIN
+        INSERT INTO Instances (
+            [TaskHub],
+            [InstanceID],
+            [ExecutionID],
+            [Name],
+            [RuntimeStatus])
+        SELECT
+            @TaskHub,
+            @InstanceID,
+            NEWID(),
+            SUBSTRING(@InstanceID, 2, CHARINDEX('@', @InstanceID, 2) - 2),
+            'Pending'
+        WHERE LEFT(@InstanceID, 1) = '@' AND CHARINDEX('@', @InstanceID, 2) > 2
+
+        -- The instance ID is not auto-start and doesn't already exist, so we fail.
+        IF @@ROWCOUNT = 0
+            THROW 50000, 'The instance does not exist.', 1; 
+    END
 
     -- Payloads are stored separately from the events
     DECLARE @PayloadID uniqueidentifier = NULL
@@ -183,8 +204,6 @@ BEGIN
         INSERT INTO Payloads ([TaskHub], [InstanceID], [PayloadID], [Text])
         VALUES (@TaskHub, @InstanceID, @PayloadID, @PayloadText)
     END
-
-    -- NOTE: We don't bother checking to see if the instance exists because we allow events to create new instances
 
     INSERT INTO NewEvents (
         [Name],
@@ -421,11 +440,6 @@ BEGIN
 
     DECLARE @TaskHub varchar(50) = dt.CurrentTaskHub()
 
-    -- *** IMPORTANT ***
-    -- To prevent deadlocks, it is important to maintain consistent table access
-    -- order across all stored procedures that execute within a transaction.
-    -- Table order for this sproc: Instances --> Payloads (--> History --> NewEvents --> NewTasks) --> NewEvents --> History --> NewTasks
-
     DECLARE @InputPayloadID uniqueidentifier
     DECLARE @CustomStatusPayloadID uniqueidentifier
     DECLARE @ExistingCustomStatusPayload varchar(MAX)
@@ -446,6 +460,7 @@ BEGIN
     WHERE I.[TaskHub] = @TaskHub AND I.[InstanceID] = @InstanceID
 
     -- ContinueAsNew case: delete all existing state
+    DECLARE @IsContinueAsNew BIT = 0
     IF @ExistingExecutionID IS NOT NULL AND @ExistingExecutionID <> @ExecutionID
     BEGIN
         DECLARE @DeletedPayloadIDs TABLE (PayloadID uniqueidentifier, InstanceID varchar(100))
@@ -463,6 +478,8 @@ BEGIN
             P.[TaskHub] = @TaskHub AND
             P.[InstanceID] = @InstanceID AND
             P.[PayloadID] NOT IN (@CustomStatusPayloadID, @InputPayloadID)
+
+        SET @IsContinueAsNew = 1
     END
 
     -- Custom status case #1: Setting the custom status for the first time
@@ -480,6 +497,17 @@ BEGIN
             [TaskHub] = @TaskHub AND
             [InstanceID] = @InstanceID AND
             [PayloadID] = @CustomStatusPayloadID
+    END
+
+    -- Need to update the input payload ID if this is a ContinueAsNew
+    IF @IsContinueAsNew = 1
+    BEGIN
+        SET @InputPayloadID = (
+            SELECT TOP 1 [PayloadID]
+            FROM @NewHistoryEvents
+            WHERE [EventType] = 'ExecutionStarted'
+            ORDER BY [SequenceNumber] DESC
+        )
     END
 
     DECLARE @IsCompleted bit
@@ -515,12 +543,36 @@ BEGIN
         [CompletedTime] = (CASE WHEN @IsCompleted = 1 THEN SYSUTCDATETIME() ELSE NULL END),
         [LockExpiration] = NULL, -- release the lock
         [CustomStatusPayloadID] = @CustomStatusPayloadID,
+        [InputPayloadID] = @InputPayloadID,
         [OutputPayloadID] = @OutputPayloadID
     FROM Instances
     WHERE [TaskHub] = @TaskHub and [InstanceID] = @InstanceID
 
     IF @@ROWCOUNT = 0
         THROW 50000, 'The instance does not exist.', 1;
+
+    -- External event messages can create new instances
+    -- NOTE: There is a chance this could result in deadlocks if two 
+    --       instances are sending events to each other at the same time
+    INSERT INTO Instances (
+        [TaskHub],
+        [InstanceID],
+        [ExecutionID],
+        [Name],
+        [RuntimeStatus])
+    SELECT DISTINCT
+        @TaskHub,
+        E.[InstanceID],
+        NEWID(),
+        SUBSTRING(E.[InstanceID], 2, CHARINDEX('@', E.[InstanceID], 2) - 2),
+        'Pending'
+    FROM @NewOrchestrationEvents E
+    WHERE NOT EXISTS (
+        SELECT 1
+        FROM dt.Instances I
+        WHERE [TaskHub] = @TaskHub AND I.[InstanceID] = E.[InstanceID])
+    GROUP BY E.[InstanceID]
+    ORDER BY E.[InstanceID] ASC
 
     -- Insert new event data payloads into the Payloads table in batches.
     -- PayloadID values are provided by the caller only if a payload exists.
@@ -578,6 +630,7 @@ BEGIN
         [SequenceNumber],
         [EventType],
         [TaskID],
+        [Timestamp],
         [IsPlayed],
         [Name],
         [RuntimeStatus],
@@ -590,6 +643,7 @@ BEGIN
         H.[SequenceNumber],
         H.[EventType],
         H.[TaskID],
+        H.[Timestamp],
         H.[IsPlayed],
         H.[Name],
         H.[RuntimeStatus],
@@ -642,6 +696,37 @@ BEGIN
 
     DECLARE @TaskHub varchar(50) = dt.CurrentTaskHub()
     
+    -- External event messages can create new instances
+    -- NOTE: There is a chance this could result in deadlocks if two 
+    --       instances are sending events to each other at the same time
+    BEGIN TRY
+        INSERT INTO Instances (
+            [TaskHub],
+            [InstanceID],
+            [ExecutionID],
+            [Name],
+            [RuntimeStatus])
+        SELECT DISTINCT
+            @TaskHub,
+            E.[InstanceID],
+            NEWID(),
+            SUBSTRING(E.[InstanceID], 2, CHARINDEX('@', E.[InstanceID], 2) - 2),
+            'Pending'
+        FROM @NewOrchestrationEvents E
+        WHERE NOT EXISTS (
+            SELECT 1
+            FROM Instances I
+            WHERE [TaskHub] = @TaskHub AND I.[InstanceID] = E.[InstanceID])
+        GROUP BY E.[InstanceID]
+        ORDER BY E.[InstanceID] ASC
+    END TRY
+    BEGIN CATCH
+        -- Ignore PK violations here, which can happen when multiple clients
+        -- try to add messages at the same time for the same instance
+        IF ERROR_NUMBER() <> 2627  -- 2627 is PK violation
+            THROW
+    END CATCH
+
     -- Insert new event data payloads into the Payloads table in batches.
     -- PayloadID values are provided by the caller only if a payload exists.
     INSERT INTO Payloads ([TaskHub], [InstanceID], [PayloadID], [Text], [Reason])
@@ -678,8 +763,8 @@ END
 GO
 
 CREATE OR ALTER PROCEDURE dt.QuerySingleOrchestration
-    @InstanceID nvarchar(100),
-    @ExecutionID nvarchar(100) = NULL,
+    @InstanceID varchar(100),
+    @ExecutionID varchar(50) = NULL,
     @FetchInput bit = 1,
     @FetchOutput bit = 1
 AS
@@ -768,6 +853,20 @@ BEGIN
     WHERE [TaskHub] = @TaskHub AND [SequenceNumber] = @SequenceNumber
 
     COMMIT TRANSACTION
+END
+GO
+
+
+CREATE OR ALTER PROCEDURE dt._RenewOrchestrationLocks
+    @InstanceID varchar(100),
+    @LockExpiration datetime2
+AS
+BEGIN
+    DECLARE @TaskHub varchar(50) = dt.CurrentTaskHub()
+
+    UPDATE Instances
+    SET [LockExpiration] = @LockExpiration
+    WHERE [TaskHub] = @TaskHub AND [InstanceID] = @InstanceID
 END
 GO
 

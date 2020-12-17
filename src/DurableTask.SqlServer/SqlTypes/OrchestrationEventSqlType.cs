@@ -116,7 +116,7 @@
             record.SetSqlString(ColumnOrdinals.Name, SqlUtils.GetName(msg.Event));
             record.SetSqlString(ColumnOrdinals.RuntimeStatus, SqlUtils.GetRuntimeStatus(msg.Event));
             record.SetSqlInt32(ColumnOrdinals.TaskID, SqlUtils.GetTaskId(msg.Event));
-            record.SetSqlDateTime(ColumnOrdinals.VisibleTime, SqlUtils.GetVisibleTime(msg.Event));
+            record.SetDateTime(ColumnOrdinals.VisibleTime, SqlUtils.GetVisibleTime(msg.Event));
 
             SqlString reason = SqlUtils.GetReason(msg.Event);
             record.SetSqlString(ColumnOrdinals.Reason, reason);

@@ -28,6 +28,7 @@ IF TYPE_ID(N'dt.HistoryEvents') IS NULL
         [Name] varchar(300) NULL,
         [RuntimeStatus] varchar(30) NULL,
         [TaskID] int NULL,
+        [Timestamp] datetime2 NULL,
         [IsPlayed] bit NULL,
         [VisibleTime] datetime2 NULL,
         [Reason] varchar(max) NULL,

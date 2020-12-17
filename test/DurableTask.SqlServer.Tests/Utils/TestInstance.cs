@@ -65,13 +65,16 @@
             Assert.NotNull(state);
             Assert.Equal(expectedStatus, state.OrchestrationStatus);
 
-            if (this.input != null)
+            if (!continuedAsNew)
             {
-                Assert.Equal(JToken.FromObject(this.input), JToken.Parse(state.Input));
-            }
-            else
-            {
-                Assert.Null(state.Input);
+                if (this.input != null)
+                {
+                    Assert.Equal(JToken.FromObject(this.input).ToString(), JToken.Parse(state.Input).ToString());
+                }
+                else
+                {
+                    Assert.Null(state.Input);
+                }
             }
 
             // For created time, account for potential clock skew

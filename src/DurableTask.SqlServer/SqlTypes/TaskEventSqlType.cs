@@ -103,7 +103,7 @@
             record.SetSqlString(ColumnOrdinals.Name, SqlUtils.GetName(msg.Event));
             record.SetSqlString(ColumnOrdinals.EventType, msg.Event.EventType.ToString());
             record.SetSqlInt32(ColumnOrdinals.TaskID, SqlUtils.GetTaskId(msg.Event));
-            record.SetSqlDateTime(ColumnOrdinals.VisibleTime, SqlUtils.GetVisibleTime(msg.Event));
+            record.SetDateTime(ColumnOrdinals.VisibleTime, SqlUtils.GetVisibleTime(msg.Event));
 
             SqlString reasonText = SqlUtils.GetReason(msg.Event);
             record.SetSqlString(ColumnOrdinals.Reason, reasonText);

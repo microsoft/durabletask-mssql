@@ -112,6 +112,36 @@
         }
 
         [Fact]
+        public async Task CurrentDateTimeUtc()
+        {
+            TestInstance<string> instance = await this.testService.RunOrchestration<bool, string>(
+                null,
+                orchestrationName: "CurrentDateTimeUtc",
+                implementation: async (ctx, _) =>
+                {
+                    DateTime currentDate1 = ctx.CurrentUtcDateTime;
+                    DateTime originalDate1 = await ctx.ScheduleTask<DateTime>("Echo", "", currentDate1);
+                    if (currentDate1 != originalDate1)
+                    {
+                        return false;
+                    }
+
+                    DateTime currentDate2 = ctx.CurrentUtcDateTime;
+                    DateTime originalDate2 = await ctx.ScheduleTask<DateTime>("Echo", "", currentDate2);
+                    if (currentDate2 != originalDate2)
+                    {
+                        return false;
+                    }
+
+                    return currentDate1 != currentDate2;
+                },
+                activities: ("Echo", TestService.MakeActivity((TaskContext ctx, object input) => input)));
+
+            OrchestrationState state = await instance.WaitForCompletion();
+            Assert.True((bool)JToken.Parse(state.Output));
+        }
+
+        [Fact]
         public async Task SingleActivity()
         {
             string input = $"[{DateTime.UtcNow:o}]";
@@ -325,10 +355,15 @@
                 LogAssert.CheckpointCompleted(orchestrationName));
         }
 
-
-        [Fact]
-        public async Task ContinueAsNew()
+        [Theory]
+        [InlineData(10)]
+        [InlineData(300)]
+        public async Task ContinueAsNew(int lockTimeoutInSeconds)
         {
+            // If the lock timeout is less than 60 seconds, then the dispatcher will also 
+            // execute a code path that renews the task orchestration work item.
+            this.testService.OrchestrationServiceOptions.WorkItemLockTimeout = TimeSpan.FromSeconds(lockTimeoutInSeconds);
+
             TestInstance<int> instance = await this.testService.RunOrchestration(
                 input: 0,
                 orchestrationName: "ContinueAsNewTest",
@@ -343,7 +378,9 @@
                     return input;
                 });
 
-            await instance.WaitForCompletion(expectedOutput: 10, continuedAsNew: true);
+            OrchestrationState state = await instance.WaitForCompletion(expectedOutput: 10, continuedAsNew: true);
+            Assert.NotNull(state.Input);
+            Assert.Equal("10", state.Input);
         }
     }
 }

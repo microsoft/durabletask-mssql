@@ -21,6 +21,7 @@
             new SqlMetaData("Name", SqlDbType.VarChar, 300),
             new SqlMetaData("RuntimeStatus", SqlDbType.VarChar, 30),
             new SqlMetaData("TaskID", SqlDbType.Int),
+            new SqlMetaData("Timestamp", SqlDbType.DateTime2),
             new SqlMetaData("IsPlayed", SqlDbType.Bit),
             new SqlMetaData("VisibleTime", SqlDbType.DateTime2),
             new SqlMetaData("Reason", SqlDbType.VarChar, -1 /* max */),
@@ -38,11 +39,12 @@
             public const int Name = 4;
             public const int RuntimeStatus = 5;
             public const int TaskID = 6;
-            public const int IsPlayed = 7;
-            public const int VisibleTime = 8;
-            public const int Reason = 9;
-            public const int PayloadText = 10;
-            public const int PayloadID = 11;
+            public const int Timestamp = 7;
+            public const int IsPlayed = 8;
+            public const int VisibleTime = 9;
+            public const int Reason = 10;
+            public const int PayloadText = 11;
+            public const int PayloadID = 12;
         };
 
         public static SqlParameter AddHistoryEventsParameter(
@@ -75,8 +77,9 @@
                 record.SetSqlString(ColumnOrdinals.Name, SqlUtils.GetName(e));
                 record.SetSqlString(ColumnOrdinals.RuntimeStatus, SqlUtils.GetRuntimeStatus(e));
                 record.SetSqlInt32(ColumnOrdinals.TaskID, SqlUtils.GetTaskId(e));
+                record.SetDateTime(ColumnOrdinals.Timestamp, e.Timestamp);
                 record.SetBoolean(ColumnOrdinals.IsPlayed, e.IsPlayed);
-                record.SetSqlDateTime(ColumnOrdinals.VisibleTime, SqlUtils.GetVisibleTime(e));
+                record.SetDateTime(ColumnOrdinals.VisibleTime, SqlUtils.GetVisibleTime(e));
 
                 if (payloadIds.TryGetValue(e, out Guid existingPayloadId))
                 {

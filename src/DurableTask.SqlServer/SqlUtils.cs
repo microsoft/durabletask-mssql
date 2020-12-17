@@ -11,15 +11,11 @@
     using DurableTask.Core;
     using DurableTask.Core.History;
     using Microsoft.Data.SqlClient;
+    using Microsoft.Data.SqlClient.Server;
     using SemVersion;
 
     static class SqlUtils
     {
-        public static DateTime? GetDateTimeOrNull(this DbDataReader reader, int columnIndex)
-        {
-            return reader.IsDBNull(columnIndex) ? (DateTime?)null : reader.GetDateTime(columnIndex);
-        }
-
         public static string? GetStringOrNull(this DbDataReader reader, int columnIndex)
         {
             return reader.IsDBNull(columnIndex) ? null : reader.GetString(columnIndex);
@@ -150,13 +146,13 @@
                 case EventType.TimerCreated:
                     historyEvent = new TimerCreatedEvent(eventId)
                     {
-                        FireAt = (DateTime)reader["VisibleTime"],
+                        FireAt = GetVisibleTime(reader),
                     };
                     break;
                 case EventType.TimerFired:
                     historyEvent = new TimerFiredEvent(eventId)
                     {
-                        FireAt = (DateTime)reader["VisibleTime"],
+                        FireAt = GetVisibleTime(reader),
                         TimerId = GetTaskId(reader),
                     };
                     break;
@@ -164,7 +160,7 @@
                     throw new InvalidOperationException($"Don't know how to interpret '{eventType}'.");
             }
 
-            historyEvent.Timestamp = (DateTime)reader["Timestamp"];
+            historyEvent.Timestamp = GetTimestamp(reader);
             historyEvent.IsPlayed = isOrchestrationHistory && (bool)reader["IsPlayed"];
             return historyEvent;
         }
@@ -173,10 +169,10 @@
         {
             return new OrchestrationState
             {
-                CompletedTime = reader.GetDateTimeOrNull(reader.GetOrdinal("CompletedTime")) ?? default,
-                CreatedTime = reader.GetDateTimeOrNull(reader.GetOrdinal("CreatedTime")) ?? default,
+                CompletedTime = reader.GetUtcDateTimeOrNull(reader.GetOrdinal("CompletedTime")) ?? default,
+                CreatedTime = reader.GetUtcDateTimeOrNull(reader.GetOrdinal("CreatedTime")) ?? default,
                 Input = reader.GetStringOrNull(reader.GetOrdinal("InputText")),
-                LastUpdatedTime = reader.GetDateTimeOrNull(reader.GetOrdinal("LastUpdatedTime")) ?? default,
+                LastUpdatedTime = reader.GetUtcDateTimeOrNull(reader.GetOrdinal("LastUpdatedTime")) ?? default,
                 Name = GetName(reader),
                 OrchestrationInstance = new OrchestrationInstance
                 {
@@ -191,27 +187,17 @@
             };
         }
 
-        internal static SqlDateTime GetVisibleTime(HistoryEvent historyEvent)
+        internal static DateTime? GetVisibleTime(HistoryEvent historyEvent)
         {
-            DateTime dateTime;
             switch (historyEvent.EventType)
             {
                 case EventType.TimerCreated:
-                    dateTime = ((TimerCreatedEvent)historyEvent).FireAt;
-                    break;
+                    return ((TimerCreatedEvent)historyEvent).FireAt;
                 case EventType.TimerFired:
-                    dateTime = ((TimerFiredEvent)historyEvent).FireAt;
-                    break;
+                    return ((TimerFiredEvent)historyEvent).FireAt;
                 default:
-                    return SqlDateTime.Null;
+                    return null;
             }
-
-            if (dateTime < SqlDateTime.MinValue.Value)
-            {
-                return SqlDateTime.MinValue;
-            }
-
-            return dateTime;
         }
 
         internal static SqlString GetRuntimeStatus(HistoryEvent historyEvent)
@@ -300,6 +286,29 @@
             return reader.IsDBNull(ordinal) ? null : reader.GetString(ordinal);
         }
 
+        static DateTime GetVisibleTime(DbDataReader reader)
+        {
+            int ordinal = reader.GetOrdinal("VisibleTime");
+            return GetUtcDateTime(reader, ordinal);
+        }
+
+        static DateTime GetTimestamp(DbDataReader reader)
+        {
+            int ordinal = reader.GetOrdinal("Timestamp");
+            return GetUtcDateTime(reader, ordinal);
+        }
+
+        static DateTime? GetUtcDateTimeOrNull(this DbDataReader reader, int columnIndex)
+        {
+            return reader.IsDBNull(columnIndex) ? (DateTime?)null : GetUtcDateTime(reader, columnIndex);
+        }
+
+        static DateTime GetUtcDateTime(DbDataReader reader, int ordinal)
+        {
+            // The SQL client always assumes DateTimeKind.Unspecified. We need to modify the result so that it knows it is UTC.
+            return DateTime.SpecifyKind(reader.GetDateTime(ordinal), DateTimeKind.Utc);
+        }
+
         public static Task<DbDataReader> ExecuteReaderAsync(
             DbCommand command,
             LogHelper traceHelper,
@@ -336,6 +345,18 @@
         public static bool IsUniqueKeyViolation(SqlException exception)
         {
             return exception.Errors.Cast<SqlError>().Any(e => e.Class == 14 && (e.Number == 2601 || e.Number == 2627));
+        }
+
+        public static void SetDateTime(this SqlDataRecord record, int ordinal, DateTime? dateTime)
+        {
+            if (dateTime.HasValue)
+            {
+                record.SetDateTime(ordinal, dateTime.Value);
+            }
+            else
+            {
+                record.SetDBNull(ordinal);
+            }
         }
     }
 }

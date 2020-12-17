@@ -10,6 +10,7 @@
     using System.Threading;
     using System.Threading.Tasks;
     using DurableTask.Core;
+    using DurableTask.Core.Common;
     using DurableTask.Core.History;
     using DurableTask.SqlServer.SqlTypes;
     using DurableTask.SqlServer.Utils;
@@ -177,9 +178,16 @@
                     }
                     else if (messages[0].Event is ExecutionStartedEvent startedEvent)
                     {
-                        // This is a new instance
+                        // This is a new manually-created instance
                         orchestrationName = startedEvent.Name;
                         instance = startedEvent.OrchestrationInstance;
+                    }
+                    else if (Entities.AutoStart(messages[0].OrchestrationInstance.InstanceId, messages) &&
+                             messages[0].Event is ExecutionStartedEvent autoStartedEvent)
+                    {
+                        // This is a new auto-start instance (e.g. Durable Entities)
+                        orchestrationName = autoStartedEvent.Name;
+                        instance = autoStartedEvent.OrchestrationInstance;
                     }
                     else
                     {
@@ -202,9 +210,19 @@
             return null;
         }
 
-        public override Task RenewTaskOrchestrationWorkItemLockAsync(TaskOrchestrationWorkItem workItem)
+        public override async Task RenewTaskOrchestrationWorkItemLockAsync(TaskOrchestrationWorkItem workItem)
         {
-            throw new NotImplementedException();
+            using SqlConnection connection = await this.GetAndOpenConnectionAsync();
+            using SqlCommand command = this.GetSprocCommand(connection, "dt._RenewOrchestrationLocks");
+
+            DateTime lockExpiration = DateTime.UtcNow.Add(this.options.WorkItemLockTimeout);
+
+            command.Parameters.Add("@InstanceID", SqlDbType.VarChar, size: 100).Value = workItem.InstanceId;
+            command.Parameters.Add("@LockExpiration", SqlDbType.DateTime2).Value = lockExpiration;
+
+            await SqlUtils.ExecuteNonQueryAsync(command, this.traceHelper);
+
+            workItem.LockedUntilUtc = lockExpiration;
         }
 
         public override async Task CompleteTaskOrchestrationWorkItemAsync(
