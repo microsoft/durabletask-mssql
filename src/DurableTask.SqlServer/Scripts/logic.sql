@@ -159,6 +159,41 @@ BEGIN
 END
 GO
 
+
+CREATE OR ALTER PROCEDURE dt.GetInstanceHistory
+    @InstanceID varchar(100),
+    @GetInputsAndOutputs bit = 0
+AS
+BEGIN
+    DECLARE @TaskHub varchar(50) = dt.CurrentTaskHub()
+
+    SELECT
+        H.[InstanceID],
+        H.[ExecutionID],
+        H.[SequenceNumber],
+        H.[EventType],
+        H.[Name],
+        H.[RuntimeStatus],
+        H.[TaskID],
+        H.[Timestamp],
+        H.[IsPlayed],
+        H.[VisibleTime],
+        P.[Reason],
+        (CASE WHEN @GetInputsAndOutputs = 0 THEN NULL ELSE P.[Text] END) AS [PayloadText],
+        [PayloadID]
+    FROM History H WITH (INDEX (PK_History))
+        LEFT OUTER JOIN Payloads P ON
+            P.[TaskHub] = @TaskHub AND
+            P.[InstanceID] = H.[InstanceID] AND
+            P.[PayloadID] = H.[DataPayloadID]
+    WHERE
+        H.[TaskHub] = @TaskHub AND
+        H.[InstanceID] = @InstanceID
+    ORDER BY H.[SequenceNumber] ASC
+END
+GO
+
+
 CREATE OR ALTER PROCEDURE dt.RaiseEvent
     @Name varchar(300),
     @InstanceID varchar(100) = NULL,

@@ -76,10 +76,10 @@
             return jobHost.CallAsync(name, args);
         }
 
-        protected async Task<DurableOrchestrationStatus> RunOrchestrationAsync(string name)
+        protected async Task<DurableOrchestrationStatus> RunOrchestrationAsync(string name, object? input = null)
         {
             IDurableClient client = await this.GetDurableClientAsync();
-            string instanceId = await client.StartNewAsync(name);
+            string instanceId = await client.StartNewAsync(name, input);
 
             TimeSpan timeout = Debugger.IsAttached ? TimeSpan.FromMinutes(5) : TimeSpan.FromSeconds(10);
             DurableOrchestrationStatus status = await client.WaitForCompletionAsync(instanceId, timeout);

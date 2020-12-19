@@ -6,6 +6,7 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
     using Microsoft.Azure.WebJobs;
     using Microsoft.Azure.WebJobs.Extensions.DurableTask;
     using Newtonsoft.Json;
+    using Newtonsoft.Json.Linq;
     using Xunit;
     using Xunit.Abstractions;
 
@@ -83,6 +84,34 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
             result = await client.ReadEntityStateAsync<int>(entityId);
             Assert.True(result.EntityExists);
             Assert.Equal(7, result.EntityState);
+        }
+
+        [Fact]
+        public async Task SingleInstanceQuery()
+        {
+            object input = 42;
+
+            DurableOrchestrationStatus status = await this.RunOrchestrationAsync(nameof(Functions.Sequence), input);
+            Assert.Equal(OrchestrationRuntimeStatus.Completed, status.RuntimeStatus);
+            Assert.Equal(10, (int)status.Output);
+
+            IDurableClient client = await this.GetDurableClientAsync();
+            status = await client.GetStatusAsync(status.InstanceId);
+
+            Assert.NotNull(status.Input);
+            Assert.Equal(JTokenType.Integer, status.Input.Type);
+            Assert.Equal(42, status.Input);
+            Assert.Null(status.History);
+
+            status = await client.GetStatusAsync(status.InstanceId, showHistory: true);
+            Assert.NotNull(status.Input);
+            Assert.Equal(JTokenType.Integer, status.Input.Type);
+            Assert.Equal(42, status.Input);
+            Assert.NotNull(status.History);
+            Assert.NotEmpty(status.History);
+            Assert.True(status.History.Count >= 12);
+
+            // TODO: Check the content of the history for input/output fields
         }
 
         static class Functions

@@ -280,7 +280,7 @@
             return reader.GetString(ordinal);
         }
 
-        static string? GetExecutionId(DbDataReader reader)
+        internal static string? GetExecutionId(DbDataReader reader)
         {
             int ordinal = reader.GetOrdinal("ExecutionID");
             return reader.IsDBNull(ordinal) ? null : reader.GetString(ordinal);

@@ -212,6 +212,7 @@
             var expectedSprocNames = new HashSet<string>(StringComparer.Ordinal)
             {
                 "dt.CreateInstance",
+                "dt.GetInstanceHistory",
                 "dt.QuerySingleOrchestration",
                 "dt.RaiseEvent",
                 "dt.TerminateInstance",

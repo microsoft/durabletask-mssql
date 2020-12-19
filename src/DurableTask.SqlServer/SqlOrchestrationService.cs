@@ -15,6 +15,7 @@
     using DurableTask.SqlServer.SqlTypes;
     using DurableTask.SqlServer.Utils;
     using Microsoft.Data.SqlClient;
+    using Newtonsoft.Json;
 
     public class SqlOrchestrationService : OrchestrationServiceBase
     {
@@ -151,19 +152,17 @@
                     this.orchestrationBackoffHelper.Reset();
 
                     // Result #2: The full event history for the locked instance
-                    var history = new List<HistoryEvent>();
+                    IList<HistoryEvent> history;
                     if (await reader.NextResultAsync(cancellationToken))
                     {
-                        while (await reader.ReadAsync(cancellationToken))
-                        {
-                            history.Add(reader.GetHistoryEvent(isOrchestrationHistory: true));
-                        }
+                        history = await ReadHistoryEventsAsync(reader, executionIdFilter: null, cancellationToken);
                     }
                     else
                     {
                         this.traceHelper.GenericWarning(
                             details: "Failed to read history from the database!",
                             instanceId: messages.FirstOrDefault(m => m.OrchestrationInstance?.InstanceId != null)?.OrchestrationInstance.InstanceId);
+                        history = Array.Empty<HistoryEvent>();
                     }
 
                     var runtimeState = new OrchestrationRuntimeState(history);
@@ -469,6 +468,47 @@
             }
 
             return null;
+        }
+
+        public override async Task<string> GetOrchestrationHistoryAsync(string instanceId, string? executionIdFilter)
+        {
+            using SqlConnection connection = await this.GetAndOpenConnectionAsync();
+            using SqlCommand command = this.GetSprocCommand(connection, "dt.GetInstanceHistory");
+
+            command.Parameters.Add("@InstanceID", SqlDbType.VarChar, size: 100).Value = instanceId;
+            command.Parameters.Add("@GetInputsAndOutputs", SqlDbType.Bit).Value = true; // There's no clean way for the caller to specify this currently
+
+            using DbDataReader reader = await SqlUtils.ExecuteReaderAsync(command, this.traceHelper);
+
+            List<HistoryEvent> history = await ReadHistoryEventsAsync(reader, executionIdFilter);
+            return JsonConvert.SerializeObject(history);
+        }
+
+        static async Task<List<HistoryEvent>> ReadHistoryEventsAsync(
+            DbDataReader reader,
+            string? executionIdFilter = null,
+            CancellationToken cancellationToken = default)
+        {
+            var history = new List<HistoryEvent>(capacity: 128);
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                string executionId = SqlUtils.GetExecutionId(reader)!;
+                HistoryEvent e = reader.GetHistoryEvent(isOrchestrationHistory: true);
+                if (executionIdFilter == null)
+                {
+                    executionIdFilter = executionId;
+                }
+                else if (executionIdFilter != executionId)
+                {
+                    // Either the instance with this execution ID doesn't exist or
+                    // we're reading past the end of the current history (ContinueAsNew case).
+                    break;
+                }
+
+                history.Add(e);
+            }
+
+            return history;
         }
 
         public override async Task ForceTerminateTaskOrchestrationAsync(string instanceId, string? reason)

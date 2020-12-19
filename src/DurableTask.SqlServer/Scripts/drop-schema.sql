@@ -7,6 +7,7 @@ DROP VIEW IF EXISTS dt.vInstances
 
 -- Public Sprocs
 DROP PROCEDURE IF EXISTS dt.CreateInstance
+DROP PROCEDURE IF EXISTS dt.GetInstanceHistory
 DROP PROCEDURE IF EXISTS dt.QuerySingleOrchestration
 DROP PROCEDURE IF EXISTS dt.RaiseEvent
 DROP PROCEDURE IF EXISTS dt.TerminateInstance
