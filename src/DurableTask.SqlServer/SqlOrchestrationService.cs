@@ -30,12 +30,14 @@
         readonly SqlProviderOptions options;
         readonly LogHelper traceHelper;
         readonly SqlDbManager dbManager;
+        readonly string lockedByValue;
 
         public SqlOrchestrationService(SqlProviderOptions? options)
         {
             this.options = ValidateOptions(options) ?? throw new ArgumentNullException(nameof(options));
             this.traceHelper = new LogHelper(this.options.LoggerFactory.CreateLogger("DurableTask.SqlServer"));
             this.dbManager = new SqlDbManager(this.options, this.traceHelper);
+            this.lockedByValue = $"{this.options.AppName}|{Process.GetCurrentProcess().Id}";
         }
 
         static SqlProviderOptions? ValidateOptions(SqlProviderOptions? options)
@@ -71,12 +73,6 @@
             return command;
         }
 
-        string GetLockedByValue()
-        {
-            // TODO: Configurable
-            return $"{Environment.MachineName}||{this.options.AppName}";
-        }
-
         public override Task CreateAsync(bool recreateInstanceStore)
             => this.dbManager.CreateOrUpgradeSchemaAsync(recreateInstanceStore);
 
@@ -107,7 +103,7 @@
                 DateTime lockExpiration = DateTime.UtcNow.Add(this.options.WorkItemLockTimeout);
 
                 command.Parameters.Add("@BatchSize", SqlDbType.Int).Value = batchSize;
-                command.Parameters.Add("@LockedBy", SqlDbType.VarChar, 100).Value = this.GetLockedByValue();
+                command.Parameters.Add("@LockedBy", SqlDbType.VarChar, 100).Value = this.lockedByValue;
                 command.Parameters.Add("@LockExpiration", SqlDbType.DateTime2).Value = lockExpiration;
 
                 DbDataReader reader;
@@ -302,7 +298,7 @@
 
                 DateTime lockExpiration = DateTime.UtcNow.Add(this.options.WorkItemLockTimeout);
 
-                command.Parameters.Add("@LockedBy", SqlDbType.VarChar, size: 100).Value = this.GetLockedByValue();
+                command.Parameters.Add("@LockedBy", SqlDbType.VarChar, size: 100).Value = this.lockedByValue;
                 command.Parameters.Add("@LockExpiration", SqlDbType.DateTime2).Value = lockExpiration;
 
                 using DbDataReader reader = await SqlUtils.ExecuteReaderAsync(command, this.traceHelper, cancellationToken);

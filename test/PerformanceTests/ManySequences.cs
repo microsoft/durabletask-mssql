@@ -13,7 +13,7 @@ namespace PerformanceTests
     public static class ManySequences
     {
         [FunctionName(nameof(StartManySequences))]
-        public static IActionResult StartManySequences(
+        public static async Task<IActionResult> StartManySequences(
             [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = null)] HttpRequest req,
             [DurableClient] IDurableClient starter,
             ILogger log)
@@ -25,7 +25,7 @@ namespace PerformanceTests
                 return new BadRequestObjectResult("A 'count' query string parameter is required and it must contain a positive number.");
             }
 
-            string prefix = Common.ScheduleManyInstances(starter, nameof(HelloSequence), count, log);
+            string prefix = await Common.ScheduleManyInstances(starter, nameof(HelloSequence), count, log);
             return new OkObjectResult($"Scheduled {count} orchestrations prefixed with '{prefix}'.");
         }
 

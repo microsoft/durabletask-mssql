@@ -12,7 +12,7 @@
     class ManyMixedOrchestrations
     {
         [FunctionName(nameof(StartManyMixedOrchestrations))]
-        public static IActionResult StartManyMixedOrchestrations(
+        public static async Task<IActionResult> StartManyMixedOrchestrations(
             [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = null)] HttpRequest req,
             [DurableClient] IDurableClient starter,
             ILogger log)
@@ -22,7 +22,7 @@
                 return new BadRequestObjectResult("A 'count' query string parameter is required and it must contain a positive number.");
             }
 
-            string prefix = Common.ScheduleManyInstances(starter, nameof(MixedOrchestration), count, log);
+            string prefix = await Common.ScheduleManyInstances(starter, nameof(MixedOrchestration), count, log);
             return new OkObjectResult($"Scheduled {count} orchestrations prefixed with '{prefix}'.");
         }
 
