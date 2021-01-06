@@ -1,6 +1,9 @@
 ﻿namespace PerformanceTests
 {
     using System;
+    using System.Collections.Generic;
+    using System.Linq;
+    using System.Threading;
     using System.Threading.Tasks;
     using Microsoft.AspNetCore.Http;
     using Microsoft.Azure.WebJobs;
@@ -9,7 +12,7 @@
 
     static class Common
     {
-        public static string ScheduleManyInstances(
+        public static async Task<string> ScheduleManyInstances(
             IDurableOrchestrationClient client,
             string orchestrationName,
             int count,
@@ -18,11 +21,11 @@
             log.LogWarning($"Scheduling {count} orchestration(s)...");
             DateTime utcNow = DateTime.UtcNow;
             string prefix = utcNow.ToString("yyyyMMdd-hhmmss");
-            Parallel.For(0, count, i =>
+
+            await Enumerable.Range(0, count).ParallelForEachAsync(200, i =>
             {
-                // Make unique instance IDs that are semi-ordered
-                string instanceId = prefix + "-" + i.ToString("X16");
-                client.StartNewAsync(orchestrationName, instanceId).GetAwaiter().GetResult();
+                string instanceId = $"{prefix}-{i:X16}";
+                return client.StartNewAsync(orchestrationName, instanceId);
             });
 
             log.LogWarning($"All {count} orchestrations were scheduled successfully!");
@@ -35,6 +38,40 @@
         public static bool TryGetPositiveIntQueryStringParam(this HttpRequest req, string name, out int value)
         {
             return int.TryParse(req.Query[name], out value) && value > 0;
+        }
+
+        public static async Task ParallelForEachAsync<T>(this IEnumerable<T> items, int maxConcurrency, Func<T, Task> action)
+        {
+            List<Task> tasks;
+            if (items is ICollection<T> itemCollection)
+            {
+                tasks = new List<Task>(itemCollection.Count);
+            }
+            else
+            {
+                tasks = new List<Task>();
+            }
+
+            using var semaphore = new SemaphoreSlim(maxConcurrency);
+            foreach (T item in items)
+            {
+                tasks.Add(InvokeThrottledAction(item, action, semaphore));
+            }
+
+            await Task.WhenAll(tasks);
+        }
+
+        static async Task InvokeThrottledAction<T>(T item, Func<T, Task> action, SemaphoreSlim semaphore)
+        {
+            await semaphore.WaitAsync();
+            try
+            {
+                await action(item);
+            }
+            finally
+            {
+                semaphore.Release();
+            }
         }
     }
 }

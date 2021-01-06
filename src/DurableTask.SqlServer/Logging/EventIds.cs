@@ -14,5 +14,6 @@
         public const int CheckpointStarting = 305;
         public const int CheckpointCompleted = 306;
         public const int DuplicateExecutionDetected = 307;
+        public const int TransientDatabaseFailure = 308;
     }
 }

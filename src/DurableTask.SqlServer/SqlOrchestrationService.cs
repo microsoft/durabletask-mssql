@@ -30,12 +30,14 @@
         readonly SqlProviderOptions options;
         readonly LogHelper traceHelper;
         readonly SqlDbManager dbManager;
+        readonly string lockedByValue;
 
         public SqlOrchestrationService(SqlProviderOptions? options)
         {
             this.options = ValidateOptions(options) ?? throw new ArgumentNullException(nameof(options));
             this.traceHelper = new LogHelper(this.options.LoggerFactory.CreateLogger("DurableTask.SqlServer"));
             this.dbManager = new SqlDbManager(this.options, this.traceHelper);
+            this.lockedByValue = $"{this.options.AppName}|{Process.GetCurrentProcess().Id}";
         }
 
         static SqlProviderOptions? ValidateOptions(SqlProviderOptions? options)
@@ -71,12 +73,6 @@
             return command;
         }
 
-        string GetLockedByValue()
-        {
-            // TODO: Configurable
-            return $"{Environment.MachineName}||{this.options.AppName}";
-        }
-
         public override Task CreateAsync(bool recreateInstanceStore)
             => this.dbManager.CreateOrUpgradeSchemaAsync(recreateInstanceStore);
 
@@ -107,14 +103,18 @@
                 DateTime lockExpiration = DateTime.UtcNow.Add(this.options.WorkItemLockTimeout);
 
                 command.Parameters.Add("@BatchSize", SqlDbType.Int).Value = batchSize;
-                command.Parameters.Add("@LockedBy", SqlDbType.VarChar, 100).Value = this.GetLockedByValue();
+                command.Parameters.Add("@LockedBy", SqlDbType.VarChar, 100).Value = this.lockedByValue;
                 command.Parameters.Add("@LockExpiration", SqlDbType.DateTime2).Value = lockExpiration;
 
                 DbDataReader reader;
 
                 try
                 {
-                    reader = await SqlUtils.ExecuteReaderAsync(command, this.traceHelper, cancellationToken);
+                    reader = await SqlUtils.ExecuteReaderAsync(
+                        command,
+                        this.traceHelper,
+                        instanceId: null,
+                        cancellationToken);
                 }
                 catch (Exception e)
                 {
@@ -219,7 +219,7 @@
             command.Parameters.Add("@InstanceID", SqlDbType.VarChar, size: 100).Value = workItem.InstanceId;
             command.Parameters.Add("@LockExpiration", SqlDbType.DateTime2).Value = lockExpiration;
 
-            await SqlUtils.ExecuteNonQueryAsync(command, this.traceHelper);
+            await SqlUtils.ExecuteNonQueryAsync(command, this.traceHelper, workItem.InstanceId);
 
             workItem.LockedUntilUtc = lockExpiration;
         }
@@ -267,7 +267,7 @@
 
             try
             {
-                await SqlUtils.ExecuteNonQueryAsync(command, this.traceHelper);
+                await SqlUtils.ExecuteNonQueryAsync(command, this.traceHelper, instance.InstanceId);
             }
             catch (SqlException e) when (SqlUtils.IsUniqueKeyViolation(e))
             {
@@ -302,10 +302,14 @@
 
                 DateTime lockExpiration = DateTime.UtcNow.Add(this.options.WorkItemLockTimeout);
 
-                command.Parameters.Add("@LockedBy", SqlDbType.VarChar, size: 100).Value = this.GetLockedByValue();
+                command.Parameters.Add("@LockedBy", SqlDbType.VarChar, size: 100).Value = this.lockedByValue;
                 command.Parameters.Add("@LockExpiration", SqlDbType.DateTime2).Value = lockExpiration;
 
-                using DbDataReader reader = await SqlUtils.ExecuteReaderAsync(command, this.traceHelper, cancellationToken);
+                using DbDataReader reader = await SqlUtils.ExecuteReaderAsync(
+                    command,
+                    this.traceHelper,
+                    instanceId: null,
+                    cancellationToken);
                 if (!await reader.ReadAsync())
                 {
                     await this.activityBackoffHelper.WaitAsync(cancellationToken);
@@ -341,7 +345,8 @@
             command.Parameters.AddMessageIdParameter("@RenewingTasks", workItem.TaskMessage);
             command.Parameters.Add("@LockExpiration", SqlDbType.DateTime2).Value = lockExpiration;
 
-            await SqlUtils.ExecuteNonQueryAsync(command, this.traceHelper);
+            string instanceId = workItem.TaskMessage.OrchestrationInstance.InstanceId;
+            await SqlUtils.ExecuteNonQueryAsync(command, this.traceHelper, instanceId);
 
             workItem.LockedUntilUtc = lockExpiration;
             return workItem;
@@ -355,16 +360,17 @@
             command.Parameters.AddMessageIdParameter("@CompletedTasks", workItem.TaskMessage);
             command.Parameters.AddTaskEventsParameter("@Results", responseMessage);
 
+            OrchestrationInstance instance = workItem.TaskMessage.OrchestrationInstance;
             try
             {
-                await SqlUtils.ExecuteNonQueryAsync(command, this.traceHelper);
+                await SqlUtils.ExecuteNonQueryAsync(command, this.traceHelper, instance.InstanceId);
             }
             catch (SqlException e) when (e.Number == 50002)
             {
                 // 50002 is the error code when we fail to delete the source message. This is expected to mean that
                 // a task activity has executed twice, likely because of an unexpected lock expiration.
                 string taskName = DTUtils.GetName(workItem.TaskMessage.Event) ?? "Unknown";
-                this.traceHelper.DuplicateExecutionDetected(workItem.TaskMessage.OrchestrationInstance, taskName);
+                this.traceHelper.DuplicateExecutionDetected(instance, taskName);
                 return;
             }
 
@@ -382,13 +388,14 @@
             using SqlCommand command = this.GetSprocCommand(connection, "dt.CreateInstance");
 
             ExecutionStartedEvent startEvent = (ExecutionStartedEvent)creationMessage.Event;
+            OrchestrationInstance instance = startEvent.OrchestrationInstance;
             command.Parameters.Add("@Name", SqlDbType.VarChar, size: 300).Value = startEvent.Name;
-            command.Parameters.Add("@InstanceID", SqlDbType.VarChar, size: 100).Value = startEvent.OrchestrationInstance.InstanceId;
-            command.Parameters.Add("@ExecutionID", SqlDbType.VarChar, size: 50).Value = startEvent.OrchestrationInstance.ExecutionId;
+            command.Parameters.Add("@InstanceID", SqlDbType.VarChar, size: 100).Value = instance.InstanceId;
+            command.Parameters.Add("@ExecutionID", SqlDbType.VarChar, size: 50).Value = instance.ExecutionId;
             command.Parameters.Add("@InputText", SqlDbType.VarChar).Value = startEvent.Input;
             command.Parameters.Add("@StartTime", SqlDbType.DateTime2).Value = startEvent.ScheduledStartTime;
 
-            await SqlUtils.ExecuteNonQueryAsync(command, this.traceHelper);
+            await SqlUtils.ExecuteNonQueryAsync(command, this.traceHelper, instance.InstanceId);
         }
 
         public override async Task SendTaskOrchestrationMessageAsync(TaskMessage message)
@@ -398,7 +405,8 @@
 
             command.Parameters.AddOrchestrationEventsParameter("@NewOrchestrationEvents", message);
 
-            await SqlUtils.ExecuteNonQueryAsync(command, this.traceHelper);
+            string instanceId = message.OrchestrationInstance.InstanceId;
+            await SqlUtils.ExecuteNonQueryAsync(command, this.traceHelper, instanceId);
         }
 
         public override async Task<OrchestrationState> WaitForOrchestrationAsync(
@@ -459,6 +467,7 @@
             using DbDataReader reader = await SqlUtils.ExecuteReaderAsync(
                 command,
                 this.traceHelper,
+                instanceId,
                 cancellationToken);
 
             if (await reader.ReadAsync(cancellationToken))
@@ -478,7 +487,7 @@
             command.Parameters.Add("@InstanceID", SqlDbType.VarChar, size: 100).Value = instanceId;
             command.Parameters.Add("@GetInputsAndOutputs", SqlDbType.Bit).Value = true; // There's no clean way for the caller to specify this currently
 
-            using DbDataReader reader = await SqlUtils.ExecuteReaderAsync(command, this.traceHelper);
+            using DbDataReader reader = await SqlUtils.ExecuteReaderAsync(command, this.traceHelper, instanceId);
 
             List<HistoryEvent> history = await ReadHistoryEventsAsync(reader, executionIdFilter);
             return JsonConvert.SerializeObject(history);
@@ -519,7 +528,7 @@
             command.Parameters.Add("@InstanceID", SqlDbType.VarChar, size: 100).Value = instanceId;
             command.Parameters.Add("@Reason", SqlDbType.VarChar).Value = reason;
 
-            await SqlUtils.ExecuteNonQueryAsync(command, this.traceHelper);
+            await SqlUtils.ExecuteNonQueryAsync(command, this.traceHelper, instanceId);
         }
 
         public override async Task PurgeOrchestrationHistoryAsync(

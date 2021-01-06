@@ -33,15 +33,20 @@
 
         [Event(EventIds.SprocCompleted, Level = EventLevel.Verbose)]
         public void SprocCompleted(
+            string? InstanceId,
             string Name,
             long LatencyMs,
+            int RetryCount,
             string AppName,
             string ExtensionVersion)
         {
+            // TODO: Switch to WriteEventCore for better performance
             this.WriteEvent(
                 EventIds.SprocCompleted,
+                InstanceId ?? string.Empty,
                 Name,
                 LatencyMs,
+                RetryCount,
                 AppName,
                 ExtensionVersion);
         }
@@ -169,6 +174,24 @@
                 InstanceId,
                 ExecutionId ?? string.Empty,
                 Name,
+                AppName,
+                ExtensionVersion);
+        }
+
+        [Event(EventIds.TransientDatabaseFailure, Level = EventLevel.Warning)]
+        internal void TransientDatabaseFailure(
+            string? InstanceId,
+            int RetryCount,
+            string Details,
+            string AppName,
+            string ExtensionVersion)
+        {
+            // TODO: Use WriteEventCore for better performance
+            this.WriteEvent(
+                EventIds.TransientDatabaseFailure,
+                InstanceId ?? string.Empty,
+                RetryCount,
+                Details,
                 AppName,
                 ExtensionVersion);
         }

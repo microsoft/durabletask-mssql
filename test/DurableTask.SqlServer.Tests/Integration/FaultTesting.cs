@@ -210,6 +210,7 @@
             // before it will retry the checkpoint.
             this.testService.OrchestrationServiceOptions.WorkItemLockTimeout = TimeSpan.FromSeconds(5);
 
+            var secondCallSignal = new ManualResetEvent(initialState: false);
             var resumeSignal = new ManualResetEvent(initialState: false);
 
             // Set up a mock that will hang on the first call, but succeed the second call
@@ -225,6 +226,10 @@
                         firstCall = false;
                         resumeSignal.WaitOne();
                     }
+                    else
+                    {
+                        secondCallSignal.Set();
+                    }
                 });
 
             // Block background activity renewal to ensure another thread tries to execute the activity work item
@@ -238,16 +243,24 @@
             TestInstance<string> instance = await this.testService.RunOrchestration(
                 input,
                 orchestrationName,
-                implementation: (ctx, input) => ctx.ScheduleTask<string>("SayHello", "", input),
+                implementation: async (ctx, input) =>
+                {
+                    string result = await ctx.ScheduleTask<string>("SayHello", "", input);
+                    await Task.Delay(Timeout.Infinite); // simulate waiting for an external event
+                    return result;
+                },
                 activities: ("SayHello", TestService.MakeActivity((TaskContext ctx, string input) => $"Hello, {input}!")));
 
             // Give the orchestration extra time to finish. Time is needed for the lock timeout
             // to expire.
-            OrchestrationState state = await instance.WaitForCompletion(
-                timeout: TimeSpan.FromSeconds(30),
-                expectedOutput: $"Hello, {input}!");
+            await instance.WaitForStart(TimeSpan.FromSeconds(10));
+            bool resumed = secondCallSignal.WaitOne(TimeSpan.FromSeconds(10));
 
+            Assert.True(resumed);
             Assert.False(firstCall);
+
+            // Give the retrying thread time to checkpoint its progress
+            await Task.Delay(TimeSpan.FromSeconds(3));
 
             // Unblock the hung thread. This should result in a failure due to a detected duplicate execution.
             resumeSignal.Set();

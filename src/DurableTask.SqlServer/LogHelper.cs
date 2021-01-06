@@ -25,11 +25,13 @@
             this.WriteLog(logEvent);
         }
 
-        public void SprocCompleted(string name, Stopwatch latencyStopwatch)
+        public void SprocCompleted(string name, Stopwatch latencyStopwatch, int retryCount, string? instanceId)
         {
             var logEvent = new LogEvents.SprocCompletedEvent(
                 name,
-                latencyStopwatch.ElapsedMilliseconds);
+                latencyStopwatch.ElapsedMilliseconds,
+                retryCount,
+                instanceId);
 
             this.WriteLog(logEvent);
         }
@@ -82,6 +84,12 @@
                 instance.InstanceId,
                 instance.ExecutionId,
                 name);
+            this.WriteLog(logEvent);
+        }
+
+        public void TransientDatabaseFailure(Exception e, string? instanceId, int retryCount)
+        {
+            var logEvent = new LogEvents.TransientDatabaseFailure(e, instanceId, retryCount);
             this.WriteLog(logEvent);
         }
 

@@ -73,10 +73,12 @@
 
         internal class SprocCompletedEvent : StructuredLogEvent, IEventSourceEvent
         {
-            public SprocCompletedEvent(string name, long latencyMs)
+            public SprocCompletedEvent(string name, long latencyMs, int retryCount, string? instanceId)
             {
                 this.Name = name;
                 this.LatencyMs = latencyMs;
+                this.RetryCount = retryCount;
+                this.InstanceId = instanceId;
             }
 
             [StructuredLogField]
@@ -85,6 +87,12 @@
             [StructuredLogField]
             public long LatencyMs { get; }
 
+            [StructuredLogField]
+            public int RetryCount { get; }
+
+            [StructuredLogField]
+            public string? InstanceId { get; }
+
             public override LogLevel Level => LogLevel.Debug;
 
             public override EventId EventId => new EventId(
@@ -92,12 +100,16 @@
                 nameof(EventIds.SprocCompleted));
 
             protected override string CreateLogMessage() =>
-                $"Executed stored procedure {this.Name} in {this.LatencyMs}ms";
+                string.IsNullOrEmpty(this.InstanceId) ?
+                    $"Executed stored procedure {this.Name} in {this.LatencyMs}ms" :
+                    $"{this.InstanceId}: Executed stored procedure {this.Name} in {this.LatencyMs}ms";
 
             void IEventSourceEvent.WriteEventSource() =>
                 DefaultEventSource.Log.SprocCompleted(
+                    this.InstanceId,
                     this.Name,
                     this.LatencyMs,
+                    this.RetryCount,
                     DTUtils.AppName,
                     DTUtils.ExtensionVersionString);
         }
@@ -295,6 +307,42 @@
                     this.InstanceId,
                     this.ExecutionId,
                     this.Name,
+                    DTUtils.AppName,
+                    DTUtils.ExtensionVersionString);
+        }
+
+        internal class TransientDatabaseFailure : StructuredLogEvent, IEventSourceEvent
+        {
+            public TransientDatabaseFailure(Exception e, string? instanceId, int retryCount)
+            {
+                this.InstanceId = instanceId;
+                this.RetryCount = retryCount;
+                this.Details = e.ToString();
+            }
+
+            [StructuredLogField]
+            public string? InstanceId { get; }
+
+            [StructuredLogField]
+            public int RetryCount { get; }
+
+            [StructuredLogField]
+            public string Details { get; }
+
+            public override EventId EventId => new EventId(
+                EventIds.TransientDatabaseFailure,
+                nameof(EventIds.TransientDatabaseFailure));
+
+            public override LogLevel Level => LogLevel.Warning;
+
+            protected override string CreateLogMessage() =>
+                $"{this.InstanceId ?? "Non-orchestration failure"}: A transient database failure occurred and will be retried. Current retry count: {this.RetryCount}. Details: {this.Details}.";
+
+            void IEventSourceEvent.WriteEventSource() =>
+                DefaultEventSource.Log.TransientDatabaseFailure(
+                    this.InstanceId,
+                    this.RetryCount,
+                    this.Details,
                     DTUtils.AppName,
                     DTUtils.ExtensionVersionString);
         }
