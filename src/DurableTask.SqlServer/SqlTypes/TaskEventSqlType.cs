@@ -96,9 +96,7 @@
 
         static SqlDataRecord PopulateTaskMessageRecord(TaskMessage msg, SqlDataRecord record)
         {
-            string instanceId = msg.OrchestrationInstance.InstanceId;
-
-            record.SetSqlString(ColumnOrdinals.InstanceID, instanceId);
+            record.SetSqlString(ColumnOrdinals.InstanceID, msg.OrchestrationInstance.InstanceId);
             record.SetSqlString(ColumnOrdinals.ExecutionID, msg.OrchestrationInstance.ExecutionId);
             record.SetSqlString(ColumnOrdinals.Name, SqlUtils.GetName(msg.Event));
             record.SetSqlString(ColumnOrdinals.EventType, msg.Event.EventType.ToString());

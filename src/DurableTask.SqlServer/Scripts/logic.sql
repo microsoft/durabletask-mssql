@@ -930,10 +930,21 @@ BEGIN
     DECLARE @TaskHub varchar(50) = dt.CurrentTaskHub()
 
     BEGIN TRANSACTION
-    -- *** IMPORTANT ***
-    -- To prevent deadlocks, it is important to maintain consistent table access
-    -- order across all stored procedures that execute within a transaction.
-    -- Table order for this sproc: Payloads --> Instances --> NewEvents --> NewTasks
+
+    /* Ensure the instance exists and is running before attempting to handle task results.
+       We need to do this first and hold the lock to avoid race conditions and deadlocks with other operations. */
+    DECLARE @ExistingInstanceID varchar(100)
+
+    SELECT @ExistingInstanceID = R.[InstanceId]
+    FROM Instances I WITH (HOLDLOCK)
+        INNER JOIN @Results R ON 
+            I.[TaskHub] = @TaskHub AND
+            I.[InstanceID] = R.[InstanceID] AND 
+            I.[ExecutionID] = R.[ExecutionID] AND
+            I.[RuntimeStatus] IN ('Running', 'Suspended')
+    
+    IF @ExistingInstanceID IS NULL
+        THROW 50003, N'The target instance is not running. It may have already completed (in which case this execution can be considered a duplicate) or been terminated. Any results of this task activity execution will be discarded.', 1;
 
     -- Insert new event data payloads into the Payloads table in batches.
     -- PayloadID values are provided by the caller only if a payload exists.
@@ -962,12 +973,6 @@ BEGIN
         R.[VisibleTime],
         R.[PayloadID]
     FROM @Results R
-        -- This join ensures we don't add messages if the associated instance was completed, terminated, or doesn't exist
-        INNER JOIN Instances I ON 
-            I.[TaskHub] = @TaskHub AND
-            I.[InstanceID] = R.[InstanceID] AND 
-            I.[ExecutionID] = R.[ExecutionID] AND
-            I.[RuntimeStatus] IN ('Running', 'Suspended')
 
     -- We return the list of deleted messages so that the caller can issue a 
     -- warning about missing messages
@@ -981,7 +986,7 @@ BEGIN
     -- This can happen if the message was completed by another worker, in which
     -- case we don't want any of the side-effects to persist.
     IF @@ROWCOUNT <> (SELECT COUNT(*) FROM @CompletedTasks)
-        THROW 50002, N'Failed to delete the completed task events(s). They may have been deleted by another worker. Any pending side-effects will be discarded.', 1;
+        THROW 50002, N'Failed to delete the completed task events(s). They may have been deleted by another worker, in which case the current execution is likely a duplicate. Any results or pending side-effects of this task activity execution will be discarded.', 1;
 
     COMMIT TRANSACTION
 END
