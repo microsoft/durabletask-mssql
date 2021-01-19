@@ -1,4 +1,7 @@
-﻿// Reference: https://docs.microsoft.com/en-us/azure/azure-functions/functions-dotnet-dependency-injection
+﻿// Copyright (c) .NET Foundation. All rights reserved.
+// Licensed under the MIT License. See LICENSE in the project root for license information.
+
+// Reference: https://docs.microsoft.com/en-us/azure/azure-functions/functions-dotnet-dependency-injection
 [assembly: Microsoft.Azure.Functions.Extensions.DependencyInjection.FunctionsStartup(
     typeof(DurableTask.SqlServer.AzureFunctions.SqlDurabilityProviderStartup))]
 

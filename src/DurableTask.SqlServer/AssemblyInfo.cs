@@ -1,3 +1,6 @@
-﻿using System.Runtime.CompilerServices;
+﻿// Copyright (c) .NET Foundation. All rights reserved.
+// Licensed under the MIT License. See LICENSE in the project root for license information.
+
+using System.Runtime.CompilerServices;
 
 [assembly: InternalsVisibleTo("DurableTask.SqlServer.Tests, PublicKey=0024000004800000940000000602000000240000525341310004000001000100fd8328dce03cd2e3033a411da400c391864fb4896f1265b2e46914ae677f9268e57ce00fe5ab144bf1746670c16798821c1e821dc3bc0ebce8374c20de809e7ae1b613b71a0a2a5680782e0458cec6c520bc77a90b2c5b00425da400b611d110a43219a9db52e89ce52705e8d11e68ca536f9d5dbe1de8c054d4f70161984de3")]

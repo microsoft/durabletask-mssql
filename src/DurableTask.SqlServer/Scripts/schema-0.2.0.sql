@@ -1,4 +1,6 @@
-﻿
+﻿-- Copyright (c) .NET Foundation. All rights reserved.
+-- Licensed under the MIT License. See LICENSE in the project root for license information.
+
 -- PERSISTENT SCHEMA OBJECTS (tables, indexes, types, etc.)
 --
 -- The contents of this file must never be changed after

@@ -1,8 +1,10 @@
-﻿namespace DurableTask.SqlServer.Logging
+﻿// Copyright (c) .NET Foundation. All rights reserved.
+// Licensed under the MIT License. See LICENSE in the project root for license information.
+
+namespace DurableTask.SqlServer.Logging
 {
     using System;
     using DurableTask.Core;
-    using DurableTask.Core.History;
     using DurableTask.Core.Logging;
     using Microsoft.Extensions.Logging;
 
