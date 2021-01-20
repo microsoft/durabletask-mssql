@@ -50,7 +50,7 @@ For local development using Azure Functions, select one of the [tools available 
 Use the [Azure Functions Core Tools](https://docs.microsoft.com/azure/azure-functions/functions-run-local) to explicitly install this extension for Python, JavaScript, and PowerShell.
 
 ```bash
-func extensions install -p DurableTask.SqlServer.AzureFunctions -s https://nuget.pkg.github.com/cgillum/index.json
+func extensions install -p DurableTask.SqlServer.AzureFunctions -s https://nuget.pkg.github.com/Azure/index.json
 ```
 
 #### .NET Projects
@@ -58,7 +58,7 @@ func extensions install -p DurableTask.SqlServer.AzureFunctions -s https://nuget
 If you're building a .NET precompiled app, then you can add a nuget reference directly in your .csproj file.
 
 ```xml
-<PackageReference Include="DurableTask.SqlServer.AzureFunctions" Version="0.4.0-alpha" />
+<PackageReference Include="DurableTask.SqlServer.AzureFunctions" Version="0.4.1-alpha" />
 ```
 
 #### Local configuration
