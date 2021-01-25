@@ -22,7 +22,7 @@ This provider was designed from the ground-up with simplicity in mind. The data 
 
 ### Multitenancy
 
-One of the goals for this provider is to create a foundation for safe multi-tenant deployments. This is especially valuable when your organization has many small apps but prefers to manage only a single backend database. Different apps can connect to this database using different database login credentials. Database administrators will be able to query data across all tenants but individual apps will only have access to their own data. Note that tenant-specific code that runs _outside_ the database would still be expected to run on appropriately isolated compute instances.
+One of the goals for this provider is to create a foundation for safe [multi-tenant deployments](https://en.wikipedia.org/wiki/Multitenancy). This is especially valuable when your organization has many small apps but prefers to manage only a single backend database. Different apps can connect to this database using different database login credentials. Database administrators will be able to query data across all tenants but individual apps will only have access to their own data. Note that tenant-specific code that runs _outside_ the database would still be expected to run on appropriately isolated compute instances. Learn how to get started with multitenancy [here](multitenancy.md).
 
 ## FAQ
 
