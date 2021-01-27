@@ -119,6 +119,8 @@ When the task hub worker for your app starts up, it will automatically check to 
 
 For local development using Azure Functions, select one of the [tools available for local development](https://docs.microsoft.com/azure/azure-functions/functions-develop-local). To configure the Durable SQL provider, you'll need to add the [DurableTask.SqlServer.AzureFunction](https://www.myget.org/feed/azure-appservice/package/nuget/DurableTask.SqlServer.AzureFunctions) NuGet package reference to your project.
 
+!> At the time of writing, the Durable SQL provider is in its early stages and does not yet work with the Azure Functions Consumption plan. It does work with the Azure Functions Elastic Premium plan if you manually configure a minimum number of instances for your app, but does not support automatic scaling. App Service plans with pre-configured instance counts are also supported today. Consumption plan support and automatic, elastic scaling is coming in a later release.
+
 ### .NET Core 3.1
 
 Durable Functions projects targeting .NET Core 3.1 can add the **DurableTask.SqlServer.AzureFunction** package by updating running the following `dotnet` CLI command:

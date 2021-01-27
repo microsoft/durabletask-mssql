@@ -197,11 +197,11 @@ GO
 -- Security 
 IF DATABASE_PRINCIPAL_ID('dt_runtime') IS NULL
 BEGIN
-    -- This is the role to which all low-priviledge user accounts should be associated using
+    -- This is the role to which all low-privilege user accounts should be associated using
     -- the 'ALTER ROLE dt_runtime ADD MEMBER [<username>]' statement.
     CREATE ROLE dt_runtime
 
-    -- This low-priviledge role will only have access to stored procedures in the dt schema.
+    -- This low-privilege role will only have access to stored procedures in the dt schema.
     -- Each stored procedure limits access to data based on the username, ensuring that no
     -- database user can access data created by another database user.
     GRANT EXECUTE ON SCHEMA::dt TO dt_runtime
