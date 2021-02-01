@@ -26,6 +26,10 @@ One of the goals for this provider is to create a foundation for safe [multi-ten
 
 ## FAQ
 
+**Q. Does this require Azure?**
+
+No. You can run on Azure if you want, but this provider was designed specifically to support running DTFx and Durable Functions in a non-Azure environment. In fact, it's the first production-grade provider that supports non-Azure deployments.
+
 **Q. When would I choose this over the Azure Storage provider?**
 
 * If you want to build cloud-agnostic apps - Microsoft SQL databases can be run [anywhere](#portability)

@@ -1,12 +1,12 @@
 ﻿<p align="center">
-  <a href="https://azure.github.io/durabletask-mssql/">
+  <a href="https://microsoft.github.io/durabletask-mssql/">
     <img alt="Durable Task SQL Provider" src="./docs/media/logo.png">
   </a>
 </p>
 
 # Microsoft SQL Provider for the Durable Task Framework
 
-[![Build status](https://github.com/Azure/durabletask-mssql/workflows/Build%20and%20Test/badge.svg)](https://github.com/Azure/durabletask-mssql/actions?workflow=Build+and+Test)
+[![Build status](https://github.com/microsoft/durabletask-mssql/workflows/Build%20and%20Test/badge.svg)](https://github.com/microsoft/durabletask-mssql/actions?workflow=Build+and+Test)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
 The Microsoft SQL provider for the [Durable Task Framework](https://github.com/Azure/durabletask) (DTFx) persists all task hub state in a Microsoft SQL database, which can be hosted in the cloud or in your own infrastructure.
@@ -16,7 +16,7 @@ This provider includes support for all DTFx features, including orchestrations, 
 
 ## Documentation
 
-Want to learn more? Detailed information about this provider and getting started instructions can be found [here](https://azure.github.io/durabletask-mssql/).
+Want to learn more? Detailed information about this provider and getting started instructions can be found [here](https://microsoft.github.io/durabletask-mssql/).
 
 ## Code of Conduct
 
