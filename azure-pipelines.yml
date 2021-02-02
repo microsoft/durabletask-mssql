@@ -35,8 +35,8 @@ steps:
     verbosityPack: Minimal
     configuration: Release
     nobuild: true
-    packDirectory: 'durabletask-mssql'
-    packagesToPack: '**/*.csproj'
+    packDirectory: $(build.artifactStagingDirectory)
+    packagesToPack: 'src/**/*.csproj'
 
 - publish: $(build.artifactStagingDirectory)
   artifact: PackageOutput
