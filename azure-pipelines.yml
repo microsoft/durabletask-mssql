@@ -22,9 +22,8 @@ steps:
 - task: DotNetCoreCLI@2
   inputs:
     command: pack
-    verbosityPack: Minimal
-    packagesToPack: '**/*.csproj'
-    packDirectory: '$(Build.ArtifactStagingDirectory)'
+    verbosityPack: Normal
+    packagesToPack: 'src/**/*.csproj'
 
 - publish: $(build.artifactStagingDirectory)
   artifact: PackageOutput
