@@ -14,13 +14,26 @@ variables:
   buildConfiguration: 'Release'
 
 steps:
+- task: DotNetCoreCLI@2
+  displayName: 'dotnet restore'
+  inputs:
+    command: restore
+    projects: 'src/**/*.csproj'
+
+- task: VSBuild@1
+  displayName: 'Build Durable Extension'
+  inputs:
+    solution: '**/*.sln'
+    vsVersion: 16.0
+    configuration: Release
 
 - task: DotNetCoreCLI@2
   inputs:
     command: pack
     verbosityPack: Minimal
     configuration: Release
-    nobuild: false
+    nobuild: true
+    packDirectory: 'durabletask-mssql'
     packagesToPack: 'src/**/*.csproj'
 
 - publish: $(build.artifactStagingDirectory)
