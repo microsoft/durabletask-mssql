@@ -1,35 +1,30 @@
-# ASP.NET
-# Build and test ASP.NET projects.
-# Add steps that publish symbols, save build artifacts, deploy, and more:
-# https://docs.microsoft.com/azure/devops/pipelines/apps/aspnet/build-aspnet-4
-
 trigger: none
 
 pool:
   vmImage: 'windows-latest'
 
-variables:
-  solution: '**/*.sln'
-  buildPlatform: 'Any CPU'
-  buildConfiguration: 'Release'
-
 steps:
+# Start by restoring all the dependencies. This needs to be its own task
+# from what I can tell.
 - task: DotNetCoreCLI@2
-  displayName: 'dotnet restore'
+  displayName: 'Restore Dependencies'
   inputs:
     command: restore
     verbosityRestore: Minimal
     projects: '**/*.csproj'
 
+# Build the entire solution. This will also build all the tests, which
+# isn't strictly necessary...
 - task: VSBuild@1
-  displayName: 'Build Durable Extension'
+  displayName: 'Build'
   inputs:
     solution: '**/*.sln'
     vsVersion: 16.0
     logFileVerbosity: minimal
     configuration: Release
-    
 
+# Authenticode sign all the DLLs with the Microsoft certificate.
+# This appears to be an in-place signing job, which is convenient.
 - task: SFP.build-tasks.custom-build-task-1.EsrpCodeSigning@1
   displayName: 'ESRP CodeSigning: Authenticode'
   inputs:
@@ -61,6 +56,8 @@ steps:
           }
       ]
 
+# Packaging needs to be a separate step from build.
+# This will automatically pick up the signed DLLs.
 - task: DotNetCoreCLI@2
   inputs:
     command: pack
@@ -70,6 +67,8 @@ steps:
     packDirectory: $(build.artifactStagingDirectory)
     packagesToPack: 'src/**/*.csproj'
 
+# Digitally sign all the nuget packages with the Microsoft certificate.
+# This appears to be an in-place signing job, which is convenient.
 - task: SFP.build-tasks.custom-build-task-1.EsrpCodeSigning@1
   displayName: 'ESRP CodeSigning: Nupkg'
   inputs:
@@ -95,5 +94,7 @@ steps:
         }
      ]
 
+# Make the nuget packages available for download in the ADO portal UI
 - publish: $(build.artifactStagingDirectory)
+  displayName: 'Publish Nupkgs to Artifacts'
   artifact: PackageOutput
