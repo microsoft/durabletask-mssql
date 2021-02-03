@@ -28,6 +28,7 @@ steps:
     vsVersion: 16.0
     logFileVerbosity: minimal
     configuration: Release
+    
 
 - task: SFP.build-tasks.custom-build-task-1.EsrpCodeSigning@1
   displayName: 'ESRP CodeSigning: Authenticode'
