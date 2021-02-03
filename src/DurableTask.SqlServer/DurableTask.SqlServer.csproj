@@ -5,10 +5,11 @@
     <LangVersion>8.0</LangVersion>
     <Nullable>enable</Nullable>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <PackageId>Microsoft.DurableTask.SqlServer</PackageId>
     <DebugType>embedded</DebugType>
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
     <EmbedUntrackedSources>true</EmbedUntrackedSources>
-    <RepositoryUrl>https://github.com/Azure/durabletask-mssql</RepositoryUrl>
+    <RepositoryUrl>https://github.com/microsoft/durabletask-mssql</RepositoryUrl>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <SignAssembly>true</SignAssembly>
     <AssemblyOriginatorKeyFile>..\..\sign.snk</AssemblyOriginatorKeyFile>
@@ -18,7 +19,7 @@
   <!-- Version settings: https://andrewlock.net/version-vs-versionsuffix-vs-packageversion-what-do-they-all-mean/ -->
   <PropertyGroup>
     <MajorVersion>0</MajorVersion>
-    <VersionPrefix>$(MajorVersion).4.1</VersionPrefix>
+    <VersionPrefix>$(MajorVersion).4.2</VersionPrefix>
     <VersionSuffix>alpha</VersionSuffix>
     <AssemblyVersion>$(MajorVersion).0.0.0</AssemblyVersion>
     <BuildSuffix Condition="'$(GITHUB_RUN_NUMBER)' != ''">.$(GITHUB_RUN_NUMBER)</BuildSuffix>
