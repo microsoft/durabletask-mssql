@@ -33,7 +33,7 @@ steps:
   displayName: 'ESRP CodeSigning: Authenticode'
   inputs:
     ConnectedServiceName: 'ESRP Service'
-    FolderPath: 'src/**/bin/Release'
+    FolderPath: 'src'
     Pattern: 'DurableTask.*.dll'
     signConfigType: inlineSignParams
     inlineOperation: |
