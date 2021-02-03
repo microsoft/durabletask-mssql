@@ -5,6 +5,7 @@
     <LangVersion>8.0</LangVersion>
     <Nullable>enable</Nullable>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <PackageId>Microsoft.DurableTask.SqlServer.AzureFunctions</PackageId>
     <DebugType>embedded</DebugType>
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
     <EmbedUntrackedSources>true</EmbedUntrackedSources>

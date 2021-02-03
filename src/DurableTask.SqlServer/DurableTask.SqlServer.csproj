@@ -22,7 +22,7 @@
     <VersionPrefix>$(MajorVersion).4.2</VersionPrefix>
     <VersionSuffix>alpha</VersionSuffix>
     <AssemblyVersion>$(MajorVersion).0.0.0</AssemblyVersion>
-    <BuildSuffix Condition="'$(Rev:r)' != ''">.$(Rev:r)</BuildSuffix>
+    <BuildSuffix Condition="'$(GITHUB_RUN_NUMBER)' != ''">.$(GITHUB_RUN_NUMBER)</BuildSuffix>
     <FileVersion>$(VersionPrefix)$(BuildSuffix)</FileVersion>
   </PropertyGroup>
 
