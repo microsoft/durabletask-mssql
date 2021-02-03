@@ -34,7 +34,7 @@ steps:
   inputs:
     ConnectedServiceName: 'ESRP Service'
     FolderPath: 'src/**/bin/Release'
-    Pattern: '*.dll'
+    Pattern: 'DurableTask.*.dll'
     signConfigType: inlineSignParams
     inlineOperation: |
      [    
