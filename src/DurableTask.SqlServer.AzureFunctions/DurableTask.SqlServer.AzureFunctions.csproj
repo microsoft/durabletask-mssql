@@ -4,21 +4,27 @@
     <TargetFramework>netstandard2.1</TargetFramework>
     <LangVersion>8.0</LangVersion>
     <Nullable>enable</Nullable>
-    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-    <PackageId>Microsoft.DurableTask.SqlServer.AzureFunctions</PackageId>
     <DebugType>embedded</DebugType>
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
     <EmbedUntrackedSources>true</EmbedUntrackedSources>
     <RepositoryUrl>https://github.com/microsoft/durabletask-mssql</RepositoryUrl>
-    <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <SignAssembly>true</SignAssembly>
-    <AssemblyOriginatorKeyFile>..\..\sign.snk</AssemblyOriginatorKeyFile>
+    <AssemblyOriginatorKeyFile>../../sign.snk</AssemblyOriginatorKeyFile>
+  </PropertyGroup>
+  
+  <!-- NuGet package settings -->
+  <PropertyGroup>
+    <PackageId>Microsoft.DurableTask.SqlServer.AzureFunctions</PackageId>
+    <PackageTags>Durable Functions;Azure Functions;Microsoft;Durable;Task;Orchestration;Workflow;Activity;Reliable;SQL</PackageTags>
+    <PackageIcon>logo.png</PackageIcon>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
   </PropertyGroup>
 
   <!-- Version settings: https://andrewlock.net/version-vs-versionsuffix-vs-packageversion-what-do-they-all-mean/ -->
   <PropertyGroup>
     <MajorVersion>0</MajorVersion>
-    <VersionPrefix>$(MajorVersion).4.1</VersionPrefix>
+    <VersionPrefix>$(MajorVersion).4.2</VersionPrefix>
     <VersionSuffix>alpha</VersionSuffix>
     <AssemblyVersion>$(MajorVersion).0.0.0</AssemblyVersion>
     <BuildSuffix Condition="'$(GITHUB_RUN_NUMBER)' != ''">.$(GITHUB_RUN_NUMBER)</BuildSuffix>
@@ -31,11 +37,15 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\DurableTask.SqlServer\DurableTask.SqlServer.csproj" />
+    <ProjectReference Include="../DurableTask.SqlServer/DurableTask.SqlServer.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.SourceLink.GitHub" Version="1.0.*" PrivateAssets="All" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="../../docs/media/logo.png" Pack="true" PackagePath="/"/>
   </ItemGroup>
   
 </Project>

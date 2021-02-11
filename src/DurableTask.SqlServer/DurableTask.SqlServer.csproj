@@ -4,16 +4,22 @@
     <TargetFramework>netstandard2.1</TargetFramework>
     <LangVersion>8.0</LangVersion>
     <Nullable>enable</Nullable>
-    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-    <PackageId>Microsoft.DurableTask.SqlServer</PackageId>
     <DebugType>embedded</DebugType>
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
     <EmbedUntrackedSources>true</EmbedUntrackedSources>
     <RepositoryUrl>https://github.com/microsoft/durabletask-mssql</RepositoryUrl>
-    <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <SignAssembly>true</SignAssembly>
-    <AssemblyOriginatorKeyFile>..\..\sign.snk</AssemblyOriginatorKeyFile>
+    <AssemblyOriginatorKeyFile>../../sign.snk</AssemblyOriginatorKeyFile>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <!-- NuGet package settings -->
+  <PropertyGroup>
+    <PackageId>Microsoft.DurableTask.SqlServer</PackageId>
+    <PackageTags>Durable Task Framework;Microsoft;Durable;Task;Orchestration;Workflow;Activity;Reliable;SQL</PackageTags>
+    <PackageIcon>logo.png</PackageIcon>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
   </PropertyGroup>
 
   <!-- Version settings: https://andrewlock.net/version-vs-versionsuffix-vs-packageversion-what-do-they-all-mean/ -->
@@ -27,7 +33,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <EmbeddedResource Include="Scripts\*.sql" />
+    <EmbeddedResource Include="Scripts/*.sql" />
   </ItemGroup>
   
   <ItemGroup>
@@ -41,6 +47,10 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.SourceLink.GitHub" Version="1.0.*" PrivateAssets="All" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="../../docs/media/logo.png" Pack="true" PackagePath="/"/>
   </ItemGroup>
 
 </Project>
