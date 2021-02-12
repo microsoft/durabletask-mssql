@@ -1,34 +1,18 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
+  <!-- Import common properties for all shipping packages-->
+  <Import Project="../common.props" />
+  
   <PropertyGroup>
     <TargetFramework>netstandard2.1</TargetFramework>
-    <LangVersion>8.0</LangVersion>
-    <Nullable>enable</Nullable>
-    <DebugType>embedded</DebugType>
-    <PublishRepositoryUrl>true</PublishRepositoryUrl>
-    <EmbedUntrackedSources>true</EmbedUntrackedSources>
-    <RepositoryUrl>https://github.com/microsoft/durabletask-mssql</RepositoryUrl>
-    <SignAssembly>true</SignAssembly>
-    <AssemblyOriginatorKeyFile>../../sign.snk</AssemblyOriginatorKeyFile>
   </PropertyGroup>
   
   <!-- NuGet package settings -->
   <PropertyGroup>
     <PackageId>Microsoft.DurableTask.SqlServer.AzureFunctions</PackageId>
-    <PackageTags>Durable Functions;Azure Functions;Microsoft;Durable;Task;Orchestration;Workflow;Activity;Reliable;SQL</PackageTags>
-    <PackageIcon>logo.png</PackageIcon>
-    <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-  </PropertyGroup>
-
-  <!-- Version settings: https://andrewlock.net/version-vs-versionsuffix-vs-packageversion-what-do-they-all-mean/ -->
-  <PropertyGroup>
-    <MajorVersion>0</MajorVersion>
-    <VersionPrefix>$(MajorVersion).4.2</VersionPrefix>
-    <VersionSuffix>alpha</VersionSuffix>
-    <AssemblyVersion>$(MajorVersion).0.0.0</AssemblyVersion>
-    <BuildSuffix Condition="'$(GITHUB_RUN_NUMBER)' != ''">.$(GITHUB_RUN_NUMBER)</BuildSuffix>
-    <FileVersion>$(VersionPrefix)$(BuildSuffix)</FileVersion>
+    <Title>Azure Durable Functions SQL Provider</Title>
+    <Description>Microsoft SQL provider for Azure Durable Functions.</Description>
+    <PackageTags>Microsoft;Azure;Functions;Durable;Task;Orchestration;Workflow;Activity;Reliable;SQL</PackageTags>
   </PropertyGroup>
 
   <ItemGroup>
@@ -38,14 +22,6 @@
 
   <ItemGroup>
     <ProjectReference Include="../DurableTask.SqlServer/DurableTask.SqlServer.csproj" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="1.0.*" PrivateAssets="All" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Content Include="../../docs/media/logo.png" Pack="true" PackagePath="/"/>
   </ItemGroup>
   
 </Project>

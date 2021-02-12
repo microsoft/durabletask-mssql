@@ -11,7 +11,9 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution 
 	ProjectSection(SolutionItems) = preProject
 		.editorconfig = .editorconfig
 		.gitignore = .gitignore
+		azure-pipelines.yml = azure-pipelines.yml
 		.github\workflows\build-and-test.yml = .github\workflows\build-and-test.yml
+		src\common.props = src\common.props
 		nuget.config = nuget.config
 		sign.snk = sign.snk
 	EndProjectSection
