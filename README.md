@@ -14,6 +14,15 @@ This provider includes support for all DTFx features, including orchestrations, 
 
 > ⚠ **IMPORTANT**: This project is currently under active development, working towards an initial _alpha_ release. Not all features are fully implemented and some names my change. It is not yet appropriate for use in production.
 
+## Downloads
+
+The Durable SQL provider for Durable Functions and DTFx are available as NuGet packages.
+
+| Package | Latest Version | Description |
+| ------- | -------------- | ----------- |
+| Microsoft.DurableTask.SqlServer.AzureFunctions | [![NuGet](https://img.shields.io/nuget/v/Microsoft.DurableTask.SqlServer.AzureFunctions.svg?style=flat)](https://www.nuget.org/packages/Microsoft.DurableTask.SqlServer.AzureFunctions/) | Use this package if building serverless Function apps with Azure Durable Functions. |
+| Microsoft.DurableTask.SqlServer | [![NuGet](https://img.shields.io/nuget/v/Microsoft.DurableTask.SqlServer.svg?style=flat)](https://www.nuget.org/packages/Microsoft.DurableTask.SqlServer/) | Use this package if using DTFx to build .NET apps. |
+
 ## Documentation
 
 Want to learn more? Detailed information about this provider and getting started instructions can be found [here](https://microsoft.github.io/durabletask-mssql/).
