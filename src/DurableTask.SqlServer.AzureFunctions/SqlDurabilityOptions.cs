@@ -14,6 +14,9 @@ namespace DurableTask.SqlServer.AzureFunctions
         [JsonProperty("taskEventLockTimeout")]
         public TimeSpan TaskEventLockTimeout { get; set; } = TimeSpan.FromMinutes(2);
 
+        [JsonProperty("taskEventBatchSize")]
+        public int TaskEventBatchSize { get; set; } = 10;
+
         internal SqlProviderOptions ProviderOptions { get; set; } = new SqlProviderOptions();
     }
 }

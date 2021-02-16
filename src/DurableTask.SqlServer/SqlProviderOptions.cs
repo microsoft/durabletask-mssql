@@ -11,6 +11,9 @@ namespace DurableTask.SqlServer
 
     public class SqlProviderOptions
     {
+        [JsonProperty("workItemBatchSize")]
+        public int WorkItemBatchSize { get; set; } = 10;
+
         [JsonProperty("workItemLockTimeout")]
         public TimeSpan WorkItemLockTimeout { get; set; } = TimeSpan.FromMinutes(2);
 
