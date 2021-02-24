@@ -91,10 +91,21 @@ namespace DurableTask.SqlServer
                             InstanceId = GetInstanceId(reader),
                             ExecutionId = GetExecutionId(reader),
                         },
-                        ParentInstance = null, // TODO
                         Tags = null, // TODO
                         Version = null, // TODO
                     };
+                    string? parentInstanceId = GetParentInstanceId(reader);
+                    if (parentInstanceId != null)
+                    {
+                        ((ExecutionStartedEvent)historyEvent).ParentInstance = new ParentInstance
+                        {
+                            OrchestrationInstance = new OrchestrationInstance
+                            {
+                                InstanceId = parentInstanceId
+                            },
+                            TaskScheduleId = GetTaskId(reader)
+                        };
+                    }
                     break;
                 case EventType.ExecutionTerminated:
                     historyEvent = new ExecutionTerminatedEvent(eventId, GetPayloadText(reader));
@@ -237,6 +248,17 @@ namespace DurableTask.SqlServer
         {
             int ordinal = reader.GetOrdinal("SequenceNumber");
             return reader.IsDBNull(ordinal) ? -1 : reader.GetInt64(ordinal);
+        }
+
+        public static SqlString GetParentInstanceId(HistoryEvent historyEvent)
+        {
+            return DTUtils.GetParentInstanceId(historyEvent) ?? SqlString.Null;
+        }
+
+        public static string? GetParentInstanceId(DbDataReader reader)
+        {
+            int ordinal = reader.GetOrdinal("ParentInstanceID");
+            return reader.IsDBNull(ordinal) ? null : reader.GetString(ordinal);
         }
 
         public static Guid? GetPayloadId(this DbDataReader reader)

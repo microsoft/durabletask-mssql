@@ -22,7 +22,7 @@ namespace DurableTask.SqlServer.SqlTypes
             new SqlMetaData("InstanceID", SqlDbType.VarChar, 100),
             new SqlMetaData("ExecutionID", SqlDbType.VarChar, 50),
             new SqlMetaData("SequenceNumber", SqlDbType.BigInt),
-            new SqlMetaData("EventType", SqlDbType.VarChar, 30),
+            new SqlMetaData("EventType", SqlDbType.VarChar, 40),
             new SqlMetaData("Name", SqlDbType.VarChar, 300),
             new SqlMetaData("RuntimeStatus", SqlDbType.VarChar, 30),
             new SqlMetaData("TaskID", SqlDbType.Int),
@@ -30,6 +30,7 @@ namespace DurableTask.SqlServer.SqlTypes
             new SqlMetaData("Reason", SqlDbType.VarChar, -1 /* max */),
             new SqlMetaData("PayloadText", SqlDbType.VarChar, -1 /* max */),
             new SqlMetaData("PayloadID", SqlDbType.UniqueIdentifier),
+            new SqlMetaData("ParentInstanceID", SqlDbType.VarChar, 100),
         };
 
         static class ColumnOrdinals
@@ -46,6 +47,7 @@ namespace DurableTask.SqlServer.SqlTypes
             public const int Reason = 8;
             public const int PayloadText = 9;
             public const int PayloadId = 10;
+            public const int ParentInstanceID = 11;
         }
 
         public static SqlParameter AddOrchestrationEventsParameter(
@@ -131,6 +133,8 @@ namespace DurableTask.SqlServer.SqlTypes
             record.SetSqlGuid(
                 ColumnOrdinals.PayloadId,
                 payloadText.IsNull && reason.IsNull ? SqlGuid.Null : new SqlGuid(Guid.NewGuid()));
+
+            record.SetSqlString(ColumnOrdinals.ParentInstanceID, SqlUtils.GetParentInstanceId(msg.Event));
 
             return record;
         }

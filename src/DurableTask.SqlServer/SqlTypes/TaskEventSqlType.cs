@@ -22,7 +22,7 @@ namespace DurableTask.SqlServer.SqlTypes
             new SqlMetaData("InstanceID", SqlDbType.VarChar, 100),
             new SqlMetaData("ExecutionID", SqlDbType.VarChar, 50),
             new SqlMetaData("Name", SqlDbType.VarChar, 300),
-            new SqlMetaData("EventType", SqlDbType.VarChar, 30),
+            new SqlMetaData("EventType", SqlDbType.VarChar, 40),
             new SqlMetaData("TaskID", SqlDbType.Int),
             new SqlMetaData("VisibleTime", SqlDbType.DateTime2),
             new SqlMetaData("LockedBy", SqlDbType.VarChar, 100),
