@@ -5,6 +5,7 @@
       "maxConcurrentOrchestratorFunctions": 8,
       "maxConcurrentActivityFunctions": 8,
       "storageProvider": {
+        "type": "MicrosoftSQL",
         "connectionStringName": "SQLDB_Connection"
       }
     }

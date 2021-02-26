@@ -21,9 +21,9 @@ namespace DurableTask.SqlServer.AzureFunctions
         readonly ILoggerFactory loggerFactory;
         readonly IConnectionStringResolver connectionStringResolver;
 
-        readonly SqlDurabilityOptions defaultOptions;
-        readonly SqlOrchestrationService service;
-        readonly SqlDurabilityProvider defaultProvider;
+        SqlDurabilityOptions? defaultOptions;
+        SqlOrchestrationService? service;
+        SqlDurabilityProvider? defaultProvider;
 
         // Called by the Azure Functions runtime dependency injection infrastructure
         public SqlDurabilityProviderFactory(
@@ -34,14 +34,20 @@ namespace DurableTask.SqlServer.AzureFunctions
             this.extensionOptions = extensionOptions?.Value ?? throw new ArgumentNullException(nameof(extensionOptions));
             this.loggerFactory = loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));
             this.connectionStringResolver = connectionStringResolver ?? throw new ArgumentNullException(nameof(connectionStringResolver));
-
-            this.defaultOptions = this.GetSqlOptions(new DurableClientAttribute());
-            this.service = new SqlOrchestrationService(this.defaultOptions.ProviderOptions);
-            this.defaultProvider = new SqlDurabilityProvider(this.service, this.defaultOptions);
         }
 
         // Called by the Durable trigger binding infrastructure
-        public DurabilityProvider GetDurabilityProvider() => this.defaultProvider;
+        public DurabilityProvider GetDurabilityProvider()
+        {
+            if (this.defaultProvider == null)
+            {
+                SqlDurabilityOptions options = this.GetDefaultSqlOptions();
+                SqlOrchestrationService service = this.GetOrchestrationService();
+                this.defaultProvider = new SqlDurabilityProvider(service, options);
+            }
+
+            return this.defaultProvider;
+        }
 
         // Called by the Durable client binding infrastructure
         public DurabilityProvider GetDurabilityProvider(DurableClientAttribute attribute)
@@ -50,7 +56,7 @@ namespace DurableTask.SqlServer.AzureFunctions
             if (string.IsNullOrEmpty(attribute.ConnectionName) &&
                 string.IsNullOrEmpty(attribute.TaskHub))
             {
-                return this.defaultProvider;
+                return this.GetDurabilityProvider();
             }
 
             lock (this.clientProviders)
@@ -65,7 +71,7 @@ namespace DurableTask.SqlServer.AzureFunctions
                 IOrchestrationServiceClient serviceClient = 
                     new SqlOrchestrationService(clientOptions.ProviderOptions);
                 clientProvider = new SqlDurabilityProvider(
-                    this.service,
+                    this.GetOrchestrationService(),
                     clientOptions,
                     serviceClient);
 
@@ -79,6 +85,26 @@ namespace DurableTask.SqlServer.AzureFunctions
             return attribute.ConnectionName + "|" + attribute.TaskHub;
         }
 
+        SqlOrchestrationService GetOrchestrationService()
+        {
+            if (this.service == null)
+            {
+                this.service = new SqlOrchestrationService(this.GetDefaultSqlOptions().ProviderOptions);
+            }
+
+            return this.service;
+        }
+
+        SqlDurabilityOptions GetDefaultSqlOptions()
+        {
+            if (this.defaultOptions == null)
+            {
+                this.defaultOptions = this.GetSqlOptions(new DurableClientAttribute());
+            }
+
+            return this.defaultOptions;
+        }
+
         SqlDurabilityOptions GetSqlOptions(DurableClientAttribute attribute)
         {
             var options = new SqlDurabilityOptions();
@@ -88,12 +114,12 @@ namespace DurableTask.SqlServer.AzureFunctions
             string configJson = JsonConvert.SerializeObject(this.extensionOptions.StorageProvider);
             JsonConvert.PopulateObject(configJson, options);
 
-            string? connectionString = this.connectionStringResolver.Resolve(
-                attribute.ConnectionName ?? options.ConnectionStringName);
+            string connectionStringName = attribute.ConnectionName ?? options.ConnectionStringName;
+            string? connectionString = this.connectionStringResolver.Resolve(connectionStringName);
             if (string.IsNullOrEmpty(connectionString))
             {
                 throw new InvalidOperationException(
-                    $"No SQL connection string configuration was found for the app setting or environment variable named '{this.defaultOptions.ConnectionStringName}'.");
+                    $"No SQL connection string configuration was found for the app setting or environment variable named '{connectionStringName}'.");
             }
 
             // Validate the connection string

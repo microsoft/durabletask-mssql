@@ -4,7 +4,7 @@
   <Import Project="../common.props" />
   
   <PropertyGroup>
-    <TargetFramework>netstandard2.1</TargetFramework>
+    <TargetFrameworks>netstandard2.1;netstandard2.0</TargetFrameworks>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
@@ -24,7 +24,7 @@
     <PackageReference Include="Microsoft.Azure.DurableTask.Core" Version="2.5.1" />
     <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="3.1.*" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="3.1.*" />
-    <PackageReference Include="Microsoft.SqlServer.SqlManagementObjects" Version="160.2004021.0" />
+    <PackageReference Include="Microsoft.SqlServer.SqlManagementObjects" Version="161.46041.41" />
     <PackageReference Include="SemanticVersion" Version="2.1.0" />
     <PackageReference Include="System.Threading.Channels" Version="4.7.1" />
   </ItemGroup>
