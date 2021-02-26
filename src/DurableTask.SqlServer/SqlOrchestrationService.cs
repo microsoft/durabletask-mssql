@@ -56,6 +56,11 @@ namespace DurableTask.SqlServer
                 {
                     throw new ArgumentException(nameof(options), $"The {options.WorkItemLockTimeout} property value must be at least 10 seconds.");
                 }
+
+                if (options.WorkItemBatchSize < 10)
+                {
+                    throw new ArgumentException(nameof(options), $"The {options.WorkItemBatchSize} property value must be at least 10.");
+                }
             }
 
             return options;
@@ -102,7 +107,7 @@ namespace DurableTask.SqlServer
                 using SqlConnection connection = await this.GetAndOpenConnectionAsync(cancellationToken);
                 using SqlCommand command = this.GetSprocCommand(connection, "dt._LockNextOrchestration");
 
-                int batchSize = 10; // TODO: Make configurable
+                int batchSize = this.options.WorkItemBatchSize;
                 DateTime lockExpiration = DateTime.UtcNow.Add(this.options.WorkItemLockTimeout);
 
                 command.Parameters.Add("@BatchSize", SqlDbType.Int).Value = batchSize;

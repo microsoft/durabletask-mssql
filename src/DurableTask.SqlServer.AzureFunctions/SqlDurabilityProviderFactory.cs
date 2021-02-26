@@ -136,6 +136,7 @@ namespace DurableTask.SqlServer.AzureFunctions
             providerOptions.ConnectionString = connectionString;
             providerOptions.LoggerFactory = this.loggerFactory;
             providerOptions.WorkItemLockTimeout = options.TaskEventLockTimeout;
+            providerOptions.WorkItemBatchSize = options.TaskEventBatchSize;
             return options;
         }
     }
