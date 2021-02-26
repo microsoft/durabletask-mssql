@@ -4,11 +4,11 @@
 
 ### New
 
-* Added support for .NET Framework 4.6.2 (DTFx only)
+* Added support for .NET Standard 2.0 (DTFx only)
 
 ### Improved
 
-* Fixed required for Azure Functions extension bundle compatibility
+* Fixes required for Azure Functions extension bundle compatibility
 
 ### Breaking changes
 
