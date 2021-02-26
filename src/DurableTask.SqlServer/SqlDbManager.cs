@@ -184,7 +184,7 @@ namespace DurableTask.SqlServer
             string schemaCommands = await GetScriptTextAsync(scriptName);
 
             // Reference: https://stackoverflow.com/questions/650098/how-to-execute-an-sql-script-file-using-c-sharp
-            await using SqlConnection scriptRunnerConnection = this.options.CreateConnection();
+            using SqlConnection scriptRunnerConnection = this.options.CreateConnection();
             var serverConnection = new ServerConnection(scriptRunnerConnection);
 
             Stopwatch latencyStopwatch = Stopwatch.StartNew();
