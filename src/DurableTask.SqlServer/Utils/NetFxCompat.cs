@@ -1,4 +1,4 @@
-﻿#if NET462 // These .NET Standard 2.1 methods are not available in .NET 4.x
+﻿#if NETSTANDARD2_0 // These .NET Standard 2.1 methods are not available in .NET Standard 2.0
 namespace DurableTask.SqlServer
 {
     using System;
@@ -6,10 +6,10 @@ namespace DurableTask.SqlServer
     using System.Data;
     using System.Data.Common;
     using System.Linq;
+    using System.Threading;
     using System.Threading.Tasks;
     using System.Text;
     using Microsoft.Data.SqlClient;
-    using System.Threading;
 
     public static class NetFxCompat
     {
@@ -33,7 +33,7 @@ namespace DurableTask.SqlServer
 
         public static Task<DbTransaction> BeginTransactionAsync(this DbConnection connection)
         {
-            // BeginTransactionAsync is not available in the .NET Framework
+            // BeginTransactionAsync is not available in the .NET Framework or .NET Standard 2.0
             return Task.FromResult(connection.BeginTransaction());
         }
 
