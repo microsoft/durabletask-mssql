@@ -5,6 +5,7 @@
 ### New
 
 * Added support for .NET Standard 2.0 (DTFx only)
+* Made batch size configurable - contributed by @usemam
 
 ### Improved
 
