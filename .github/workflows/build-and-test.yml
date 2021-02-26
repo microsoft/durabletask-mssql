@@ -13,7 +13,7 @@ on:
 jobs:
   build:
 
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     env:
       SA_PASSWORD: NotASecret!12
 
@@ -26,7 +26,7 @@ jobs:
       env:
         NUGET_AUTH_TOKEN: RequiredButNotUsed
     - name: NuGet Restore
-      run: dotnet restore -v n
+      run: dotnet restore --verbosity normal
     - name: Build
       run: dotnet build
     - name: Setup SQL Server container
