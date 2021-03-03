@@ -149,7 +149,6 @@ BEGIN
         [Name] varchar(300) NULL,
         [TaskID] int NULL,
         [PayloadID] uniqueidentifier NULL,
-        [ParentInstanceID] varchar(100) NULL,
 
         CONSTRAINT PK_NewEvents PRIMARY KEY (TaskHub, InstanceID, SequenceNumber),
         CONSTRAINT FK_NewEvents_Payloads FOREIGN KEY (TaskHub, InstanceID, PayloadID) REFERENCES dt.Payloads(TaskHub, InstanceID, PayloadID)
@@ -171,7 +170,6 @@ IF OBJECT_ID(N'dt.History', 'U') IS NULL
 	    [RuntimeStatus] varchar(20) NULL,
         [VisibleTime] datetime2 NULL,
 	    [DataPayloadID] uniqueidentifier NULL,
-        [ParentInstanceID] varchar(100) NULL,
 
         CONSTRAINT PK_History PRIMARY KEY (TaskHub, InstanceID, ExecutionID, SequenceNumber),
         CONSTRAINT FK_History_Instances FOREIGN KEY (TaskHub, InstanceID) REFERENCES dt.Instances(TaskHub, InstanceID) ON DELETE CASCADE,
