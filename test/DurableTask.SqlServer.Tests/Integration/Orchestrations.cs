@@ -385,5 +385,27 @@ namespace DurableTask.SqlServer.Tests.Integration
             Assert.NotNull(state.Input);
             Assert.Equal("10", state.Input);
         }
+
+        [Fact]
+        public async Task SubOrchestration()
+        {
+            string orchestrationName = "SubOrchestrationTest";
+            TestInstance<int> testInstance = await this.testService.RunOrchestration(
+                input: 1,
+                orchestrationName,
+                implementation: async (ctx, input) =>
+                {
+                    int result = 5;
+                    if (input < 3)
+                    {
+                        int subResult =
+                            await ctx.CreateSubOrchestrationInstance<int>(orchestrationName, string.Empty, input+1);
+                        result += subResult;
+                    }
+                    return result;
+                });
+            await testInstance.WaitForCompletion(
+                timeout: TimeSpan.FromSeconds(15), expectedOutput: 15);
+        }
     }
 }

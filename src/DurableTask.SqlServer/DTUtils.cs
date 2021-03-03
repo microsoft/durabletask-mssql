@@ -56,6 +56,18 @@ namespace DurableTask.SqlServer
                 case EventType.TimerFired:
                     taskScheduledId = ((TimerFiredEvent)historyEvent).TimerId;
                     return true;
+                case EventType.ExecutionStarted:
+                    var parentInstance = ((ExecutionStartedEvent)historyEvent).ParentInstance;
+                    if (parentInstance != null)
+                    {
+                        // taskId that scheduled a sub-orchestration
+                        taskScheduledId = parentInstance.TaskScheduleId;
+                        return true;
+                    }
+                    else {
+                        taskScheduledId = -1;
+                        return false;
+                    }
                 default:
                     taskScheduledId = -1;
                     return false;
@@ -119,6 +131,15 @@ namespace DurableTask.SqlServer
                 default:
                     return null;
             }
+        }
+
+        public static string? GetParentInstanceId(HistoryEvent historyEvent)
+        {
+            return historyEvent.EventType switch
+            {
+                EventType.ExecutionStarted => ((ExecutionStartedEvent)historyEvent).ParentInstance?.OrchestrationInstance.InstanceId,
+                _ => null,
+            };
         }
     }
 }

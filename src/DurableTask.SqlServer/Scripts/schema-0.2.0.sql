@@ -26,7 +26,7 @@ IF TYPE_ID(N'dt.HistoryEvents') IS NULL
         [InstanceID] varchar(100) NULL,
         [ExecutionID] varchar(50) NULL,
         [SequenceNumber] bigint NULL,
-        [EventType] varchar(30) NULL,
+        [EventType] varchar(40) NULL,
         [Name] varchar(300) NULL,
         [RuntimeStatus] varchar(30) NULL,
         [TaskID] int NULL,
@@ -35,7 +35,8 @@ IF TYPE_ID(N'dt.HistoryEvents') IS NULL
         [VisibleTime] datetime2 NULL,
         [Reason] varchar(max) NULL,
         [PayloadText] varchar(max) NULL,
-        [PayloadID] uniqueidentifier NULL
+        [PayloadID] uniqueidentifier NULL,
+        [ParentInstanceID] varchar(100) NULL
     )
 GO
 
@@ -45,14 +46,15 @@ IF TYPE_ID(N'dt.OrchestrationEvents') IS NULL
         [InstanceID] varchar(100) NULL,
         [ExecutionID] varchar(50) NULL,
         [SequenceNumber] bigint NULL,
-        [EventType] varchar(30) NULL,
+        [EventType] varchar(40) NULL,
         [Name] varchar(300) NULL,
         [RuntimeStatus] varchar(30) NULL,
         [TaskID] int NULL,
         [VisibleTime] datetime2 NULL,
         [Reason] varchar(max) NULL,
         [PayloadText] varchar(max) NULL,
-        [PayloadID] uniqueidentifier NULL
+        [PayloadID] uniqueidentifier NULL,
+        [ParentInstanceID] varchar(100) NULL
     )
 GO
 
@@ -62,7 +64,7 @@ IF TYPE_ID(N'dt.TaskEvents') IS NULL
         [InstanceID] varchar(100) NULL,
         [ExecutionID] varchar(50) NULL,
         [Name] varchar(300) NULL,
-        [EventType] varchar(30) NULL,
+        [EventType] varchar(40) NULL,
         [TaskID] int NULL,
         [VisibleTime] datetime2 NULL,
         [LockedBy] varchar(100) NULL,
@@ -119,6 +121,7 @@ BEGIN
 		[InputPayloadID] uniqueidentifier NULL,
 		[OutputPayloadID] uniqueidentifier NULL,
 		[CustomStatusPayloadID] uniqueidentifier NULL,
+        [ParentInstanceID] varchar(100) NULL,
 
         CONSTRAINT PK_Instances PRIMARY KEY (TaskHub, InstanceID),
         CONSTRAINT FK_Instances_Input_Payloads FOREIGN KEY (TaskHub, InstanceID, InputPayloadID) REFERENCES dt.Payloads(TaskHub, InstanceID, PayloadID),
@@ -141,7 +144,7 @@ BEGIN
 		[TaskHub] varchar(50) NOT NULL,
         [InstanceID] varchar(100) NOT NULL,
         [ExecutionID] varchar(50) NULL,
-        [EventType] varchar(30) NOT NULL,
+        [EventType] varchar(40) NOT NULL,
         [RuntimeStatus] varchar(30) NULL,
         [Name] varchar(300) NULL,
         [TaskID] int NULL,
@@ -159,7 +162,7 @@ IF OBJECT_ID(N'dt.History', 'U') IS NULL
         [InstanceID] varchar(100) NOT NULL,
 	    [ExecutionID] varchar(50) NOT NULL,
         [SequenceNumber] bigint NOT NULL,
-	    [EventType] varchar(30) NOT NULL,
+	    [EventType] varchar(40) NOT NULL,
 	    [TaskID] int NULL,
 	    [Timestamp] datetime2 NOT NULL CONSTRAINT DF_History_Timestamp DEFAULT SYSUTCDATETIME(),
 	    [IsPlayed] bit NOT NULL CONSTRAINT DF_History_IsPlayed DEFAULT 0,

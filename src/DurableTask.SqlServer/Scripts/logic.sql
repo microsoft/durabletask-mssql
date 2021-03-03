@@ -169,6 +169,8 @@ CREATE OR ALTER PROCEDURE dt.GetInstanceHistory
 AS
 BEGIN
     DECLARE @TaskHub varchar(50) = dt.CurrentTaskHub()
+    DECLARE @ParentInstanceID varchar(100) = (
+        SELECT [ParentInstanceID] FROM Instances WHERE [InstanceID] = @InstanceID)
 
     SELECT
         H.[InstanceID],
@@ -183,7 +185,8 @@ BEGIN
         H.[VisibleTime],
         P.[Reason],
         (CASE WHEN @GetInputsAndOutputs = 0 THEN NULL ELSE P.[Text] END) AS [PayloadText],
-        [PayloadID]
+        [PayloadID],
+        @ParentInstanceID as [ParentInstanceID]
     FROM History H WITH (INDEX (PK_History))
         LEFT OUTER JOIN Payloads P ON
             P.[TaskHub] = @TaskHub AND
@@ -374,6 +377,7 @@ AS
 BEGIN
     DECLARE @now datetime2 = SYSUTCDATETIME()
     DECLARE @instanceID varchar(100)
+    DECLARE @parentInstanceID varchar(100)
     DECLARE @TaskHub varchar(50) = dt.CurrentTaskHub()
 
     BEGIN TRANSACTION
@@ -390,7 +394,8 @@ BEGIN
     SET
         [LockedBy] = @LockedBy,
 	    [LockExpiration] = @LockExpiration,
-        @instanceID = I.[InstanceID]
+        @instanceID = I.[InstanceID],
+        @parentInstanceID = I.[ParentInstanceID]
     FROM 
         dt.Instances I WITH (READPAST) INNER JOIN NewEvents E WITH (READPAST) ON
             E.[TaskHub] = @TaskHub AND
@@ -418,9 +423,10 @@ BEGIN
         P.[Reason],
         P.[Text] AS [PayloadText],
         P.[PayloadID],
-        DATEDIFF(millisecond, [Timestamp], @now) AS [WaitTime]
+        DATEDIFF(millisecond, [Timestamp], @now) AS [WaitTime],
+        @parentInstanceID as [ParentInstanceID]
     FROM NewEvents N
-        LEFT OUTER JOIN Payloads P ON 
+        LEFT OUTER JOIN dt.[Payloads] P ON 
             P.[TaskHub] = @TaskHub AND
             P.[InstanceID] = N.[InstanceID] AND
             P.[PayloadID] = N.[PayloadID]
@@ -449,7 +455,8 @@ BEGIN
         P.[Reason],
         -- Optimization: Do not load the data payloads for these history events - they are not needed since they are never replayed
         (CASE WHEN [EventType] IN ('TaskScheduled', 'SubOrchestrationInstanceCreated') THEN NULL ELSE P.[Text] END) AS [PayloadText],
-        [PayloadID]
+        [PayloadID],
+        @parentInstanceID as [ParentInstanceID]
     FROM History H WITH (INDEX (PK_History))
         LEFT OUTER JOIN Payloads P ON
             P.[TaskHub] = @TaskHub AND
@@ -605,11 +612,36 @@ BEGIN
         SUBSTRING(E.[InstanceID], 2, CHARINDEX('@', E.[InstanceID], 2) - 2),
         'Pending'
     FROM @NewOrchestrationEvents E
-    WHERE NOT EXISTS (
-        SELECT 1
-        FROM dt.Instances I
-        WHERE [TaskHub] = @TaskHub AND I.[InstanceID] = E.[InstanceID])
+    WHERE LEFT(E.[InstanceID], 1) = '@'
+        AND CHARINDEX('@', E.[InstanceID], 2) > 0
+        AND NOT EXISTS (
+            SELECT 1
+            FROM dt.Instances I
+            WHERE [TaskHub] = @TaskHub AND I.[InstanceID] = E.[InstanceID])
     GROUP BY E.[InstanceID]
+    ORDER BY E.[InstanceID] ASC
+
+    -- Create sub-orchestration instances
+    INSERT INTO Instances (
+        [TaskHub],
+        [InstanceID],
+        [ExecutionID],
+        [Name],
+        [ParentInstanceID],
+        [RuntimeStatus])
+    SELECT DISTINCT
+        @TaskHub,
+        E.[InstanceID],
+        E.[ExecutionID],
+        E.[Name],
+        E.[ParentInstanceID],
+        'Pending'
+    FROM @NewOrchestrationEvents E
+    WHERE E.[EventType] IN ('ExecutionStarted')
+        AND NOT EXISTS (
+            SELECT 1
+            FROM dt.Instances I
+            WHERE [TaskHub] = @TaskHub AND I.[InstanceID] = E.[InstanceID])
     ORDER BY E.[InstanceID] ASC
 
     -- Insert new event data payloads into the Payloads table in batches.

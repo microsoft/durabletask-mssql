@@ -20,7 +20,7 @@ namespace DurableTask.SqlServer.SqlTypes
             new SqlMetaData("InstanceID", SqlDbType.VarChar, 100),
             new SqlMetaData("ExecutionID", SqlDbType.VarChar, 50),
             new SqlMetaData("SequenceNumber", SqlDbType.BigInt),
-            new SqlMetaData("EventType", SqlDbType.VarChar, 30),
+            new SqlMetaData("EventType", SqlDbType.VarChar, 40),
             new SqlMetaData("Name", SqlDbType.VarChar, 300),
             new SqlMetaData("RuntimeStatus", SqlDbType.VarChar, 30),
             new SqlMetaData("TaskID", SqlDbType.Int),
@@ -30,6 +30,7 @@ namespace DurableTask.SqlServer.SqlTypes
             new SqlMetaData("Reason", SqlDbType.VarChar, -1 /* max */),
             new SqlMetaData("PayloadText", SqlDbType.VarChar, -1 /* max */),
             new SqlMetaData("PayloadID", SqlDbType.UniqueIdentifier),
+            new SqlMetaData("ParentInstanceID", SqlDbType.VarChar, 100),
         };
 
         static class ColumnOrdinals
@@ -48,6 +49,7 @@ namespace DurableTask.SqlServer.SqlTypes
             public const int Reason = 10;
             public const int PayloadText = 11;
             public const int PayloadID = 12;
+            public const int ParentInstanceID = 13;
         };
 
         public static SqlParameter AddHistoryEventsParameter(
