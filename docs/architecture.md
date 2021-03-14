@@ -18,6 +18,7 @@ The tables are as follows:
 * **dt.NewTasks**: Contains a queue of unprocessed activity tasks for running instances.
 * **dt.Versions**: Contains a record of schema versions that have been provisioned in this database.
 * **dt.Payloads**: Contains the payload blobs for all instances, events, tasks, and history records.
+* **dt.GlobalSettings**: Key-value configuration pairs that control the runtime behavior of the provider.
 
 You can find the current version of the database schema in the `dt.Versions` table. If you create an app using one version of the SQL provider and then later upgrade to a newer version of the provider, the provider will automatically take care of upgrading the database schema, without introducing any downtime.
 

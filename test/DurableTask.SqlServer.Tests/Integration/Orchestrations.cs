@@ -254,7 +254,7 @@ namespace DurableTask.SqlServer.Tests.Integration
 
             OrchestrationState state = await instance.WaitForCompletion(
                 expectedStatus: OrchestrationStatus.Failed,
-                expectedOutputRegex: ".*(Kah-BOOOOOM!!!).*"); // TODO: Test for error message in output
+                expectedOutputRegex: ".*(Kah-BOOOOOM!!!).*");
         }
 
         [Fact]

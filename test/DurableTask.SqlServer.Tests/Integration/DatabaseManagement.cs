@@ -11,6 +11,7 @@ namespace DurableTask.SqlServer.Tests.Integration
     using System.Threading.Tasks;
     using DurableTask.Core;
     using DurableTask.SqlServer.Tests.Logging;
+    using DurableTask.SqlServer.Tests.Utils;
     using Microsoft.Data.SqlClient;
     using Microsoft.Extensions.Logging;
     using Microsoft.SqlServer.Management.Common;
@@ -42,6 +43,7 @@ namespace DurableTask.SqlServer.Tests.Integration
                 "drop-schema.sql",
                 "schema-0.2.0.sql",
                 "logic.sql",
+                "permissions.sql",
             };
 
             // The actual prefix value may change if the project structure changes.
@@ -83,6 +85,7 @@ namespace DurableTask.SqlServer.Tests.Integration
                 LogAssert.ExecutedSqlScript("drop-schema.sql"),
                 LogAssert.ExecutedSqlScript("schema-0.2.0.sql"),
                 LogAssert.ExecutedSqlScript("logic.sql"),
+                LogAssert.ExecutedSqlScript("permissions.sql"),
                 LogAssert.SprocCompleted("dt._UpdateVersion"));
 
             ValidateDatabaseSchema(testDb);
@@ -134,6 +137,7 @@ namespace DurableTask.SqlServer.Tests.Integration
                 LogAssert.SprocCompleted("dt._GetVersions"),
                 LogAssert.ExecutedSqlScript("schema-0.2.0.sql"),
                 LogAssert.ExecutedSqlScript("logic.sql"),
+                LogAssert.ExecutedSqlScript("permissions.sql"),
                 LogAssert.SprocCompleted("dt._UpdateVersion"));
 
             ValidateDatabaseSchema(testDb);
@@ -166,6 +170,7 @@ namespace DurableTask.SqlServer.Tests.Integration
                 LogAssert.SprocCompleted("dt._GetVersions"),
                 LogAssert.ExecutedSqlScript("schema-0.2.0.sql"),
                 LogAssert.ExecutedSqlScript("logic.sql"),
+                LogAssert.ExecutedSqlScript("permissions.sql"),
                 LogAssert.SprocCompleted("dt._UpdateVersion"),
                 // 2nd
                 LogAssert.AcquiredAppLock(statusCode: 1),
@@ -187,9 +192,8 @@ namespace DurableTask.SqlServer.Tests.Integration
 
         IOrchestrationService CreateServiceWithTestDb(TestDatabase testDb)
         {
-            var options = new SqlProviderOptions
+            var options = new SqlOrchestrationServiceSettings(testDb.ConnectionString)
             {
-                ConnectionString = testDb.ConnectionString,
                 LoggerFactory = LoggerFactory.Create(builder =>
                 {
                     builder.SetMinimumLevel(LogLevel.Trace);
@@ -206,6 +210,7 @@ namespace DurableTask.SqlServer.Tests.Integration
             {
                 "dt.NewEvents",
                 "dt.NewTasks",
+                "dt.GlobalSettings",
                 "dt.History",
                 "dt.Instances",
                 "dt.Payloads",
@@ -218,6 +223,7 @@ namespace DurableTask.SqlServer.Tests.Integration
                 "dt.GetInstanceHistory",
                 "dt.QuerySingleOrchestration",
                 "dt.RaiseEvent",
+                "dt.SetGlobalSetting",
                 "dt.TerminateInstance",
                 "dt.PurgeInstanceState",
                 "dt._AddOrchestrationEvents",
@@ -278,11 +284,10 @@ namespace DurableTask.SqlServer.Tests.Integration
             {
                 string databaseName = $"TestDB_{DateTime.UtcNow:yyyyMMddhhmmssfffffff}";
 
-                this.server = new Server(new ServerConnection(new SqlProviderOptions().CreateConnection()));
+                this.server = new Server(new ServerConnection(new SqlConnection(SharedTestHelpers.GetDefaultConnectionString())));
                 this.testDb = new Database(this.server, databaseName)
                 {
-                    // For SQL Server 2019, "Latin1_General_100_BIN2_UTF8" is preferred
-                    Collation = "Latin1_General_100_BIN2",
+                    Collation = "Latin1_General_100_BIN2_UTF8",
                 };
 
                 this.ConnectionString = 

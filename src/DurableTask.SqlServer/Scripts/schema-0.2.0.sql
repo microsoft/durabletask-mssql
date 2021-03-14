@@ -195,18 +195,21 @@ IF OBJECT_ID(N'dt.NewTasks', 'U') IS NULL
         CONSTRAINT FK_NewTasks_Instances FOREIGN KEY (TaskHub, InstanceID) REFERENCES dt.Instances(TaskHub, InstanceID) ON DELETE CASCADE,
         CONSTRAINT FK_NewTasks_Payloads FOREIGN KEY (TaskHub, InstanceID, PayloadID) REFERENCES dt.Payloads(TaskHub, InstanceID, PayloadID)
     )
+
+    -- This index is used by vScaleHints
+    CREATE NONCLUSTERED INDEX IX_NewTasks_InstanceID ON dt.NewTasks(TaskHub, InstanceID)
+        INCLUDE ([SequenceNumber], [Timestamp], [LockExpiration], [VisibleTime])
 GO
 
--- Security 
-IF DATABASE_PRINCIPAL_ID('dt_runtime') IS NULL
+IF OBJECT_ID(N'dt.GlobalSettings', 'U') IS NULL
 BEGIN
-    -- This is the role to which all low-privilege user accounts should be associated using
-    -- the 'ALTER ROLE dt_runtime ADD MEMBER [<username>]' statement.
-    CREATE ROLE dt_runtime
-
-    -- This low-privilege role will only have access to stored procedures in the dt schema.
-    -- Each stored procedure limits access to data based on the username, ensuring that no
-    -- database user can access data created by another database user.
-    GRANT EXECUTE ON SCHEMA::dt TO dt_runtime
+    CREATE TABLE dt.GlobalSettings (
+        [Name] varchar(300) NOT NULL PRIMARY KEY,
+        [Value] sql_variant NULL,
+        [Timestamp] datetime2 NOT NULL CONSTRAINT DF_GlobalSettings_Timestamp DEFAULT SYSUTCDATETIME(),
+        [LastModifiedBy] nvarchar(128) NOT NULL CONSTRAINT DF_GlobalSettings_LastModifiedby DEFAULT USER_NAME()
+    )
+    
+    INSERT INTO dt.GlobalSettings ([Name], [Value]) VALUES ('TaskHubMode', 0)
 END
 GO

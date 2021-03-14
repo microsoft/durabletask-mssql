@@ -30,45 +30,45 @@ namespace DurableTask.SqlServer
             minimumInterval: TimeSpan.FromMilliseconds(50),
             maximumInterval: TimeSpan.FromSeconds(3)); // TODO: Configurable
 
-        readonly SqlProviderOptions options;
+        readonly SqlOrchestrationServiceSettings settings;
         readonly LogHelper traceHelper;
         readonly SqlDbManager dbManager;
         readonly string lockedByValue;
 
-        public SqlOrchestrationService(SqlProviderOptions? options)
+        public SqlOrchestrationService(SqlOrchestrationServiceSettings? settings)
         {
-            this.options = ValidateOptions(options) ?? throw new ArgumentNullException(nameof(options));
-            this.traceHelper = new LogHelper(this.options.LoggerFactory.CreateLogger("DurableTask.SqlServer"));
-            this.dbManager = new SqlDbManager(this.options, this.traceHelper);
-            this.lockedByValue = $"{this.options.AppName}|{Process.GetCurrentProcess().Id}";
+            this.settings = ValidateSettings(settings) ?? throw new ArgumentNullException(nameof(settings));
+            this.traceHelper = new LogHelper(this.settings.LoggerFactory.CreateLogger("DurableTask.SqlServer"));
+            this.dbManager = new SqlDbManager(this.settings, this.traceHelper);
+            this.lockedByValue = $"{this.settings.AppName}|{Process.GetCurrentProcess().Id}";
         }
 
-        static SqlProviderOptions? ValidateOptions(SqlProviderOptions? options)
+        static SqlOrchestrationServiceSettings? ValidateSettings(SqlOrchestrationServiceSettings? settings)
         {
-            if (options != null)
+            if (settings != null)
             {
-                if (string.IsNullOrEmpty(options.ConnectionString))
+                if (string.IsNullOrEmpty(settings.TaskHubConnectionString))
                 {
-                    throw new ArgumentException(nameof(options), $"A value for {options.ConnectionString} must be provided.");
+                    throw new ArgumentException($"A non-empty connection string value must be provided.", nameof(settings));
                 }
 
-                if (options.WorkItemLockTimeout < TimeSpan.FromSeconds(10))
+                if (settings.WorkItemLockTimeout < TimeSpan.FromSeconds(10))
                 {
-                    throw new ArgumentException(nameof(options), $"The {options.WorkItemLockTimeout} property value must be at least 10 seconds.");
+                    throw new ArgumentException($"The {nameof(settings.WorkItemLockTimeout)} property value must be at least 10 seconds.", nameof(settings));
                 }
 
-                if (options.WorkItemBatchSize < 10)
+                if (settings.WorkItemBatchSize < 10)
                 {
-                    throw new ArgumentException(nameof(options), $"The {options.WorkItemBatchSize} property value must be at least 10.");
+                    throw new ArgumentException($"The {nameof(settings.WorkItemBatchSize)} property value must be at least 10.", nameof(settings));
                 }
             }
 
-            return options;
+            return settings;
         }
 
         async Task<SqlConnection> GetAndOpenConnectionAsync(CancellationToken cancelToken = default)
         {
-            SqlConnection connection = this.options.CreateConnection();
+            SqlConnection connection = this.settings.CreateConnection();
             await connection.OpenAsync(cancelToken);
             return connection;
         }
@@ -107,8 +107,8 @@ namespace DurableTask.SqlServer
                 using SqlConnection connection = await this.GetAndOpenConnectionAsync(cancellationToken);
                 using SqlCommand command = this.GetSprocCommand(connection, "dt._LockNextOrchestration");
 
-                int batchSize = this.options.WorkItemBatchSize;
-                DateTime lockExpiration = DateTime.UtcNow.Add(this.options.WorkItemLockTimeout);
+                int batchSize = this.settings.WorkItemBatchSize;
+                DateTime lockExpiration = DateTime.UtcNow.Add(this.settings.WorkItemLockTimeout);
 
                 command.Parameters.Add("@BatchSize", SqlDbType.Int).Value = batchSize;
                 command.Parameters.Add("@LockedBy", SqlDbType.VarChar, 100).Value = this.lockedByValue;
@@ -222,7 +222,7 @@ namespace DurableTask.SqlServer
             using SqlConnection connection = await this.GetAndOpenConnectionAsync();
             using SqlCommand command = this.GetSprocCommand(connection, "dt._RenewOrchestrationLocks");
 
-            DateTime lockExpiration = DateTime.UtcNow.Add(this.options.WorkItemLockTimeout);
+            DateTime lockExpiration = DateTime.UtcNow.Add(this.settings.WorkItemLockTimeout);
 
             command.Parameters.Add("@InstanceID", SqlDbType.VarChar, size: 100).Value = workItem.InstanceId;
             command.Parameters.Add("@LockExpiration", SqlDbType.DateTime2).Value = lockExpiration;
@@ -308,7 +308,7 @@ namespace DurableTask.SqlServer
                 using SqlConnection connection = await this.GetAndOpenConnectionAsync();
                 using SqlCommand command = this.GetSprocCommand(connection, "dt._LockNextTask");
 
-                DateTime lockExpiration = DateTime.UtcNow.Add(this.options.WorkItemLockTimeout);
+                DateTime lockExpiration = DateTime.UtcNow.Add(this.settings.WorkItemLockTimeout);
 
                 command.Parameters.Add("@LockedBy", SqlDbType.VarChar, size: 100).Value = this.lockedByValue;
                 command.Parameters.Add("@LockExpiration", SqlDbType.DateTime2).Value = lockExpiration;
@@ -348,7 +348,7 @@ namespace DurableTask.SqlServer
             using SqlConnection connection = await this.GetAndOpenConnectionAsync();
             using SqlCommand command = this.GetSprocCommand(connection, "dt._RenewTaskLocks");
 
-            DateTime lockExpiration = DateTime.UtcNow.Add(this.options.WorkItemLockTimeout);
+            DateTime lockExpiration = DateTime.UtcNow.Add(this.settings.WorkItemLockTimeout);
 
             command.Parameters.AddMessageIdParameter("@RenewingTasks", workItem.TaskMessage);
             command.Parameters.Add("@LockExpiration", SqlDbType.DateTime2).Value = lockExpiration;

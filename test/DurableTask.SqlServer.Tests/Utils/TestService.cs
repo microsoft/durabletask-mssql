@@ -40,13 +40,14 @@ namespace DurableTask.SqlServer.Tests.Utils
             });
 
             this.testName = test.TestCase.TestMethod.Method.Name;
-            this.OrchestrationServiceOptions = new SqlProviderOptions
+            this.OrchestrationServiceOptions = new SqlOrchestrationServiceSettings(
+                SharedTestHelpers.GetDefaultConnectionString())
             {
                 LoggerFactory = this.loggerFactory,
             };
         }
 
-        public SqlProviderOptions OrchestrationServiceOptions { get; }
+        public SqlOrchestrationServiceSettings OrchestrationServiceOptions { get; private set; }
 
         public Mock<SqlOrchestrationService> OrchestrationServiceMock { get; private set; }
 
@@ -57,9 +58,15 @@ namespace DurableTask.SqlServer.Tests.Utils
             // The initialization requires administrative credentials (default)
             await new SqlOrchestrationService(this.OrchestrationServiceOptions).CreateIfNotExistsAsync();
 
+            // Enable multitenancy to isolate each test using low-privilege credentials
+            await this.EnableMultitenancyAsync();
+
             // The runtime will use low-privilege credentials
             string taskHubConnectionString = await this.CreateTaskHubLoginAsync();
-            this.OrchestrationServiceOptions.ConnectionString = taskHubConnectionString;
+            this.OrchestrationServiceOptions = new SqlOrchestrationServiceSettings(taskHubConnectionString)
+            {
+                LoggerFactory = this.loggerFactory,
+            };
 
             this.OrchestrationServiceMock = new Mock<SqlOrchestrationService>(this.OrchestrationServiceOptions) { CallBase = true };
             this.worker = await new TaskHubWorker(this.OrchestrationServiceMock.Object, this.loggerFactory).StartAsync();
@@ -192,6 +199,11 @@ namespace DurableTask.SqlServer.Tests.Utils
             }
         }
 
+        internal Task EnableMultitenancyAsync()
+        {
+            return ExecuteCommandAsync($"EXECUTE dt.SetGlobalSetting @Name='TaskHubMode', @Value=1");
+        }
+
         internal async Task<string> CreateTaskHubLoginAsync()
         {
             // NOTE: Max length for user IDs is 128 characters
@@ -203,7 +215,7 @@ namespace DurableTask.SqlServer.Tests.Utils
             await ExecuteCommandAsync($"CREATE USER [testuser_{userId}] FOR LOGIN [testlogin_{userId}]");
             await ExecuteCommandAsync($"ALTER ROLE dt_runtime ADD MEMBER [testuser_{userId}]");
 
-            var existing = new SqlConnectionStringBuilder(this.OrchestrationServiceOptions.ConnectionString);
+            var existing = new SqlConnectionStringBuilder(this.OrchestrationServiceOptions.TaskHubConnectionString);
             var builder = new SqlConnectionStringBuilder()
             {
                 UserID = $"testlogin_{userId}",
@@ -234,7 +246,7 @@ namespace DurableTask.SqlServer.Tests.Utils
             {
                 try
                 {
-                    string connectionString = SqlProviderOptions.GetDefaultConnectionString();
+                    string connectionString = SharedTestHelpers.GetDefaultConnectionString();
                     await using SqlConnection connection = new SqlConnection(connectionString);
                     await using SqlCommand command = connection.CreateCommand();
                     await command.Connection.OpenAsync();

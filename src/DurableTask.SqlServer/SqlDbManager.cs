@@ -19,12 +19,12 @@ namespace DurableTask.SqlServer
 
     class SqlDbManager
     {
-        readonly SqlProviderOptions options;
+        readonly SqlOrchestrationServiceSettings settings;
         readonly LogHelper traceHelper;
 
-        public SqlDbManager(SqlProviderOptions options, LogHelper traceHelper)
+        public SqlDbManager(SqlOrchestrationServiceSettings settings, LogHelper traceHelper)
         {
-            this.options = options ?? throw new ArgumentNullException(nameof(options));
+            this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
             this.traceHelper = traceHelper ?? throw new ArgumentNullException(nameof(traceHelper));
         }
 
@@ -103,6 +103,9 @@ namespace DurableTask.SqlServer
             // Add or update stored procedures, functions, and views
             await this.ExecuteSqlScriptAsync("logic.sql", dbLock);
 
+            // Configure security roles, permissions, etc.
+            await this.ExecuteSqlScriptAsync("permissions.sql", dbLock);
+
             // Insert the current extension version number into the database and commit the transaction.
             // The extension version is used instead of the schema version to more accurately track whether
             // we need to update the sprocs or views.
@@ -130,7 +133,7 @@ namespace DurableTask.SqlServer
 
         async Task<DatabaseLock> AcquireDatabaseLockAsync()
         {
-            SqlConnection connection = this.options.CreateConnection();
+            SqlConnection connection = this.settings.CreateConnection();
             await connection.OpenAsync();
 
             // It's possible that more than one worker may attempt to execute this creation logic at the same
@@ -184,7 +187,7 @@ namespace DurableTask.SqlServer
             string schemaCommands = await GetScriptTextAsync(scriptName);
 
             // Reference: https://stackoverflow.com/questions/650098/how-to-execute-an-sql-script-file-using-c-sharp
-            using SqlConnection scriptRunnerConnection = this.options.CreateConnection();
+            using SqlConnection scriptRunnerConnection = this.settings.CreateConnection();
             var serverConnection = new ServerConnection(scriptRunnerConnection);
 
             Stopwatch latencyStopwatch = Stopwatch.StartNew();

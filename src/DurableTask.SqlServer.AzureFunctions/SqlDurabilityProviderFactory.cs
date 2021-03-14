@@ -69,7 +69,7 @@ namespace DurableTask.SqlServer.AzureFunctions
 
                 SqlDurabilityOptions clientOptions = this.GetSqlOptions(attribute);
                 IOrchestrationServiceClient serviceClient = 
-                    new SqlOrchestrationService(clientOptions.ProviderOptions);
+                    new SqlOrchestrationService(clientOptions.GetOrchestrationServiceSettings(this.connectionStringResolver));
                 clientProvider = new SqlDurabilityProvider(
                     this.GetOrchestrationService(),
                     clientOptions,
@@ -89,7 +89,9 @@ namespace DurableTask.SqlServer.AzureFunctions
         {
             if (this.service == null)
             {
-                this.service = new SqlOrchestrationService(this.GetDefaultSqlOptions().ProviderOptions);
+                SqlDurabilityOptions options = this.GetDefaultSqlOptions();
+                this.service = new SqlOrchestrationService(
+                    options.GetOrchestrationServiceSettings(this.connectionStringResolver));
             }
 
             return this.service;
@@ -107,36 +109,27 @@ namespace DurableTask.SqlServer.AzureFunctions
 
         SqlDurabilityOptions GetSqlOptions(DurableClientAttribute attribute)
         {
-            var options = new SqlDurabilityOptions();
+            var options = new SqlDurabilityOptions
+            {
+                LoggerFactory = this.loggerFactory,
+            };
 
             // Deserialize the configuration directly from the host.json settings.
             // Note that not all settings can be applied from JSON.
             string configJson = JsonConvert.SerializeObject(this.extensionOptions.StorageProvider);
             JsonConvert.PopulateObject(configJson, options);
 
-            string connectionStringName = attribute.ConnectionName ?? options.ConnectionStringName;
-            string? connectionString = this.connectionStringResolver.Resolve(connectionStringName);
-            if (string.IsNullOrEmpty(connectionString))
+            // Attribute properties can override host.json settings.
+            if (!string.IsNullOrEmpty(attribute.ConnectionName))
             {
-                throw new InvalidOperationException(
-                    $"No SQL connection string configuration was found for the app setting or environment variable named '{connectionStringName}'.");
+                options.ConnectionStringName = attribute.ConnectionName;
             }
 
-            // Validate the connection string
-            try
+            if (!string.IsNullOrEmpty(attribute.TaskHub))
             {
-                new SqlConnectionStringBuilder(connectionString);
-            }
-            catch (ArgumentException e)
-            {
-                throw new ArgumentException("The provided connection string is invalid.", e);
+                options.TaskHubName = attribute.TaskHub;
             }
 
-            SqlProviderOptions providerOptions = options.ProviderOptions;
-            providerOptions.ConnectionString = connectionString;
-            providerOptions.LoggerFactory = this.loggerFactory;
-            providerOptions.WorkItemLockTimeout = options.TaskEventLockTimeout;
-            providerOptions.WorkItemBatchSize = options.TaskEventBatchSize;
             return options;
         }
     }

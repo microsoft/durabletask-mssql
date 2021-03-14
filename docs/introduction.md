@@ -1,8 +1,6 @@
 ﻿# Introduction
 
-The [Durable Task Framework](https://github.com/Azure/durabletask) (DTFx) is a lightweight and portable framework that allows developers to build reliable workflows (orchestrations) using .NET tasks and standard C# async/await syntax. Task orchestrations and their activities are written using standard, imperative code. No DSLs or DAGs.
-
-The Microsoft SQL provider is a backend for DTFx that persists all task hub state in a Microsoft SQL database, which can be hosted in the cloud or in your own infrastructure. This provider includes support for all DTFx features, including orchestrations, activities, and entities, and has full support for [Azure Durable Functions](https://docs.microsoft.com/azure/azure-functions/durable/durable-functions-overview).
+The Durable Task SQL Provider is a backend for the [Durable Task Framework](https://github.com/Azure/durabletask) (DTFx) and [Azure Durable Functions](https://docs.microsoft.com/azure/azure-functions/durable/durable-functions-overview) that persists all task hub state in a Microsoft SQL database. It's compatible with [on-premises SQL Server](https://www.microsoft.com/sql-server/), [SQL Server for Docker containers](https://hub.docker.com/_/microsoft-mssql-server), the cloud-hosted [Azure SQL Database](https://azure.microsoft.com/services/azure-sql/), and includes support for orchestrations, activities, and durable entities.
 
 ## Features
 
@@ -10,7 +8,7 @@ The Microsoft SQL provider is just one of [many supported providers for the Dura
 
 ### Portability
 
-Microsoft SQL Server is an industry leading database server available as a managed service or as a standalone installation and is supported by the leading cloud providers ([Azure SQL](https://azure.microsoft.com/services/azure-sql/), [SQL Server on AWS](https://aws.amazon.com/sql/), [Google Cloud SQL](https://cloud.google.com/sql/), etc.). It also is supported on multiple OS platforms, like [Windows Server](https://www.microsoft.com/sql-server/), [Linux containers](https://hub.docker.com/_/microsoft-mssql-server), and more recently on [IoT/Edge](https://azure.microsoft.com/services/sql-edge/) devices. All your orchestration data is contained in a single database that can easily be exported from one host to another, so there is no need to worry about having your data locked to a particular vendor.
+Microsoft SQL Server is an industry leading database server available as a managed service or as a standalone installation and is supported by the leading cloud providers ([Azure SQL](https://azure.microsoft.com/services/azure-sql/), [SQL Server on AWS](https://aws.amazon.com/sql/), [Google Cloud SQL](https://cloud.google.com/sql/), etc.). It also is supported on multiple OS platforms, like [Windows Server](https://www.microsoft.com/sql-server/), [Linux Docker containers](https://hub.docker.com/_/microsoft-mssql-server), and more recently on [IoT/Edge](https://azure.microsoft.com/services/sql-edge/) devices. All your orchestration data is contained in a single database that can easily be exported from one host to another, so there is no need to worry about having your data locked to a particular vendor.
 
 ### Control
 
