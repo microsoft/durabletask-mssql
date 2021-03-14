@@ -7,7 +7,6 @@ DROP FUNCTION IF EXISTS dt.CurrentTaskHub
 -- Views
 DROP VIEW IF EXISTS dt.vHistory
 DROP VIEW IF EXISTS dt.vInstances
-DROP VIEW IF EXISTS dt.vScaleHints
 
 -- Public Sprocs
 DROP PROCEDURE IF EXISTS dt.CreateInstance
