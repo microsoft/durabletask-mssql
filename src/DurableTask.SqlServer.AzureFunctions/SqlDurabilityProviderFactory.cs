@@ -37,6 +37,9 @@ namespace DurableTask.SqlServer.AzureFunctions
         }
 
         // Called by the Durable trigger binding infrastructure
+        public string Name => "MicrosoftSQL";
+
+        // Called by the Durable trigger binding infrastructure
         public DurabilityProvider GetDurabilityProvider()
         {
             if (this.defaultProvider == null)
@@ -111,6 +114,7 @@ namespace DurableTask.SqlServer.AzureFunctions
         {
             var options = new SqlDurabilityOptions
             {
+                TaskHubName = this.extensionOptions.HubName,
                 LoggerFactory = this.loggerFactory,
             };
 
