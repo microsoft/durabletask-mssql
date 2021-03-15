@@ -9,6 +9,7 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
     using System.Linq;
     using System.Threading.Tasks;
     using DurableTask.SqlServer.Tests.Logging;
+    using DurableTask.SqlServer.Tests.Utils;
     using Microsoft.Azure.WebJobs;
     using Microsoft.Azure.WebJobs.Extensions.DurableTask;
     using Microsoft.Extensions.DependencyInjection;
@@ -31,10 +32,7 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
             this.typeLocator = new TestFunctionTypeLocator();
             this.settingsResolver = new TestSettingsResolver();
 
-            // SqlServerProviderOptions resolves the default connection string from
-            // environment variables, or defaults to localhost.
-            var defaultOptions = new SqlProviderOptions();
-            this.settingsResolver.AddSetting("SQLDB_Connection", defaultOptions.ConnectionString);
+            this.settingsResolver.AddSetting("SQLDB_Connection", SharedTestHelpers.GetDefaultConnectionString());
 
             this.functionsHost = new HostBuilder()
                 .ConfigureLogging(

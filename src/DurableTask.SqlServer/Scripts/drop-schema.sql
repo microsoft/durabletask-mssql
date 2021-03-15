@@ -13,6 +13,7 @@ DROP PROCEDURE IF EXISTS dt.CreateInstance
 DROP PROCEDURE IF EXISTS dt.GetInstanceHistory
 DROP PROCEDURE IF EXISTS dt.QuerySingleOrchestration
 DROP PROCEDURE IF EXISTS dt.RaiseEvent
+DROP PROCEDURE IF EXISTS dt.SetGlobalSetting
 DROP PROCEDURE IF EXISTS dt.TerminateInstance
 DROP PROCEDURE IF EXISTS dt.PurgeInstanceState
 
@@ -34,6 +35,7 @@ DROP TABLE IF EXISTS dt.NewEvents
 DROP TABLE IF EXISTS dt.History
 DROP TABLE IF EXISTS dt.Instances
 DROP TABLE IF EXISTS dt.Payloads
+DROP TABLE IF EXISTS dt.GlobalSettings
 
 -- Custom types
 DROP TYPE IF EXISTS dt.MessageIDs

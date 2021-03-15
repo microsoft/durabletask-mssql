@@ -6,16 +6,26 @@ CREATE OR ALTER FUNCTION dt.CurrentTaskHub()
     WITH EXECUTE AS CALLER
 AS
 BEGIN
-    -- Implemented as a function to make it easier to customize
-    DECLARE @TaskHub varchar(50)
-    IF LEN(CURRENT_USER) <= 50
-        -- default behavior is to just use the username
-        SET @TaskHub = CONVERT(varchar(50), CURRENT_USER)
-    ELSE
-        -- if the username is too long, keep the first 16 characters and hash the rest
-        SET @TaskHub = CONVERT(varchar(16), CURRENT_USER) + '__' + CONVERT(varchar(32), HashBytes('MD5', CURRENT_USER), 2)
+    -- Task Hub modes:
+    -- 0: Task hub names are set by the app
+    -- 1: Task hub names are inferred from the user credential
+    DECLARE @taskHubMode sql_variant = (SELECT TOP 1 [Value] FROM dt.GlobalSettings WHERE [Name] = 'TaskHubMode');
 
-    RETURN @TaskHub
+    DECLARE @taskHub varchar(150)
+
+    IF @taskHubMode = 0
+        SET @taskHub = APP_NAME()
+    IF @taskHubMode = 1
+        SET @taskHub = USER_NAME()
+
+    IF @taskHub IS NULL
+        SET @taskHub = 'default'
+
+    -- if the name is too long, keep the first 16 characters and hash the rest
+    IF LEN(@taskHub) > 50
+        SET @taskHub = CONVERT(varchar(16), @taskHub) + '__' + CONVERT(varchar(32), HASHBYTES('MD5', @taskHub), 2)
+
+    RETURN @taskHub
 END
 GO
 
@@ -365,6 +375,31 @@ BEGIN
 
     -- return the number of deleted instances
     RETURN (SELECT COUNT(*) FROM @InstanceIDs)
+END
+GO
+
+
+CREATE OR ALTER PROCEDURE dt.SetGlobalSetting
+    @Name varchar(300),
+    @Value sql_variant
+AS
+BEGIN
+    BEGIN TRANSACTION
+ 
+    UPDATE dt.GlobalSettings WITH (UPDLOCK, HOLDLOCK)
+    SET
+        [Value] = @Value,
+        [Timestamp] = SYSUTCDATETIME(),
+        [LastModifiedBy] = USER_NAME()
+    WHERE
+        [Name] = @Name
+ 
+    IF @@ROWCOUNT = 0
+    BEGIN
+        INSERT INTO dt.GlobalSettings ([Name], [Value]) VALUES (@Name, @Value)
+    END
+ 
+    COMMIT TRANSACTION
 END
 GO
 
