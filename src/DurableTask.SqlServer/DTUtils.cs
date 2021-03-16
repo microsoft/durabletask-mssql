@@ -141,5 +141,14 @@ namespace DurableTask.SqlServer
                 _ => null,
             };
         }
+
+        public static string? GetVersion(HistoryEvent historyEvent)
+        {
+            return historyEvent.EventType switch
+            {
+                EventType.ExecutionStarted => ((ExecutionStartedEvent)historyEvent).Version,
+                _ => null,
+            };
+        }
     }
 }

@@ -31,6 +31,7 @@ namespace DurableTask.SqlServer.SqlTypes
             new SqlMetaData("PayloadText", SqlDbType.VarChar, -1 /* max */),
             new SqlMetaData("PayloadID", SqlDbType.UniqueIdentifier),
             new SqlMetaData("ParentInstanceID", SqlDbType.VarChar, 100),
+            new SqlMetaData("Version", SqlDbType.VarChar, 100),
         };
 
         static class ColumnOrdinals
@@ -48,6 +49,7 @@ namespace DurableTask.SqlServer.SqlTypes
             public const int PayloadText = 9;
             public const int PayloadId = 10;
             public const int ParentInstanceID = 11;
+            public const int Version = 12;
         }
 
         public static SqlParameter AddOrchestrationEventsParameter(
@@ -135,6 +137,7 @@ namespace DurableTask.SqlServer.SqlTypes
                 payloadText.IsNull && reason.IsNull ? SqlGuid.Null : new SqlGuid(Guid.NewGuid()));
 
             record.SetSqlString(ColumnOrdinals.ParentInstanceID, SqlUtils.GetParentInstanceId(msg.Event));
+            record.SetSqlString(ColumnOrdinals.Version, SqlUtils.GetVersion(msg.Event));
 
             return record;
         }

@@ -43,6 +43,7 @@ namespace DurableTask.SqlServer.Tests.Integration
                 count: 30, // ideally some multiple of 3
                 inputGenerator: i=> $"Hello, world {i}",
                 orchestrationName: "SimpleDelay",
+                version: string.Empty,
                 implementation: async (ctx, input) =>
                 {
                     var tcs = new TaskCompletionSource<bool>();

@@ -92,7 +92,7 @@ namespace DurableTask.SqlServer
                             ExecutionId = GetExecutionId(reader),
                         },
                         Tags = null, // TODO
-                        Version = null, // TODO
+                        Version = GetVersion(reader),
                     };
                     string? parentInstanceId = GetParentInstanceId(reader);
                     if (parentInstanceId != null)
@@ -190,6 +190,7 @@ namespace DurableTask.SqlServer
                 Input = reader.GetStringOrNull(reader.GetOrdinal("InputText")),
                 LastUpdatedTime = reader.GetUtcDateTimeOrNull(reader.GetOrdinal("LastUpdatedTime")) ?? default,
                 Name = GetName(reader),
+                Version = GetVersion(reader),
                 OrchestrationInstance = new OrchestrationInstance
                 {
                     InstanceId = GetInstanceId(reader),
@@ -267,10 +268,21 @@ namespace DurableTask.SqlServer
             return reader.IsDBNull(ordinal) ? (Guid?)null : reader.GetGuid(ordinal);
         }
 
-        public static SemanticVersion GetVersion(DbDataReader reader)
+        public static SemanticVersion GetSemanticVersion(DbDataReader reader)
         {
             string versionString = reader.GetString("SemanticVersion");
             return SemanticVersion.Parse(versionString);
+        }
+
+        public static SqlString GetVersion(HistoryEvent historyEvent)
+        {
+            return DTUtils.GetVersion(historyEvent) ?? SqlString.Null;
+        }
+
+        public static string? GetVersion(DbDataReader reader)
+        {
+            int ordinal = reader.GetOrdinal("Version");
+            return reader.IsDBNull(ordinal) ? null : reader.GetString(ordinal);
         }
 
         internal static SqlString GetReason(HistoryEvent historyEvent)
