@@ -398,6 +398,7 @@ namespace DurableTask.SqlServer
             ExecutionStartedEvent startEvent = (ExecutionStartedEvent)creationMessage.Event;
             OrchestrationInstance instance = startEvent.OrchestrationInstance;
             command.Parameters.Add("@Name", SqlDbType.VarChar, size: 300).Value = startEvent.Name;
+            command.Parameters.Add("@Version", SqlDbType.VarChar, size: 100).Value = startEvent.Version;
             command.Parameters.Add("@InstanceID", SqlDbType.VarChar, size: 100).Value = instance.InstanceId;
             command.Parameters.Add("@ExecutionID", SqlDbType.VarChar, size: 50).Value = instance.ExecutionId;
             command.Parameters.Add("@InputText", SqlDbType.VarChar).Value = startEvent.Input;

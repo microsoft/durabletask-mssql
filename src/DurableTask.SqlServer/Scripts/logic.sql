@@ -37,6 +37,7 @@ AS
         I.[InstanceID],
         I.[ExecutionID],
         I.[Name],
+        I.[Version],
         I.[CreatedTime],
         I.[LastUpdatedTime],
         I.[CompletedTime],
@@ -84,6 +85,7 @@ GO
 
 CREATE OR ALTER PROCEDURE dt.CreateInstance
     @Name varchar(300),
+    @Version varchar(100),
     @InstanceID varchar(100) = NULL,
     @ExecutionID varchar(50) = NULL,
     @InputText varchar(MAX) = NULL,
@@ -135,6 +137,7 @@ BEGIN
 
     INSERT INTO Instances (
         [Name],
+        [Version],
         [TaskHub],
         [InstanceID],
         [ExecutionID],
@@ -142,6 +145,7 @@ BEGIN
         [InputPayloadID])
     VALUES (
         @Name,
+        @Version,
         @TaskHub,
         @InstanceID,
         @ExecutionID,
@@ -179,8 +183,13 @@ CREATE OR ALTER PROCEDURE dt.GetInstanceHistory
 AS
 BEGIN
     DECLARE @TaskHub varchar(50) = dt.CurrentTaskHub()
-    DECLARE @ParentInstanceID varchar(100) = (
-        SELECT [ParentInstanceID] FROM Instances WHERE [InstanceID] = @InstanceID)
+    DECLARE @ParentInstanceID varchar(100)
+    DECLARE @Version varchar(100)
+    
+    SELECT
+        @ParentInstanceID = [ParentInstanceID],
+        @Version = [Version]
+    FROM Instances WHERE [InstanceID] = @InstanceID
 
     SELECT
         H.[InstanceID],
@@ -196,7 +205,8 @@ BEGIN
         P.[Reason],
         (CASE WHEN @GetInputsAndOutputs = 0 THEN NULL ELSE P.[Text] END) AS [PayloadText],
         [PayloadID],
-        @ParentInstanceID as [ParentInstanceID]
+        @ParentInstanceID as [ParentInstanceID],
+        @Version as [Version]
     FROM History H WITH (INDEX (PK_History))
         LEFT OUTER JOIN Payloads P ON
             P.[TaskHub] = @TaskHub AND
@@ -233,12 +243,14 @@ BEGIN
             [InstanceID],
             [ExecutionID],
             [Name],
+            [Version],
             [RuntimeStatus])
         SELECT
             @TaskHub,
             @InstanceID,
             NEWID(),
             SUBSTRING(@InstanceID, 2, CHARINDEX('@', @InstanceID, 2) - 2),
+            '',
             'Pending'
         WHERE LEFT(@InstanceID, 1) = '@' AND CHARINDEX('@', @InstanceID, 2) > 2
 
@@ -413,6 +425,7 @@ BEGIN
     DECLARE @now datetime2 = SYSUTCDATETIME()
     DECLARE @instanceID varchar(100)
     DECLARE @parentInstanceID varchar(100)
+    DECLARE @version varchar(100)
     DECLARE @TaskHub varchar(50) = dt.CurrentTaskHub()
 
     BEGIN TRANSACTION
@@ -430,7 +443,8 @@ BEGIN
         [LockedBy] = @LockedBy,
 	    [LockExpiration] = @LockExpiration,
         @instanceID = I.[InstanceID],
-        @parentInstanceID = I.[ParentInstanceID]
+        @parentInstanceID = I.[ParentInstanceID],
+        @version = I.[Version]
     FROM 
         dt.Instances I WITH (READPAST) INNER JOIN NewEvents E WITH (READPAST) ON
             E.[TaskHub] = @TaskHub AND
@@ -459,7 +473,8 @@ BEGIN
         P.[Text] AS [PayloadText],
         P.[PayloadID],
         DATEDIFF(millisecond, [Timestamp], @now) AS [WaitTime],
-        @parentInstanceID as [ParentInstanceID]
+        @parentInstanceID as [ParentInstanceID],
+        @version as [Version]
     FROM NewEvents N
         LEFT OUTER JOIN dt.[Payloads] P ON 
             P.[TaskHub] = @TaskHub AND
@@ -491,7 +506,8 @@ BEGIN
         -- Optimization: Do not load the data payloads for these history events - they are not needed since they are never replayed
         (CASE WHEN [EventType] IN ('TaskScheduled', 'SubOrchestrationInstanceCreated') THEN NULL ELSE P.[Text] END) AS [PayloadText],
         [PayloadID],
-        @parentInstanceID as [ParentInstanceID]
+        @parentInstanceID as [ParentInstanceID],
+        @version as [Version]
     FROM History H WITH (INDEX (PK_History))
         LEFT OUTER JOIN Payloads P ON
             P.[TaskHub] = @TaskHub AND
@@ -639,12 +655,14 @@ BEGIN
         [InstanceID],
         [ExecutionID],
         [Name],
+        [Version],
         [RuntimeStatus])
     SELECT DISTINCT
         @TaskHub,
         E.[InstanceID],
         NEWID(),
         SUBSTRING(E.[InstanceID], 2, CHARINDEX('@', E.[InstanceID], 2) - 2),
+        '',
         'Pending'
     FROM @NewOrchestrationEvents E
     WHERE LEFT(E.[InstanceID], 1) = '@'
@@ -662,6 +680,7 @@ BEGIN
         [InstanceID],
         [ExecutionID],
         [Name],
+        [Version],
         [ParentInstanceID],
         [RuntimeStatus])
     SELECT DISTINCT
@@ -669,6 +688,7 @@ BEGIN
         E.[InstanceID],
         E.[ExecutionID],
         E.[Name],
+        E.[Version],
         E.[ParentInstanceID],
         'Pending'
     FROM @NewOrchestrationEvents E
@@ -810,12 +830,14 @@ BEGIN
             [InstanceID],
             [ExecutionID],
             [Name],
+            [Version],
             [RuntimeStatus])
         SELECT DISTINCT
             @TaskHub,
             E.[InstanceID],
             NEWID(),
             SUBSTRING(E.[InstanceID], 2, CHARINDEX('@', E.[InstanceID], 2) - 2),
+            '',
             'Pending'
         FROM @NewOrchestrationEvents E
         WHERE NOT EXISTS (
@@ -880,6 +902,7 @@ BEGIN
         I.[InstanceID],
         I.[ExecutionID],
         I.[Name],
+        I.[Version],
         I.[CreatedTime],
         I.[LastUpdatedTime],
         I.[CompletedTime],

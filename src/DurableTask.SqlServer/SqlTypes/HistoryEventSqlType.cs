@@ -31,6 +31,7 @@ namespace DurableTask.SqlServer.SqlTypes
             new SqlMetaData("PayloadText", SqlDbType.VarChar, -1 /* max */),
             new SqlMetaData("PayloadID", SqlDbType.UniqueIdentifier),
             new SqlMetaData("ParentInstanceID", SqlDbType.VarChar, 100),
+            new SqlMetaData("Version", SqlDbType.VarChar, 100),
         };
 
         static class ColumnOrdinals
@@ -50,6 +51,7 @@ namespace DurableTask.SqlServer.SqlTypes
             public const int PayloadText = 11;
             public const int PayloadID = 12;
             public const int ParentInstanceID = 13;
+            public const int Version = 14;
         };
 
         public static SqlParameter AddHistoryEventsParameter(

@@ -169,6 +169,7 @@ namespace DurableTask.SqlServer.Tests.Integration
                 parallelCount,
                 _ => null,
                 orchestrationName: "OrchestrationsWithActivityChain",
+                version: string.Empty,
                 implementation: async (ctx, _) =>
                 {
                     int value = 0;
@@ -406,6 +407,54 @@ namespace DurableTask.SqlServer.Tests.Integration
                 });
             await testInstance.WaitForCompletion(
                 timeout: TimeSpan.FromSeconds(15), expectedOutput: 15);
+        }
+
+        [Fact]
+        public async Task VersionedOrchestration()
+        {
+            string orchestrationName = "VersionedOrchestrationTest";
+            string version1 = "V1";
+            string version2 = "V2";
+            var waitTimeout = TimeSpan.FromSeconds(15);
+
+            TestInstance<string> v1Instance = await this.testService.RunOrchestration<string, string>(
+                null,
+                orchestrationName,
+                version: version1,
+                implementation: (ctx, input) => Task.FromResult(version1));
+            await v1Instance.WaitForCompletion(waitTimeout, expectedOutput: version1);
+
+            TestInstance<string> v2Instance = await this.testService.RunOrchestration<string, string>(
+                null,
+                orchestrationName,
+                version: version2,
+                implementation: (ctx, input) => Task.FromResult(version2));
+            await v2Instance.WaitForCompletion(waitTimeout, expectedOutput: version2);
+        }
+
+        [Fact]
+        public async Task VersionedSubOrchestration()
+        {
+            string subOrchestrationName = "VersionedSubOrchestrationTest";
+            string version1 = "V1";
+            string version2 = "V2";
+            var waitTimeout = TimeSpan.FromSeconds(30);
+
+            this.testService.RegisterInlineOrchestration<string, string>(
+                subOrchestrationName, version1, implementation: (ctx, input) => Task.FromResult(version1));
+            this.testService.RegisterInlineOrchestration<string, string>(
+                subOrchestrationName, version2, implementation: (ctx, input) => Task.FromResult(version2));
+            
+            TestInstance<string> parentInstance = await this.testService.RunOrchestration<string, string>(
+                null,
+                "ParentOrchestration",
+                implementation: async (ctx, input) =>
+                {
+                    var result1 = await ctx.CreateSubOrchestrationInstance<string>(subOrchestrationName, version1, null);
+                    var result2 = await ctx.CreateSubOrchestrationInstance<string>(subOrchestrationName, version2, null);
+                    return result1 + result2;
+                });
+            await parentInstance.WaitForCompletion(waitTimeout, expectedOutput: version1 + version2);
         }
     }
 }

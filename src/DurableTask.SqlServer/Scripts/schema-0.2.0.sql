@@ -36,7 +36,8 @@ IF TYPE_ID(N'dt.HistoryEvents') IS NULL
         [Reason] varchar(max) NULL,
         [PayloadText] varchar(max) NULL,
         [PayloadID] uniqueidentifier NULL,
-        [ParentInstanceID] varchar(100) NULL
+        [ParentInstanceID] varchar(100) NULL,
+        [Version] varchar(100) NULL
     )
 GO
 
@@ -54,7 +55,8 @@ IF TYPE_ID(N'dt.OrchestrationEvents') IS NULL
         [Reason] varchar(max) NULL,
         [PayloadText] varchar(max) NULL,
         [PayloadID] uniqueidentifier NULL,
-        [ParentInstanceID] varchar(100) NULL
+        [ParentInstanceID] varchar(100) NULL,
+        [Version] varchar(100) NULL
     )
 GO
 
@@ -112,6 +114,7 @@ BEGIN
         [InstanceID] varchar(100) NOT NULL,
 		[ExecutionID] varchar(50) NOT NULL CONSTRAINT DF_Instances_ExecutionID DEFAULT (NEWID()), -- expected to be system generated
         [Name] varchar(300) NOT NULL, -- the type name of the orchestration or entity
+        [Version] varchar(100) NOT NULL, -- the version of the orchestration
 		[CreatedTime] datetime2 NOT NULL CONSTRAINT DF_Instances_CreatedTime DEFAULT SYSUTCDATETIME(),
 		[LastUpdatedTime] datetime2 NULL,
         [CompletedTime] datetime2 NULL,

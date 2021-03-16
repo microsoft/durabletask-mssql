@@ -88,9 +88,18 @@ namespace DurableTask.SqlServer.Tests.Utils
             await this.DropTaskHubLoginAsync();
         }
 
+        public Task<TestInstance<TInput>> RunOrchestration<TOutput, TInput>(
+            TInput input,
+            string orchestrationName,
+            Func<OrchestrationContext, TInput, Task<TOutput>> implementation,
+            Action<OrchestrationContext, string, string> onEvent = null,
+            params (string name, TaskActivity activity)[] activities) =>
+            RunOrchestration(input, orchestrationName, string.Empty, implementation, onEvent, activities);
+
         public async Task<TestInstance<TInput>> RunOrchestration<TOutput, TInput>(
             TInput input,
             string orchestrationName,
+            string version,
             Func<OrchestrationContext, TInput, Task<TOutput>> implementation,
             Action<OrchestrationContext, string, string> onEvent = null,
             params (string name, TaskActivity activity)[] activities)
@@ -98,7 +107,8 @@ namespace DurableTask.SqlServer.Tests.Utils
             var instances = await this.RunOrchestrations(
                 count: 1,
                 inputGenerator: i => input,
-                orchestrationName,
+                orchestrationName: orchestrationName,
+                version: version,
                 implementation,
                 onEvent,
                 activities);
@@ -110,16 +120,13 @@ namespace DurableTask.SqlServer.Tests.Utils
             int count,
             Func<int, TInput> inputGenerator,
             string orchestrationName,
+            string version,
             Func<OrchestrationContext, TInput, Task<TOutput>> implementation,
             Action<OrchestrationContext, string, string> onEvent = null,
             params (string name, TaskActivity activity)[] activities)
         {
             // Register the inline orchestration - note that this will only work once per test
-            Type orchestrationType = typeof(OrchestrationShim<TOutput, TInput>);
-
-            this.worker.AddTaskOrchestrations(new TestObjectCreator<TaskOrchestration>(
-                orchestrationName,
-                MakeOrchestration(implementation, onEvent)));
+            RegisterInlineOrchestration(orchestrationName, version, implementation, onEvent);
 
             foreach ((string name, TaskActivity activity) in activities)
             {
@@ -134,7 +141,7 @@ namespace DurableTask.SqlServer.Tests.Utils
                 TInput input = inputGenerator(i);
                 OrchestrationInstance instance = await this.client.CreateOrchestrationInstanceAsync(
                     orchestrationName,
-                    string.Empty /* version */,
+                    version,
                     input);
 
                 // Verify that the CreateOrchestrationInstanceAsync implementation set the InstanceID and ExecutionID fields
@@ -145,6 +152,18 @@ namespace DurableTask.SqlServer.Tests.Utils
             }
 
             return instances;
+        }
+
+        public void RegisterInlineOrchestration<TOutput, TInput>(
+            string orchestrationName,
+            string version,
+            Func<OrchestrationContext, TInput, Task<TOutput>> implementation,
+            Action<OrchestrationContext, string, string> onEvent = null)
+        {
+            this.worker.AddTaskOrchestrations(new TestObjectCreator<TaskOrchestration>(
+                orchestrationName,
+                version,
+                MakeOrchestration(implementation, onEvent)));
         }
 
         public static TaskOrchestration MakeOrchestration<TOutput, TInput>(
@@ -345,10 +364,14 @@ namespace DurableTask.SqlServer.Tests.Utils
         {
             readonly T obj;
 
-            public TestObjectCreator(string name, T obj)
+            public TestObjectCreator(string name, T obj) : this(name, string.Empty, obj)
+            {
+            }
+
+            public TestObjectCreator(string name, string version, T obj)
             {
                 this.Name = name;
-                this.Version = string.Empty;
+                this.Version = version;
                 this.obj = obj;
             }
 

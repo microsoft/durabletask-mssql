@@ -51,7 +51,7 @@ namespace DurableTask.SqlServer
                     if (await reader.ReadAsync())
                     {
                         // The first result contains the latest version
-                        currentSchemaVersion = SqlUtils.GetVersion(reader);
+                        currentSchemaVersion = SqlUtils.GetSemanticVersion(reader);
                         if (currentSchemaVersion >= DTUtils.ExtensionVersion)
                         {
                             // The schema is already up-to-date.
