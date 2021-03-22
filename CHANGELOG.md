@@ -1,20 +1,34 @@
 # Changelog
 
+## v0.7.0-alpha
+
+### New
+
+* Added `dt.GetScaleMetric` SQL function for use with the [MSSQL KEDA Scaler](https://keda.sh/docs/scalers/mssql/).
+
+### Updates
+
+* Switched default task hub mode back to multitenant, since it simplifies certain test setups
+
+### Breaking changes
+
+* None
+
 ## v0.6.0-alpha
 
 ### New
 
 * Support for sub-orchestrations ([#7](https://github.com/microsoft/durabletask-mssql/pull/7)) - contributed by [@usemam](https://github.com/usemam)
-* Support for explicit task hub name configuration
-* Added `dt.GlobalSettings` table and `dt.SetGlobalSetting` stored procedure
-* Added new permissions.sql setup script for setting up databaes permissions
-* Added task hub documentation page
+* Support for explicit task hub name configuration ([#10](https://github.com/microsoft/durabletask-mssql/pull/10))
+* Added `dt.GlobalSettings` table and `dt.SetGlobalSetting` stored procedure ([#10](https://github.com/microsoft/durabletask-mssql/pull/10))
+* Added new permissions.sql setup script for setting up databaes permissions ([#10](https://github.com/microsoft/durabletask-mssql/pull/10))
+* Added task hub documentation page ([#10](https://github.com/microsoft/durabletask-mssql/pull/10))
 
-## Breaking changes
+### Breaking changes
 
-* Renamed `SqlProviderOptions` to `SqlOrchestrationServiceSettings` and added required constructor parameters
-* User-based multitenancy is now disabled by default
-* The `dt_runtime` role is now granted access to only specific stored procedures rather than all of them
+* Renamed `SqlProviderOptions` to `SqlOrchestrationServiceSettings` and added required constructor parameters ([#10](https://github.com/microsoft/durabletask-mssql/pull/10))
+* User-based multitenancy is now disabled by default ([#10](https://github.com/microsoft/durabletask-mssql/pull/10))
+* The `dt_runtime` role is now granted access to only specific stored procedures rather than all of them ([#10](https://github.com/microsoft/durabletask-mssql/pull/10))
 
 ## v0.5.0-alpha
 

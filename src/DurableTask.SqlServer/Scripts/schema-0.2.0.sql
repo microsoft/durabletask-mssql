@@ -213,6 +213,7 @@ BEGIN
         [LastModifiedBy] nvarchar(128) NOT NULL CONSTRAINT DF_GlobalSettings_LastModifiedby DEFAULT USER_NAME()
     )
     
-    INSERT INTO dt.GlobalSettings ([Name], [Value]) VALUES ('TaskHubMode', 0)
+    -- Default task hub mode is 1, or "User ID"
+    INSERT INTO dt.GlobalSettings ([Name], [Value]) VALUES ('TaskHubMode', 1)
 END
 GO

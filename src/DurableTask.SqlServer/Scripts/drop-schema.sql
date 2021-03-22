@@ -3,6 +3,7 @@
 
 -- Functions
 DROP FUNCTION IF EXISTS dt.CurrentTaskHub
+DROP FUNCTION IF EXISTS dt.GetScaleMetric
 
 -- Views
 DROP VIEW IF EXISTS dt.vHistory

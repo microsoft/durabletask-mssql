@@ -13,6 +13,9 @@ END
 -- on the task hub since that is. that no
 -- database user can access data created by another database user.
 
+-- Functions 
+GRANT EXECUTE ON OBJECT::dt.GetScaleMetric TO dt_runtime
+
 -- Public sprocs
 GRANT EXECUTE ON OBJECT::dt.CreateInstance TO dt_runtime
 GRANT EXECUTE ON OBJECT::dt.GetInstanceHistory TO dt_runtime
