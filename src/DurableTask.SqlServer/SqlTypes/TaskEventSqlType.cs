@@ -30,6 +30,7 @@ namespace DurableTask.SqlServer.SqlTypes
             new SqlMetaData("Reason", SqlDbType.VarChar, -1 /* max */),
             new SqlMetaData("PayloadText", SqlDbType.VarChar, -1 /* max */),
             new SqlMetaData("PayloadID", SqlDbType.UniqueIdentifier),
+            new SqlMetaData("Version", SqlDbType.VarChar, 100),
         };
 
         static class ColumnOrdinals
@@ -46,6 +47,7 @@ namespace DurableTask.SqlServer.SqlTypes
             public const int Reason = 8;
             public const int PayloadText = 9;
             public const int PayloadId = 10;
+            public const int Version = 11;
         }
 
         public static SqlParameter AddTaskEventsParameter(
@@ -118,6 +120,8 @@ namespace DurableTask.SqlServer.SqlTypes
 
             // Optionally, the LockedBy and LockExpiration fields can be specified
             // to pre-lock task work items for this particular node.
+
+            record.SetSqlString(ColumnOrdinals.Version, SqlUtils.GetVersion(msg.Event));
 
             return record;
         }

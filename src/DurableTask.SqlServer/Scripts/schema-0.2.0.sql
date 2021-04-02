@@ -73,7 +73,8 @@ IF TYPE_ID(N'dt.TaskEvents') IS NULL
         [LockExpiration] datetime2 NULL,
         [Reason] varchar(max) NULL,
         [PayloadText] varchar(max) NULL,
-        [PayloadID] uniqueidentifier NULL
+        [PayloadID] uniqueidentifier NULL,
+        [Version] varchar(100) NULL
     )
 GO
 
@@ -193,6 +194,7 @@ IF OBJECT_ID(N'dt.NewTasks', 'U') IS NULL
         [LockedBy] varchar(100) NULL,
         [LockExpiration] datetime2 NULL,
         [PayloadID] uniqueidentifier NULL,
+        [Version] varchar(100) NULL,
 
         CONSTRAINT PK_NewTasks PRIMARY KEY (TaskHub, SequenceNumber),
         CONSTRAINT FK_NewTasks_Instances FOREIGN KEY (TaskHub, InstanceID) REFERENCES dt.Instances(TaskHub, InstanceID) ON DELETE CASCADE,

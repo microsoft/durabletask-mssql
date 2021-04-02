@@ -156,7 +156,7 @@ namespace DurableTask.SqlServer
                     {
                         Input = GetPayloadText(reader),
                         Name = GetName(reader),
-                        Version = null, // TODO
+                        Version = GetVersion(reader),
                     };
                     break;
                 case EventType.TimerCreated:
