@@ -147,6 +147,7 @@ namespace DurableTask.SqlServer
             return historyEvent.EventType switch
             {
                 EventType.ExecutionStarted => ((ExecutionStartedEvent)historyEvent).Version,
+                EventType.TaskScheduled => ((TaskScheduledEvent)historyEvent).Version,
                 _ => null,
             };
         }

@@ -456,5 +456,30 @@ namespace DurableTask.SqlServer.Tests.Integration
                 });
             await parentInstance.WaitForCompletion(waitTimeout, expectedOutput: version1 + version2);
         }
+
+        [Fact]
+        public async Task VersionedActivity()
+        {
+            string activityName = "VersionedActivityTest";
+            string version1 = "V1";
+            string version2 = "V2";
+            var waitTimeout = TimeSpan.FromSeconds(30);
+
+            this.testService.RegisterInlineActivity(
+                activityName, version1, TestService.MakeActivity<string, string>((ctx, input) => version1));
+            this.testService.RegisterInlineActivity(
+                activityName, version2, TestService.MakeActivity<string, string>((ctx, input) => version2));
+            
+            var instance = await this.testService.RunOrchestration<string, string>(
+                null,
+                "OrchestrationWithVersionedActivities",
+                implementation: async (ctx, input) =>
+                {
+                    var result1 = await ctx.ScheduleTask<string>(activityName, version1, input);
+                    var result2 = await ctx.ScheduleTask<string>(activityName, version2, input);
+                    return result1 + result2;
+                });
+            await instance.WaitForCompletion(waitTimeout, expectedOutput: version1 + version2);
+        }
     }
 }

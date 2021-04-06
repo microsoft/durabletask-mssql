@@ -130,7 +130,7 @@ namespace DurableTask.SqlServer.Tests.Utils
 
             foreach ((string name, TaskActivity activity) in activities)
             {
-                this.worker.AddTaskActivities(new TestObjectCreator<TaskActivity>(name, activity));
+                RegisterInlineActivity(name, string.Empty, activity);
             }
 
             DateTime utcNow = DateTime.UtcNow;
@@ -152,6 +152,11 @@ namespace DurableTask.SqlServer.Tests.Utils
             }
 
             return instances;
+        }
+
+        public void RegisterInlineActivity(string name, string version, TaskActivity activity)
+        {
+            this.worker.AddTaskActivities(new TestObjectCreator<TaskActivity>(name, version, activity));
         }
 
         public void RegisterInlineOrchestration<TOutput, TInput>(
@@ -363,10 +368,6 @@ namespace DurableTask.SqlServer.Tests.Utils
         class TestObjectCreator<T> : ObjectCreator<T>
         {
             readonly T obj;
-
-            public TestObjectCreator(string name, T obj) : this(name, string.Empty, obj)
-            {
-            }
 
             public TestObjectCreator(string name, string version, T obj)
             {

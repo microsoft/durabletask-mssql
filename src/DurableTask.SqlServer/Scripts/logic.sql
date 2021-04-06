@@ -813,7 +813,8 @@ BEGIN
         [VisibleTime],
         [LockedBy],
         [LockExpiration],
-        [PayloadID]
+        [PayloadID],
+        [Version]
     )
     OUTPUT
         INSERTED.[SequenceNumber],
@@ -827,7 +828,8 @@ BEGIN
         [VisibleTime],
         [LockedBy],
         [LockExpiration],
-        [PayloadID]
+        [PayloadID],
+        [Version]
     FROM @NewTaskEvents
 
     COMMIT TRANSACTION
@@ -999,6 +1001,7 @@ BEGIN
         [VisibleTime],
         [Timestamp],
         [DequeueCount],
+        [Version],
         (SELECT TOP 1 [Text] FROM Payloads P WHERE
             P.[TaskHub] = @TaskHub AND
             P.[InstanceID] = N.[InstanceID] AND
