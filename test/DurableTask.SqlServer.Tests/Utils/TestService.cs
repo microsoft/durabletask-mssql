@@ -53,7 +53,7 @@ namespace DurableTask.SqlServer.Tests.Utils
 
         public TestLogProvider LogProvider { get; }
 
-        public async Task InitializeAsync()
+        public async Task InitializeAsync(bool startWorker = true)
         {
             // The initialization requires administrative credentials (default)
             await new SqlOrchestrationService(this.OrchestrationServiceOptions).CreateIfNotExistsAsync();
@@ -69,9 +69,16 @@ namespace DurableTask.SqlServer.Tests.Utils
             };
 
             this.OrchestrationServiceMock = new Mock<SqlOrchestrationService>(this.OrchestrationServiceOptions) { CallBase = true };
-            this.worker = await new TaskHubWorker(this.OrchestrationServiceMock.Object, this.loggerFactory).StartAsync();
+            this.worker = new TaskHubWorker(this.OrchestrationServiceMock.Object, this.loggerFactory);
+            if (startWorker)
+            {
+                await this.worker.StartAsync();
+            }
+
             this.client = new TaskHubClient(this.OrchestrationServiceMock.Object, loggerFactory: this.loggerFactory);
         }
+
+        public Task StartWorkerAsync() => this.worker?.StartAsync() ?? Task.CompletedTask;
 
         public Task PurgeAsync(DateTime minimumThreshold, OrchestrationStateTimeRangeFilterType filterType)
         {
@@ -93,8 +100,10 @@ namespace DurableTask.SqlServer.Tests.Utils
             string orchestrationName,
             Func<OrchestrationContext, TInput, Task<TOutput>> implementation,
             Action<OrchestrationContext, string, string> onEvent = null,
-            params (string name, TaskActivity activity)[] activities) =>
-            RunOrchestration(input, orchestrationName, string.Empty, implementation, onEvent, activities);
+            params (string name, TaskActivity activity)[] activities)
+        {
+            return this.RunOrchestration(input, orchestrationName, string.Empty, implementation, onEvent, activities);
+        }
 
         public async Task<TestInstance<TInput>> RunOrchestration<TOutput, TInput>(
             TInput input,
@@ -106,6 +115,7 @@ namespace DurableTask.SqlServer.Tests.Utils
         {
             var instances = await this.RunOrchestrations(
                 count: 1,
+                instanceIdGenerator: i => Guid.NewGuid().ToString("N"),
                 inputGenerator: i => input,
                 orchestrationName: orchestrationName,
                 version: version,
@@ -116,8 +126,9 @@ namespace DurableTask.SqlServer.Tests.Utils
             return instances.First();
         }
 
-        public async Task<List<TestInstance<TInput>>> RunOrchestrations<TOutput, TInput>(
+        public async Task<IReadOnlyList<TestInstance<TInput>>> RunOrchestrations<TOutput, TInput>(
             int count,
+            Func<int, string> instanceIdGenerator,
             Func<int, TInput> inputGenerator,
             string orchestrationName,
             string version,
@@ -126,29 +137,34 @@ namespace DurableTask.SqlServer.Tests.Utils
             params (string name, TaskActivity activity)[] activities)
         {
             // Register the inline orchestration - note that this will only work once per test
-            RegisterInlineOrchestration(orchestrationName, version, implementation, onEvent);
+            this.RegisterInlineOrchestration(orchestrationName, version, implementation, onEvent);
 
             foreach ((string name, TaskActivity activity) in activities)
             {
                 RegisterInlineActivity(name, string.Empty, activity);
             }
 
-            DateTime utcNow = DateTime.UtcNow;
-
-            var instances = new List<TestInstance<TInput>>(count);
-            for (int i = 0; i < count; i++)
+            IEnumerable<Task<TestInstance<TInput>>> tasks = Enumerable.Range(0, count).Select(async i =>
             {
-                TInput input = inputGenerator(i);
+                string instanceId = instanceIdGenerator?.Invoke(i) ?? Guid.NewGuid().ToString("N");
+                TInput input = inputGenerator != null ? inputGenerator(i) : default;
+
+                DateTime utcNow = DateTime.UtcNow;
                 OrchestrationInstance instance = await this.client.CreateOrchestrationInstanceAsync(
                     orchestrationName,
                     version,
+                    instanceId,
                     input);
 
+                return new TestInstance<TInput>(this.client, instance, utcNow, input);
+            });
+
+            TestInstance<TInput>[] instances = await Task.WhenAll(tasks);
+            foreach (TestInstance<TInput> instance in instances)
+            {
                 // Verify that the CreateOrchestrationInstanceAsync implementation set the InstanceID and ExecutionID fields
                 Assert.NotNull(instance.InstanceId);
                 Assert.NotNull(instance.ExecutionId);
-
-                instances.Add(new TestInstance<TInput>(this.client, instance, utcNow, input));
             }
 
             return instances;

@@ -63,6 +63,23 @@ namespace DurableTask.SqlServer
         public string AppName { get; set; } = Environment.MachineName;
 
         /// <summary>
+        /// Gets or sets the maximum number of work items that can be processed concurrently by a single worker.
+        /// The default value is the value of <see cref="Environment.ProcessorCount"/>.
+        /// </summary>
+        [JsonProperty("maxConcurrentActivities")]
+        public int MaxConcurrentActivities { get; set; } = Environment.ProcessorCount;
+
+        /// <summary>
+        /// Gets or sets the maximum number of orchestrations that can be loaded in memory at a time by a single worker.
+        /// The default value is the value of <see cref="Environment.ProcessorCount"/>.
+        /// </summary>
+        /// <remarks>
+        /// Orchestrations that are idle and waiting for inputs are unloaded from memory and do not count against this limit.
+        /// </remarks>
+        [JsonProperty("maxActiveOrchestrations")]
+        public int MaxActiveOrchestrations { get; set; } = Environment.ProcessorCount;
+
+        /// <summary>
         /// Gets a SQL connection string associated with the configured task hub.
         /// </summary>
         [JsonIgnore]

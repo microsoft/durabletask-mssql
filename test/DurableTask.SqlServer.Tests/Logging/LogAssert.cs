@@ -154,9 +154,25 @@ namespace DurableTask.SqlServer.Tests.Logging
                     Assert.True(fields.ContainsKey("InstanceId"));
                     Assert.True(fields.ContainsKey("ExecutionId"));
                     break;
+                case EventIds.ReplicaCountChangeRecommended:
+                    Assert.Contains("CurrentCount", fields);
+                    Assert.Contains("RecommendedCount", fields);
+                    break;
                 default:
                     throw new ArgumentException($"Log event {log.EventId} is not known. Does it need to be added to the log validator?", nameof(log));
             }
+        }
+
+        public static T FieldEquals<T>(LogEntry logEntry, string fieldName, T expectedValue)
+        {
+            var structuredEvent = logEntry.State as IReadOnlyDictionary<string, object>;
+            Assert.NotNull(structuredEvent);
+
+            IReadOnlyDictionary<string, object> eventData = Assert.IsAssignableFrom<IReadOnlyDictionary<string, object>>(logEntry.State);
+            object fieldValue = Assert.Contains(fieldName, eventData);
+            T convertedValue = Assert.IsType<T>(fieldValue);
+            Assert.Equal(expectedValue, convertedValue);
+            return convertedValue;
         }
     }
 }

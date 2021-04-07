@@ -5,15 +5,17 @@
 ### New
 
 * Added `dt.GetScaleMetric` SQL function for use with the [MSSQL KEDA Scaler](https://keda.sh/docs/scalers/mssql/).
+* Added `dt.GetScaleRecommendation` SQL function and `IScaleProvider` implementation for VNET scaling in Azure Functions.
 * Added versioning support for task activities ([#14](https://github.com/microsoft/durabletask-mssql/pull/14)) - contributed by [@usemam](https://github.com/usemam)
 
 ### Updates
 
-* Switched default task hub mode back to multitenant, since it simplifies certain test setups
+* Switched default task hub mode back to multitenant to simplify testing
+* Updated [Microsoft.Azure.WebJobs.Extensions.DurableTask](https://www.nuget.org/packages/Microsoft.Azure.WebJobs.Extensions.DurableTask) dependency to [v2.4.2](https://github.com/Azure/azure-functions-durable-extension/releases/tag/v2.4.2).
 
 ### Breaking changes
 
-* None
+* Changed `SqlDurabilityProviderFactory` and `SqlDurabilityOptions` classes from `public` to `internal`.
 
 ## v0.6.0-alpha
 

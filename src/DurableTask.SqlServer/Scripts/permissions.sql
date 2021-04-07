@@ -15,6 +15,7 @@ END
 
 -- Functions 
 GRANT EXECUTE ON OBJECT::dt.GetScaleMetric TO dt_runtime
+GRANT EXECUTE ON OBJECT::dt.GetScaleRecommendation TO dt_runtime
 
 -- Public sprocs
 GRANT EXECUTE ON OBJECT::dt.CreateInstance TO dt_runtime

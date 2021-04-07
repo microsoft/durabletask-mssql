@@ -39,8 +39,9 @@ namespace DurableTask.SqlServer.Tests.Integration
             var events = new ConcurrentDictionary<string, TaskCompletionSource<bool>>();
 
             // Waits for an external event and then either completes or fails depending on that event
-            List<TestInstance<string>> instances = await this.testService.RunOrchestrations(
+            IReadOnlyList<TestInstance<string>> instances = await this.testService.RunOrchestrations(
                 count: 30, // ideally some multiple of 3
+                instanceIdGenerator: i => $"InstanceToPurge_{i:00}",
                 inputGenerator: i=> $"Hello, world {i}",
                 orchestrationName: "SimpleDelay",
                 version: string.Empty,

@@ -31,7 +31,34 @@ GO
 
 
 CREATE OR ALTER FUNCTION dt.GetScaleMetric()
-    RETURNS varchar(50)
+    RETURNS INT
+    WITH EXECUTE AS CALLER
+AS
+BEGIN
+    DECLARE @taskHub varchar(50) = dt.CurrentTaskHub()
+    DECLARE @now datetime2 = SYSUTCDATETIME()
+
+    DECLARE @liveInstances int = 0
+    DECLARE @liveTasks int = 0
+
+    SELECT
+        @liveInstances = COUNT(DISTINCT E.[InstanceID]),
+        @liveTasks = COUNT(T.[InstanceID])
+    FROM dt.Instances I WITH (NOLOCK)
+        LEFT OUTER JOIN dt.NewEvents E WITH (NOLOCK) ON E.[TaskHub] = @taskHub AND E.[InstanceID] = I.[InstanceID]
+        LEFT OUTER JOIN dt.NewTasks T WITH (NOLOCK) ON T.[TaskHub] = @taskHub AND T.[InstanceID] = I.[InstanceID]
+    WHERE
+        I.[TaskHub] = @taskHub
+        AND I.[RuntimeStatus] IN ('Pending', 'Running')
+        AND (E.[VisibleTime] IS NULL OR @now > E.[VisibleTime])
+
+    RETURN @liveInstances + @liveTasks
+END
+GO
+
+
+CREATE OR ALTER FUNCTION dt.GetScaleRecommendation(@MaxOrchestrationsPerWorker real, @MaxActivitiesPerWorker real)
+    RETURNS INT
     WITH EXECUTE AS CALLER
 AS
 BEGIN
@@ -52,7 +79,13 @@ BEGIN
         AND I.[RuntimeStatus] IN ('Pending', 'Running')
         AND (E.[VisibleTime] IS NULL OR E.[VisibleTime] < @now)
 
-    RETURN @liveInstances + @liveTasks
+    IF @MaxOrchestrationsPerWorker < 1 SET @MaxOrchestrationsPerWorker = 1
+    IF @MaxActivitiesPerWorker < 1 SET @MaxActivitiesPerWorker = 1
+
+    DECLARE @recommendedWorkersForOrchestrations int = CEILING(@liveInstances / @MaxOrchestrationsPerWorker)
+    DECLARE @recommendedWorkersForActivities int = CEILING(@liveTasks / @MaxActivitiesPerWorker)
+
+    RETURN @recommendedWorkersForOrchestrations + @recommendedWorkersForActivities
 END
 GO
 
@@ -112,7 +145,7 @@ GO
 
 CREATE OR ALTER PROCEDURE dt.CreateInstance
     @Name varchar(300),
-    @Version varchar(100),
+    @Version varchar(100) = NULL,
     @InstanceID varchar(100) = NULL,
     @ExecutionID varchar(50) = NULL,
     @InputText varchar(MAX) = NULL,
