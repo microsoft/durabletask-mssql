@@ -41,7 +41,14 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
                         loggingBuilder.AddProvider(this.logProvider);
                         loggingBuilder.SetMinimumLevel(LogLevel.Information);
                     })
-                .ConfigureWebJobs(webJobsBuilder => webJobsBuilder.AddDurableTask())
+                .ConfigureWebJobs(
+                    webJobsBuilder =>
+                    {
+                        webJobsBuilder.AddDurableTask(options =>
+                        {
+                            options.StorageProvider["type"] = SqlDurabilityProvider.Name;
+                        });
+                    })
                 .ConfigureServices(
                     services =>
                     {
