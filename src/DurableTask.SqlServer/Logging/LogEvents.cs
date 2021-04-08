@@ -348,5 +348,36 @@ namespace DurableTask.SqlServer.Logging
                     DTUtils.AppName,
                     DTUtils.ExtensionVersionString);
         }
+
+        internal class ReplicaCountChangeRecommended : StructuredLogEvent, IEventSourceEvent
+        {
+            public ReplicaCountChangeRecommended(int currentCount, int recommendedCount)
+            {
+                this.CurrentCount = currentCount;
+                this.RecommendedCount = recommendedCount;
+            }
+
+            [StructuredLogField]
+            public int CurrentCount { get; }
+
+            [StructuredLogField]
+            public int RecommendedCount { get; }
+
+            public override EventId EventId => new EventId(
+                EventIds.ReplicaCountChangeRecommended,
+                nameof(EventIds.ReplicaCountChangeRecommended));
+
+            public override LogLevel Level => LogLevel.Information;
+
+            protected override string CreateLogMessage() =>
+                $"Recommending a replica count change from {this.CurrentCount} to {this.RecommendedCount}.";
+
+            void IEventSourceEvent.WriteEventSource() =>
+                DefaultEventSource.Log.ReplicaCountChangeRecommended(
+                    this.CurrentCount,
+                    this.RecommendedCount,
+                    DTUtils.AppName,
+                    DTUtils.ExtensionVersionString);
+        }
     }
 }

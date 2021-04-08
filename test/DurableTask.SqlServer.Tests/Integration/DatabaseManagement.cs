@@ -243,6 +243,13 @@ namespace DurableTask.SqlServer.Tests.Integration
                 "dt.vInstances",
             };
 
+            var expectedFunctionNames = new HashSet<string>(StringComparer.Ordinal)
+            {
+                "dt.CurrentTaskHub",
+                "dt.GetScaleMetric",
+                "dt.GetScaleRecommendation",
+            };
+
             // Ensure the schema exists
             Assert.Contains("dt", database.GetSchemas());
 
@@ -272,6 +279,15 @@ namespace DurableTask.SqlServer.Tests.Integration
             }
 
             Assert.Empty(expectedViewNames);
+
+            // Make sure we've accounted for all expected functions
+            foreach (string functionName in database.GetFunctions())
+            {
+                Assert.Contains(functionName, expectedFunctionNames);
+                expectedFunctionNames.Remove(functionName);
+            }
+
+            Assert.Empty(expectedFunctionNames);
         }
 
         sealed class TestDatabase : IDisposable
@@ -353,6 +369,20 @@ namespace DurableTask.SqlServer.Tests.Integration
                     }
 
                     yield return $"{view.Schema}.{view.Name}";
+                }
+            }
+
+            public IEnumerable<string> GetFunctions()
+            {
+                this.testDb.UserDefinedFunctions.Refresh();
+                foreach (UserDefinedFunction function in this.testDb.UserDefinedFunctions)
+                {
+                    if (function.Schema == "sys" || function.Schema == "INFORMATION_SCHEMA")
+                    {
+                        continue;
+                    }
+
+                    yield return $"{function.Schema}.{function.Name}";
                 }
             }
 

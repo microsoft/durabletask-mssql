@@ -115,7 +115,7 @@ BEGIN
         [InstanceID] varchar(100) NOT NULL,
 		[ExecutionID] varchar(50) NOT NULL CONSTRAINT DF_Instances_ExecutionID DEFAULT (NEWID()), -- expected to be system generated
         [Name] varchar(300) NOT NULL, -- the type name of the orchestration or entity
-        [Version] varchar(100) NOT NULL, -- the version of the orchestration
+        [Version] varchar(100) NULL, -- the version of the orchestration (optional)
 		[CreatedTime] datetime2 NOT NULL CONSTRAINT DF_Instances_CreatedTime DEFAULT SYSUTCDATETIME(),
 		[LastUpdatedTime] datetime2 NULL,
         [CompletedTime] datetime2 NULL,

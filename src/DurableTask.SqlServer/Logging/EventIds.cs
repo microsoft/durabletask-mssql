@@ -18,5 +18,6 @@ namespace DurableTask.SqlServer.Logging
         public const int CheckpointCompleted = 306;
         public const int DuplicateExecutionDetected = 307;
         public const int TransientDatabaseFailure = 308;
+        public const int ReplicaCountChangeRecommended = 309;
     }
 }

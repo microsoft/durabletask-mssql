@@ -43,6 +43,10 @@ namespace DurableTask.SqlServer
             this.lockedByValue = $"{this.settings.AppName}|{Process.GetCurrentProcess().Id}";
         }
 
+        public override int MaxConcurrentTaskOrchestrationWorkItems => this.settings.MaxActiveOrchestrations;
+
+        public override int MaxConcurrentTaskActivityWorkItems => this.settings.MaxConcurrentActivities;
+
         static SqlOrchestrationServiceSettings? ValidateSettings(SqlOrchestrationServiceSettings? settings)
         {
             if (settings != null)
@@ -68,6 +72,11 @@ namespace DurableTask.SqlServer
 
         async Task<SqlConnection> GetAndOpenConnectionAsync(CancellationToken cancelToken = default)
         {
+            if (cancelToken == default)
+            {
+                cancelToken = this.ShutdownToken;
+            }
+
             SqlConnection connection = this.settings.CreateConnection();
             await connection.OpenAsync(cancelToken);
             return connection;
@@ -551,6 +560,42 @@ namespace DurableTask.SqlServer
             command.Parameters.Add("@FilterType", SqlDbType.TinyInt).Value = (int)timeRangeFilterType;
 
             await SqlUtils.ExecuteNonQueryAsync(command, this.traceHelper);
+        }
+
+        /// <summary>
+        /// Gets a value that represents the recommended instance count for handling the current event and work-item backlogs.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// This method calls the <c>dt.GetScaleRecommendation</c> SQL function and gets back a number that represents
+        /// the recommended number of worker replicas that should be allocated to handle the current event backlog.
+        /// The SQL function takes the values of <see cref="SqlOrchestrationServiceSettings.MaxConcurrentActivities"/> and
+        /// <see cref="SqlOrchestrationServiceSettings.MaxActiveOrchestrations"/> as inputs.
+        /// </para><para>
+        /// This method is intended to be called periodically by auto-scale providers for making periodic scale decisions.
+        /// The returned value may be zero, in which case it is assumed to be safe to scale the number of task hub workers
+        /// down to zero.
+        /// </para>
+        /// </remarks>
+        /// <param name="currentReplicaCount">
+        /// If specified, results in a trace message if the recommended replica count differs from this value.
+        /// </param>
+        /// <returns>Returns a non-negative recommended replica count integer value.</returns>
+        public async Task<int> GetRecommendedReplicaCountAsync(int? currentReplicaCount = null, CancellationToken cancellationToken = default)
+        {
+            using SqlConnection connection = await this.GetAndOpenConnectionAsync(cancellationToken);
+            using SqlCommand command = connection.CreateCommand();
+            command.CommandText = "SELECT dt.GetScaleRecommendation(@MaxConcurrentOrchestrations, @MaxConcurrentActivities)";
+            command.Parameters.Add("@MaxConcurrentOrchestrations", SqlDbType.Int).Value = this.MaxConcurrentTaskOrchestrationWorkItems;
+            command.Parameters.Add("@MaxConcurrentActivities", SqlDbType.Int).Value = this.MaxConcurrentTaskActivityWorkItems;
+
+            int recommendedReplicaCount = (int)await command.ExecuteScalarAsync();
+            if (currentReplicaCount != null && currentReplicaCount != recommendedReplicaCount)
+            {
+                this.traceHelper.ReplicaCountChangeRecommended(currentReplicaCount.Value, recommendedReplicaCount);
+            }
+
+            return recommendedReplicaCount;
         }
 
         class ExtendedOrchestrationWorkItem : TaskOrchestrationWorkItem

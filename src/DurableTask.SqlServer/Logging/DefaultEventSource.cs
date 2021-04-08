@@ -198,5 +198,21 @@ namespace DurableTask.SqlServer.Logging
                 AppName,
                 ExtensionVersion);
         }
+
+        [Event(EventIds.ReplicaCountChangeRecommended, Level = EventLevel.Informational)]
+        internal void ReplicaCountChangeRecommended(
+            int CurrentCount,
+            int RecommendedCount,
+            string AppName,
+            string ExtensionVersion)
+        {
+            // TODO: Use WriteEventCore for better performance
+            this.WriteEvent(
+                EventIds.ReplicaCountChangeRecommended,
+                CurrentCount,
+                RecommendedCount,
+                AppName,
+                ExtensionVersion);
+        }
     }
 }

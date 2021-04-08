@@ -9,34 +9,39 @@ namespace DurableTask.SqlServer.AzureFunctions
     using System.Threading.Tasks;
     using DurableTask.Core;
     using Microsoft.Azure.WebJobs.Extensions.DurableTask;
+    using Microsoft.Azure.WebJobs.Host.Scale;
     using Newtonsoft.Json;
     using Newtonsoft.Json.Linq;
 
     class SqlDurabilityProvider : DurabilityProvider
     {
-        readonly SqlDurabilityOptions options;
+        public const string Name = "mssql";
+
+        readonly SqlDurabilityOptions durabilityOptions;
         readonly SqlOrchestrationService service;
 
+        SqlScaleMonitor? scaleMonitor;
+
         public SqlDurabilityProvider(
             SqlOrchestrationService service,
-            SqlDurabilityOptions options)
-            : base("SQL Server", service, service, options.ConnectionStringName)
+            SqlDurabilityOptions durabilityOptions)
+            : base(Name, service, service, durabilityOptions.ConnectionStringName)
         {
-            this.options = options;
-            this.service = service;
+            this.service = service ?? throw new ArgumentNullException(nameof(service));
+            this.durabilityOptions = durabilityOptions;
         }
 
         public SqlDurabilityProvider(
             SqlOrchestrationService service,
-            SqlDurabilityOptions options,
+            SqlDurabilityOptions durabilityOptions,
             IOrchestrationServiceClient client)
-            : base("SQL Server", service, client, options.ConnectionStringName)
+            : base(Name, service, client, durabilityOptions.ConnectionStringName)
         {
-            this.options = options;
-            this.service = service;
+            this.service = service ?? throw new ArgumentNullException(nameof(service));
+            this.durabilityOptions = durabilityOptions;
         }
 
-        public override JObject ConfigurationJson => JObject.FromObject(this.options);
+        public override JObject ConfigurationJson => JObject.FromObject(this.durabilityOptions);
 
         public override async Task<IList<OrchestrationState>> GetOrchestrationStateWithInputsAsync(string instanceId, bool showInput = true)
         {
@@ -95,6 +100,17 @@ namespace DurableTask.SqlServer.AzureFunctions
             }
 
             return value.ToString();
+        }
+
+        public override bool TryGetScaleMonitor(
+            string functionId,
+            string functionName,
+            string hubName,
+            string storageConnectionString,
+            out IScaleMonitor scaleMonitor)
+        {
+            scaleMonitor = this.scaleMonitor ??= new SqlScaleMonitor(this.service, hubName);
+            return true;
         }
     }
 }

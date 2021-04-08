@@ -12,7 +12,9 @@ Task hubs are also the primary unit of isolation within a database. Each table i
 
 ## Configuring task hub names
 
-Tasks hubs can be configured explicitly in the SQL provider configuration or can be inferred by details of the SQL connection string. For self-hosted DTFx apps, you can configure the task hub directly in the `SqlProviderOptions` class.
+Tasks hubs can be configured explicitly in the SQL provider configuration or can be inferred by details of the SQL connection string. By default, the name of a task hub is the name of the database user. For more information, see the [Multitenancy](multitenancy.md) topic.
+
+For self-hosted DTFx apps that opt-out of multitenant mode, you can configure the task hub directly in the `SqlProviderOptions` class.
 
 ```csharp
 var options = new SqlProviderOptions
@@ -22,7 +24,7 @@ var options = new SqlProviderOptions
 };
 ```
 
-For Durable Functions apps, the task hub name can be configured in the `extensions/durableTask/hubName` property of the **host.json** file.
+For Durable Functions apps, explicit task hub names are configured in the `extensions/durableTask/hubName` property of the **host.json** file.
 
 ```json
 {
@@ -39,9 +41,7 @@ For Durable Functions apps, the task hub name can be configured in the `extensio
 }
 ```
 
-Task hub names can alternatively be inferred from database user credentials. For more information, see [Multitenancy](multitenancy.md).
-
-?> Task hub names are limited to 50 characters. If the specified task hub name exceeds 50 characters, the configured task hub name will be truncated and suffixed with an MD5 hash of the full task hub name to keep it within 50 characters.
+?> Task hub names are limited to 50 characters. If the specified task hub name exceeds 50 characters, it will be truncated and suffixed with an MD5 hash of the full task hub name to keep it within 50 characters. This behavior applies both to task hubs inferred from database usernames and explicitly configured task hub names.
 
 ## Case sensitivity
 

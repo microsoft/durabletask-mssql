@@ -74,6 +74,8 @@ Multiple DTFx workers can be configured to use the same SQL database connection 
 
 The provider works by having a single worker take a lock on a particular orchestration instance (or entity) and then process all events for that orchestration instance. When it is done executing a particular step in the orchestration, the lock is released and other workers will have an opportunity to lock the instance if there are more events that need to be processed. Similarly, activities are distributed across all worker instances in a competing-consumer way. However, activity execution does not require taking a lock on an orchestration instance, allowing multiple workers can process activities concurrently.
 
+For more detailed information on scalability, see the [Scaling](scaling.md) topic.
+
 ### Polling
 
 The Durable SQL provider regularly polls the `dt.NewEvents` and `dt.NewTasks` tables for new events and tasks. Initially, there is a 0 to 50ms delay in between polling attempts. If no events are found, the SQL provider will slowly increase the amount of time in between polling intervals up to a maximum of **3 seconds**. This means that a mostly idle app could see up to 3 seconds delay between the time an execution is scheduled and when it is detected and executed.

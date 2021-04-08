@@ -70,7 +70,6 @@ namespace DurableTask.SqlServer
             this.WriteLog(logEvent);
         }
 
-
         public void CheckpointCompleted(OrchestrationState state, Stopwatch latencyStopwatch)
         {
             var logEvent = new LogEvents.CheckpointCompletedEvent(
@@ -93,6 +92,14 @@ namespace DurableTask.SqlServer
         public void TransientDatabaseFailure(Exception e, string? instanceId, int retryCount)
         {
             var logEvent = new LogEvents.TransientDatabaseFailure(e, instanceId, retryCount);
+            this.WriteLog(logEvent);
+        }
+
+        public void ReplicaCountChangeRecommended(int currentCount, int recommendedCount)
+        {
+            var logEvent = new LogEvents.ReplicaCountChangeRecommended(
+                currentCount,
+                recommendedCount);
             this.WriteLog(logEvent);
         }
 

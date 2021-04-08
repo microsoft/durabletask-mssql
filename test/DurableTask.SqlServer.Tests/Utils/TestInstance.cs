@@ -30,6 +30,10 @@ namespace DurableTask.SqlServer.Tests.Utils
             this.input = input;
         }
 
+        public string InstanceId => this.instance?.InstanceId;
+
+        public string ExecutionId => this.instance?.ExecutionId;
+
         OrchestrationInstance GetInstanceForAnyExecution() => new OrchestrationInstance
         {
             InstanceId = this.instance.InstanceId,
@@ -87,14 +91,8 @@ namespace DurableTask.SqlServer.Tests.Utils
             Assert.NotNull(state.OrchestrationInstance);
             Assert.Equal(this.instance.InstanceId, state.OrchestrationInstance.InstanceId);
 
-            if (continuedAsNew)
-            {
-                Assert.NotEqual(this.instance.ExecutionId, state.OrchestrationInstance.ExecutionId);
-            }
-            else
-            {
-                Assert.Equal(this.instance.ExecutionId, state.OrchestrationInstance.ExecutionId);
-            }
+            // Make sure there is an ExecutionId, but don't require it to match any particular value
+            Assert.NotNull(state.OrchestrationInstance.ExecutionId);
 
             if (expectedOutput != null)
             {
@@ -137,19 +135,7 @@ namespace DurableTask.SqlServer.Tests.Utils
 
         static void AdjustTimeout(ref TimeSpan timeout)
         {
-            if (timeout == default)
-            {
-                timeout = TimeSpan.FromSeconds(10);
-            }
-
-            if (Debugger.IsAttached)
-            {
-                TimeSpan debuggingTimeout = TimeSpan.FromMinutes(5);
-                if (debuggingTimeout > timeout)
-                {
-                    timeout = debuggingTimeout;
-                }
-            }
+            timeout = timeout.AdjustForDebugging();
         }
     }
 }

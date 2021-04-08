@@ -165,9 +165,10 @@ namespace DurableTask.SqlServer.Tests.Integration
         [InlineData(100)]
         public async Task ActivityChain(int parallelCount)
         {
-            List<TestInstance<string>> instances = await this.testService.RunOrchestrations<int, string>(
+            IReadOnlyList<TestInstance<string>> instances = await this.testService.RunOrchestrations<int, string>(
                 parallelCount,
-                _ => null,
+                instanceIdGenerator: _ => Guid.NewGuid().ToString("N"),
+                inputGenerator: _ => null,
                 orchestrationName: "OrchestrationsWithActivityChain",
                 version: string.Empty,
                 implementation: async (ctx, _) =>

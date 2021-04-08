@@ -10,7 +10,7 @@ namespace DurableTask.SqlServer.AzureFunctions
     using Microsoft.Extensions.Logging.Abstractions;
     using Newtonsoft.Json;
 
-    public class SqlDurabilityOptions
+    class SqlDurabilityOptions
     {
         [JsonProperty("connectionStringName")]
         public string ConnectionStringName { get; set; } = "SQLDB_Connection";
@@ -27,6 +27,7 @@ namespace DurableTask.SqlServer.AzureFunctions
         internal ILoggerFactory LoggerFactory { get; set; } = NullLoggerFactory.Instance;
         
         internal SqlOrchestrationServiceSettings GetOrchestrationServiceSettings(
+            DurableTaskOptions extensionOptions,
             IConnectionStringResolver connectionStringResolver)
         {
             if (connectionStringResolver == null)
@@ -57,6 +58,16 @@ namespace DurableTask.SqlServer.AzureFunctions
                 WorkItemLockTimeout = this.TaskEventLockTimeout,
                 WorkItemBatchSize = this.TaskEventBatchSize,
             };
+
+            if (extensionOptions.MaxConcurrentActivityFunctions.HasValue)
+            {
+                settings.MaxConcurrentActivities = extensionOptions.MaxConcurrentActivityFunctions.Value;
+            }
+
+            if (extensionOptions.MaxConcurrentOrchestratorFunctions.HasValue)
+            {
+                settings.MaxActiveOrchestrations = extensionOptions.MaxConcurrentOrchestratorFunctions.Value;
+            }
 
             return settings;
         }
