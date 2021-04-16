@@ -77,7 +77,7 @@ It is recommended to always configure the `DurableTask.*` log categories to at l
 
 ## Self-hosted .NET apps
 
-The Durable SQL provider can also be used by Durable Task Framework (DTFx) apps targeting .NET Core 3.1 and above. To reference the Durable SQL provider package for DTFx, uses the `dotnet` CLI to add a reference to the [Microsoft.DurableTask.SqlServer](https://www.nuget.org/packages/Microsoft.DurableTask.SqlServer/) package.
+The Durable SQL provider can also be used by Durable Task Framework (DTFx) apps targeting .NET Standard 2.0 and above. To reference the Durable SQL provider package for DTFx, uses the `dotnet` CLI to add a reference to the [Microsoft.DurableTask.SqlServer](https://www.nuget.org/packages/Microsoft.DurableTask.SqlServer/) package.
 
 ```bash
 dotnet add package Microsoft.DurableTask.SqlServer --prerelease
