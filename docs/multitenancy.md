@@ -12,15 +12,25 @@ Multitenancy works by isolating each app into a separate [task hub](taskhubs.md)
 
 ## Enabling multitenancy
 
-If you want to have multiple apps share a database (multitenancy) but want to ensure no app can access any data owned by another app, then you can configure a task hub via database login credentials. In this model, database administrators provide individual app owners with SQL credentials known only to them, and each credential maps to an isolated task hub within the database. When using this model, you do not configure a task hub name in code or configuration. Instead, the SQL login username is used as the task hub name.
+Multitenancy is enabled by default. In this mode, database administrators provide individual app owners with SQL credentials known only to them, and each credential maps to an isolated task hub within the database.
 
-Multitenancy is disabled by default. To enable multitenancy, a database administrator must set `TaskHubMode` to `1` in the `dt.GlobalSettings` table. This can be done using the `dt.SetGlobalSetting` stored procedure.
+When using multitenacy mode, you do not (and should not) configure a task hub name in code or configuration. Instead, the SQL login username (from the [`USER_NAME()`](https://docs.microsoft.com/sql/t-sql/functions/user-name-transact-sql) SQL function) is automatically used as the task hub name (for example, `dbo`).
+
+The following T-SQL can be used to _disable_ multitenancy:
 
 ```sql
-EXECUTE dt.SetGlobalSetting @Name='TaskHubMode', @Value=1
+-- Disable multi-tenancy mode
+EXECUTE dt.SetGlobalSetting @Name='TaskHubMode', @Value=0
 ```
 
-The value `1` instructs all runtime stored procedures to infer the current task hub from the [`USER_NAME()`](https://docs.microsoft.com/sql/t-sql/functions/user-name-transact-sql) function of SQL Server. Multitenancy can be disabled by setting `TaskHubMode` to `0`.
+The value `0` instructs all runtime stored procedures to instead infer the current task hub from the [`APP_NAME()`](https://docs.microsoft.com/sql/t-sql/functions/app-name-transact-sql) SQL function. The configured connection string is automatically modified to ensure that `APP_NAME()` is set to the explicitly configured name of the task hub, or `default` if no task hub name is configured.
+
+Multitenancy can be re-enabled using the following T-SQL:
+
+```sql
+-- Enable multi-tenancy mode
+EXECUTE dt.SetGlobalSetting @Name='TaskHubMode', @Value=1
+```
 
 !> Enabling or disabling multitenancy may result in subsequent logins using a different task hub name. Any orchestrations or entities created using a previous task hub names will not be visible to an app that switches to a new task hub name. Switching between task hub modes must therefore be done with careful planning and should not be done while apps are actively running.
 

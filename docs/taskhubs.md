@@ -12,17 +12,9 @@ Task hubs are also the primary unit of isolation within a database. Each table i
 
 ## Configuring task hub names
 
-Tasks hubs can be configured explicitly in the SQL provider configuration or can be inferred by details of the SQL connection string. By default, the name of a task hub is the name of the database user. For more information, see the [Multitenancy](multitenancy.md) topic.
+By default, the name of a task hub is the name of the database user. No explicit configuration is required. For more information, see the [Multitenancy](multitenancy.md) topic.
 
-For self-hosted DTFx apps that opt-out of multitenant mode, you can configure the task hub directly in the `SqlProviderOptions` class.
-
-```csharp
-var options = new SqlProviderOptions
-{
-    TaskHub = "MyTaskHub",
-    ConnectionString = Environment.GetEnvironmentVariable("SQLDB_Connection"),
-};
-```
+Automatic task hub name inference can be disabled by disabling multitenancy in the database. When multitenancy is disabled, task hubs names can be configured explicitly in the SQL provider configuration, as shown in the following examples.
 
 For Durable Functions apps, explicit task hub names are configured in the `extensions/durableTask/hubName` property of the **host.json** file.
 
@@ -40,6 +32,18 @@ For Durable Functions apps, explicit task hub names are configured in the `exten
   }
 }
 ```
+
+For self-hosted DTFx apps that opt-out of multitenant mode, you can configure the task hub directly in the `SqlOrchestrationServiceSettings` class.
+
+```csharp
+var settings = new SqlOrchestrationServiceSettings
+{
+    TaskHubName = "MyTaskHub",
+    TaskHubConnectionString = Environment.GetEnvironmentVariable("SQLDB_Connection"),
+};
+```
+
+If no task hub name is explicitly configured, the value `default` will be used. Note that any task hub name configuration is ignored when the database is in multitenancy mode (which is the default behavior).
 
 ?> Task hub names are limited to 50 characters. If the specified task hub name exceeds 50 characters, it will be truncated and suffixed with an MD5 hash of the full task hub name to keep it within 50 characters. This behavior applies both to task hubs inferred from database usernames and explicitly configured task hub names.
 
