@@ -1134,9 +1134,10 @@ BEGIN
     -- warning about missing messages
     DELETE N
     OUTPUT DELETED.[SequenceNumber]
-    FROM NewTasks N INNER JOIN @CompletedTasks C ON
-        C.[SequenceNumber] = N.[SequenceNumber] AND
-        N.[TaskHub] = @TaskHub
+    FROM NewTasks N WITH (FORCESEEK(PK_NewTasks(TaskHub, SequenceNumber)))
+        INNER JOIN @CompletedTasks C ON
+            C.[SequenceNumber] = N.[SequenceNumber] AND
+            N.[TaskHub] = @TaskHub
 
     -- If we fail to delete the messages then we must abort the transaction.
     -- This can happen if the message was completed by another worker, in which
