@@ -41,7 +41,7 @@ When using Azure Functions, these values inferred from the existing `maxConcurre
       "maxConcurrentOrchestratorFunctions": 8,
       "maxConcurrentActivityFunctions": 8,
       "storageProvider": {
-        "type": "MicrosoftSQL",
+        "type": "mssql",
         "connectionStringName": "SQLDB_Connection"
       }
     }

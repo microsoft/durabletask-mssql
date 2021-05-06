@@ -120,7 +120,7 @@ stringData:
 Name the yaml file **mssql-secrets.yml** and deploy it to your cluster.
 
 ```powershell
-kubectl apply ./mssql-secrets.yml
+kubectl apply -f ./mssql-secrets.yml
 ```
 
 Next, deploy the app using the following command:
