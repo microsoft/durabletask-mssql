@@ -232,6 +232,7 @@ namespace DurableTask.SqlServer.Tests.Integration
                 "dt._GetVersions",
                 "dt._LockNextOrchestration",
                 "dt._LockNextTask",
+                "dt._QueryManyOrchestrations",
                 "dt._RenewOrchestrationLocks",
                 "dt._RenewTaskLocks",
                 "dt._UpdateVersion",

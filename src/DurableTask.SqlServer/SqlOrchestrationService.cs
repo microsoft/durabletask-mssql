@@ -563,6 +563,60 @@ namespace DurableTask.SqlServer
         }
 
         /// <summary>
+        /// Queries the database for all orchestration instances that match a given filter.
+        /// </summary>
+        /// <param name="query">The query parameters to use as a filter.</param>
+        /// <param name="cancellationToken">A token for cancelling the query.</param>
+        /// <returns>Returns a collection of <see cref="OrchestrationState"/> objects for orchestrations that match the specified query filter.</returns>
+        public async Task<IReadOnlyCollection<OrchestrationState>> GetManyOrchestrationsAsync(SqlOrchestrationQuery query, CancellationToken cancellationToken)
+        {
+            if (query.PageSize < 1)
+            {
+                throw new ArgumentOutOfRangeException(nameof(query), $"{nameof(query.PageSize)} must be a positive number.");
+            }
+
+            if (query.PageNumber < 0 || query.PageNumber > short.MaxValue)
+            {
+                throw new ArgumentOutOfRangeException(nameof(query), $"{nameof(query.PageNumber)} must be between 0 and {short.MaxValue} (inclusive).");
+            }
+
+            SqlDateTime createdTimeFrom = query.CreatedTimeFrom.ToSqlDateTime(SqlDateTime.MinValue);
+            SqlDateTime createdTimeTo = query.CreatedTimeTo.ToSqlDateTime(SqlDateTime.MaxValue);
+
+            using SqlConnection connection = await this.GetAndOpenConnectionAsync(cancellationToken);
+            using SqlCommand command = this.GetSprocCommand(connection, "dt._QueryManyOrchestrations");
+
+            command.Parameters.Add("@PageSize", SqlDbType.SmallInt).Value = query.PageSize;
+            command.Parameters.Add("@PageNumber", SqlDbType.SmallInt).Value = query.PageNumber;
+            command.Parameters.Add("@FetchInput", SqlDbType.Bit).Value = query.FetchInput;
+            command.Parameters.Add("@FetchOutput", SqlDbType.Bit).Value = query.FetchOutput;
+            command.Parameters.Add("@CreatedTimeFrom", SqlDbType.DateTime).Value = createdTimeFrom;
+            command.Parameters.Add("@CreatedTimeTo", SqlDbType.DateTime).Value = createdTimeTo;
+            command.Parameters.Add("@InstanceIDPrefix", SqlDbType.VarChar, size: 100).Value = query.InstanceIdPrefix ?? SqlString.Null;
+
+            if (query.StatusFilter?.Count > 0)
+            {
+                string filter = string.Join(",", query.StatusFilter);
+                command.Parameters.Add("@RuntimeStatusFilter", SqlDbType.VarChar, size: 200).Value = filter;
+            }
+
+            using DbDataReader reader = await SqlUtils.ExecuteReaderAsync(
+                command,
+                this.traceHelper,
+                instanceId: null,
+                cancellationToken);
+
+            var results = new List<OrchestrationState>(query.PageSize);
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                OrchestrationState state = reader.GetOrchestrationState();
+                results.Add(state);
+            }
+
+            return results;
+        }
+
+        /// <summary>
         /// Gets a value that represents the recommended instance count for handling the current event and work-item backlogs.
         /// </summary>
         /// <remarks>

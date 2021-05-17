@@ -6,13 +6,9 @@ namespace DurableTask.SqlServer.Tests.Utils
     using System;
     using System.Collections.Generic;
     using System.Linq;
-    using System.Reflection;
-    using System.Security.Cryptography;
-    using System.Text;
     using System.Threading.Tasks;
     using DurableTask.Core;
     using DurableTask.SqlServer.Tests.Logging;
-    using Microsoft.Data.SqlClient;
     using Microsoft.Extensions.Logging;
     using Moq;
     using Xunit;
@@ -23,23 +19,19 @@ namespace DurableTask.SqlServer.Tests.Utils
         readonly ILoggerFactory loggerFactory;
         readonly string testName;
 
-        string generatedUserId;
+        TestCredential testCredential;
         TaskHubWorker worker;
         TaskHubClient client;
 
         public TestService(ITestOutputHelper output)
         {
-            Type type = output.GetType();
-            FieldInfo testMember = type.GetField("test", BindingFlags.Instance | BindingFlags.NonPublic);
-            var test = (ITest)testMember.GetValue(output);
-
             this.LogProvider = new TestLogProvider(output);
             this.loggerFactory = LoggerFactory.Create(builder =>
             {
                 builder.AddProvider(this.LogProvider);
             });
 
-            this.testName = test.TestCase.TestMethod.Method.Name;
+            this.testName = SharedTestHelpers.GetTestName(output);
             this.OrchestrationServiceOptions = new SqlOrchestrationServiceSettings(
                 SharedTestHelpers.GetDefaultConnectionString())
             {
@@ -59,15 +51,16 @@ namespace DurableTask.SqlServer.Tests.Utils
             await new SqlOrchestrationService(this.OrchestrationServiceOptions).CreateIfNotExistsAsync();
 
             // Enable multitenancy to isolate each test using low-privilege credentials
-            await this.EnableMultitenancyAsync();
+            await SharedTestHelpers.EnableMultitenancyAsync();
 
             // The runtime will use low-privilege credentials
-            string taskHubConnectionString = await this.CreateTaskHubLoginAsync();
-            this.OrchestrationServiceOptions = new SqlOrchestrationServiceSettings(taskHubConnectionString)
+            this.testCredential = await SharedTestHelpers.CreateTaskHubLoginAsync(this.testName);
+            this.OrchestrationServiceOptions = new SqlOrchestrationServiceSettings(this.testCredential.ConnectionString)
             {
                 LoggerFactory = this.loggerFactory,
             };
 
+            // A mock orchestration service allows us to stub out specific methods for testing.
             this.OrchestrationServiceMock = new Mock<SqlOrchestrationService>(this.OrchestrationServiceOptions) { CallBase = true };
             this.worker = new TaskHubWorker(this.OrchestrationServiceMock.Object, this.loggerFactory);
             if (startWorker)
@@ -92,7 +85,7 @@ namespace DurableTask.SqlServer.Tests.Utils
             await this.worker.StopAsync(isForced: true);
             this.worker.Dispose();
 
-            await this.DropTaskHubLoginAsync();
+            await SharedTestHelpers.DropTaskHubLoginAsync(this.testCredential);
         }
 
         public Task<TestInstance<TInput>> RunOrchestration<TOutput, TInput>(
@@ -141,7 +134,7 @@ namespace DurableTask.SqlServer.Tests.Utils
 
             foreach ((string name, TaskActivity activity) in activities)
             {
-                RegisterInlineActivity(name, string.Empty, activity);
+                this.RegisterInlineActivity(name, string.Empty, activity);
             }
 
             IEnumerable<Task<TestInstance<TInput>>> tasks = Enumerable.Range(0, count).Select(async i =>
@@ -239,111 +232,7 @@ namespace DurableTask.SqlServer.Tests.Utils
             }
         }
 
-        internal Task EnableMultitenancyAsync()
-        {
-            return ExecuteCommandAsync($"EXECUTE dt.SetGlobalSetting @Name='TaskHubMode', @Value=1");
-        }
-
-        internal async Task<string> CreateTaskHubLoginAsync()
-        {
-            // NOTE: Max length for user IDs is 128 characters
-            string userId = $"{this.testName}_{DateTime.UtcNow:yyyyMMddhhmmssff}";
-            string password = GeneratePassword();
-
-            // Generate a low-priviledge user account. This will map to a unique task hub.
-            await ExecuteCommandAsync($"CREATE LOGIN [testlogin_{userId}] WITH PASSWORD = '{password}'");
-            await ExecuteCommandAsync($"CREATE USER [testuser_{userId}] FOR LOGIN [testlogin_{userId}]");
-            await ExecuteCommandAsync($"ALTER ROLE dt_runtime ADD MEMBER [testuser_{userId}]");
-
-            var existing = new SqlConnectionStringBuilder(this.OrchestrationServiceOptions.TaskHubConnectionString);
-            var builder = new SqlConnectionStringBuilder()
-            {
-                UserID = $"testlogin_{userId}",
-                Password = password,
-                DataSource = existing.DataSource,
-                InitialCatalog = existing.InitialCatalog,
-            };
-
-            this.generatedUserId = userId;
-            return builder.ToString();
-        }
-
-        async Task DropTaskHubLoginAsync()
-        {
-            // Drop the generated user information
-            string userId = this.generatedUserId;
-            await ExecuteCommandAsync($"ALTER ROLE dt_runtime DROP MEMBER [testuser_{userId}]");
-            await ExecuteCommandAsync($"DROP USER IF EXISTS [testuser_{userId}]");
-
-            // drop all the connections; otherwise, the DROP LOGIN statement will fail
-            await ExecuteCommandAsync($"DECLARE @kill varchar(max) = ''; SELECT @kill = @kill + 'KILL ' + CAST(session_id AS varchar(5)) + ';' FROM sys.dm_exec_sessions WHERE original_login_name = 'testlogin_{userId}'; EXEC(@kill);");
-            await ExecuteCommandAsync($"DROP LOGIN [testlogin_{userId}]");
-        }
-
-        static async Task ExecuteCommandAsync(string commandText)
-        {
-            for (int retry = 0; retry < 3; retry++)
-            {
-                try
-                {
-                    string connectionString = SharedTestHelpers.GetDefaultConnectionString();
-                    await using SqlConnection connection = new SqlConnection(connectionString);
-                    await using SqlCommand command = connection.CreateCommand();
-                    await command.Connection.OpenAsync();
-
-                    command.CommandText = commandText;
-                    await command.ExecuteNonQueryAsync();
-                    break;
-                }
-                catch (SqlException e) when (e.Number == 15434)
-                {
-                    // 15434 : Could not drop login 'XXX' as the user is currently logged in.
-                }
-            }
-        }
-
-        static string GeneratePassword()
-        {
-            const string AllowedChars = "abcdefghijklmnopqrstuvwxyzABCDEFGHJKLMNPQRSTWXYZ0123456789#$";
-            const int PasswordLenth = 16;
-
-            string password = GetRandomString(AllowedChars, PasswordLenth);
-            while (!MeetsSqlPasswordConstraint(password))
-            {
-                password = GetRandomString(AllowedChars, PasswordLenth);
-            }
-
-            return password;
-        }
-
-        static string GetRandomString(string allowedChars, int length)
-        {
-            var result = new StringBuilder(length);
-            byte[] randomBytes = new byte[length * 4];
-            using (var rng = new RNGCryptoServiceProvider())
-            {
-                rng.GetBytes(randomBytes);
-
-                for (int i = 0; i < length; i++)
-                {
-                    int seed = BitConverter.ToInt32(randomBytes, i * 4);
-                    Random random = new Random(seed);
-                    result.Append(allowedChars[random.Next(allowedChars.Length)]);
-                }
-            }
-
-            return result.ToString();
-        }
-
-        static bool MeetsSqlPasswordConstraint(string password)
-        {
-            return !string.IsNullOrEmpty(password) &&
-                password.Any(c => char.IsUpper(c)) &&
-                password.Any(c => char.IsLower(c)) &&
-                password.Any(c => char.IsDigit(c)) &&
-                password.Any(c => !char.IsLetterOrDigit(c)) &&
-                password.Length >= 8;
-        }
+        static Task ExecuteCommandAsync(string commandText) => SharedTestHelpers.ExecuteSqlAsync(commandText);
 
         class ActivityShim<TInput, TOutput> : TaskActivity<TInput, TOutput>
         {

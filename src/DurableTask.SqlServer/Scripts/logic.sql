@@ -973,21 +973,67 @@ BEGIN
             P.[TaskHub] = @TaskHub AND
             P.[InstanceID] = I.[InstanceID] AND
             P.[PayloadID] = I.[CustomStatusPayloadID]) AS [CustomStatusText],
-        (SELECT TOP 1 [Text] FROM Payloads P WHERE
-            @FetchInput = 1 AND 
+        CASE WHEN @FetchInput = 1 THEN (SELECT TOP 1 [Text] FROM Payloads P WHERE
             P.[TaskHub] = @TaskHub AND
             P.[InstanceID] = I.[InstanceID] AND
-            P.[PayloadID] = I.[InputPayloadID]) AS [InputText],
-        (SELECT TOP 1 [Text] FROM Payloads P WHERE
-            @FetchOutput = 1 AND 
+            P.[PayloadID] = I.[InputPayloadID]) ELSE NULL END AS [InputText],
+        CASE WHEN @FetchOutput = 1 THEN (SELECT TOP 1 [Text] FROM Payloads P WHERE
             P.[TaskHub] = @TaskHub AND
             P.[InstanceID] = I.[InstanceID] AND
-            P.[PayloadID] = I.[OutputPayloadID]) AS [OutputText]
+            P.[PayloadID] = I.[OutputPayloadID]) ELSE NULL END AS [OutputText]
     FROM Instances I
     WHERE
         I.[TaskHub] = @TaskHub AND
         I.[InstanceID] = @InstanceID AND
         (@ExecutionID IS NULL OR @ExecutionID = I.ExecutionID)
+END
+GO
+
+
+CREATE OR ALTER PROCEDURE dt._QueryManyOrchestrations
+    @PageSize smallint = 100,
+    @PageNumber smallint = 0,
+    @FetchInput bit = 1,
+    @FetchOutput bit = 1,
+    @CreatedTimeFrom datetime2 = NULL,
+    @CreatedTimeTo datetime2 = NULL,
+    @RuntimeStatusFilter varchar(200) = NULL,
+    @InstanceIDPrefix varchar(100) = NULL
+AS
+BEGIN
+    DECLARE @TaskHub varchar(50) = dt.CurrentTaskHub()
+
+    SELECT
+        I.[InstanceID],
+        I.[ExecutionID],
+        I.[Name],
+        I.[Version],
+        I.[CreatedTime],
+        I.[LastUpdatedTime],
+        I.[CompletedTime],
+        I.[RuntimeStatus],
+        (SELECT TOP 1 [Text] FROM Payloads P WHERE
+            P.[TaskHub] = @TaskHub AND
+            P.[InstanceID] = I.[InstanceID] AND
+            P.[PayloadID] = I.[CustomStatusPayloadID]) AS [CustomStatusText],
+        CASE WHEN @FetchInput = 1 THEN (SELECT TOP 1 [Text] FROM Payloads P WHERE
+            P.[TaskHub] = @TaskHub AND
+            P.[InstanceID] = I.[InstanceID] AND
+            P.[PayloadID] = I.[InputPayloadID]) ELSE NULL END AS [InputText],
+        CASE WHEN @FetchOutput = 1 THEN (SELECT TOP 1 [Text] FROM Payloads P WHERE
+            P.[TaskHub] = @TaskHub AND
+            P.[InstanceID] = I.[InstanceID] AND
+            P.[PayloadID] = I.[OutputPayloadID]) ELSE NULL END AS [OutputText]
+    FROM
+        Instances I
+    WHERE
+        I.[TaskHub] = @TaskHub AND
+        (@CreatedTimeFrom IS NULL OR I.[CreatedTime] >= @CreatedTimeFrom) AND
+        (@CreatedTimeTo IS NULL OR I.[CreatedTime] <= @CreatedTimeTo) AND
+        (@RuntimeStatusFilter IS NULL OR I.[RuntimeStatus] IN (SELECT [value] FROM string_split(@RuntimeStatusFilter, ','))) AND
+        (@InstanceIDPrefix IS NULL OR I.[InstanceID] LIKE @InstanceIDPrefix + '%')
+    ORDER BY
+        I.[CreatedTime] OFFSET (@PageNumber * @PageSize) ROWS FETCH NEXT @PageSize ROWS ONLY
 END
 GO
 

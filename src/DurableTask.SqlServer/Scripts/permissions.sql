@@ -32,6 +32,7 @@ GRANT EXECUTE ON OBJECT::dt._CompleteTasks TO dt_runtime
 GRANT EXECUTE ON OBJECT::dt._GetVersions TO dt_runtime
 GRANT EXECUTE ON OBJECT::dt._LockNextOrchestration TO dt_runtime
 GRANT EXECUTE ON OBJECT::dt._LockNextTask TO dt_runtime
+GRANT EXECUTE ON OBJECT::dt._QueryManyOrchestrations TO dt_runtime
 GRANT EXECUTE ON OBJECT::dt._RenewOrchestrationLocks TO dt_runtime
 GRANT EXECUTE ON OBJECT::dt._RenewTaskLocks TO dt_runtime
 GRANT EXECUTE ON OBJECT::dt._UpdateVersion TO dt_runtime
