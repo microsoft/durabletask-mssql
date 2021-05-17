@@ -140,6 +140,18 @@ namespace DurableTask.SqlServer.Tests.Utils
             return result.ToString();
         }
 
+        public static DateTime GetCurrentDatabaseTimeUtc()
+        {
+            string connectionString = GetDefaultConnectionString();
+            using SqlConnection connection = new SqlConnection(connectionString);
+            using SqlCommand command = connection.CreateCommand();
+            command.Connection.Open();
+
+            command.CommandText = "SELECT SYSUTCDATETIME()";
+            DateTime currentDatabaseTimeUtc = (DateTime)command.ExecuteScalar();
+            return DateTime.SpecifyKind(currentDatabaseTimeUtc, DateTimeKind.Utc);
+        }
+
         static bool MeetsSqlPasswordConstraint(string password)
         {
             return !string.IsNullOrEmpty(password) &&

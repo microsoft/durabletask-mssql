@@ -8,6 +8,7 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
     using System.Linq;
     using System.Threading;
     using System.Threading.Tasks;
+    using DurableTask.SqlServer.Tests.Utils;
     using Microsoft.Azure.WebJobs;
     using Microsoft.Azure.WebJobs.Extensions.DurableTask;
     using Newtonsoft.Json;
@@ -130,8 +131,7 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
                     nameof(Functions.Sequence),
                     instanceId: $"{prefix}.sequence.{i}"));
 
-            DateTime sequencesFinishedTime = DateTime.UtcNow;
-            await Task.Delay(TimeSpan.FromSeconds(3));
+            DateTime sequencesFinishedTime = SharedTestHelpers.GetCurrentDatabaseTimeUtc();
 
             await Enumerable.Range(0, 5).ParallelForEachAsync(5, i =>
                 this.StartOrchestrationAsync(
@@ -280,18 +280,17 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
         [Fact]
         public async Task MultiInstancePurge()
         {
-            DateTime startTime = DateTime.UtcNow;
+            DateTime startTime = SharedTestHelpers.GetCurrentDatabaseTimeUtc();
+
             DurableOrchestrationStatus instance1 = await this.RunOrchestrationAsync(nameof(Functions.NoOp));
             DurableOrchestrationStatus instance2 = await this.RunOrchestrationAsync(nameof(Functions.NoOp));
 
-            await Task.Delay(TimeSpan.FromSeconds(2));
-            DateTime midTime = DateTime.UtcNow;
+            DateTime midTime = SharedTestHelpers.GetCurrentDatabaseTimeUtc();
 
             DurableOrchestrationStatus instance3 = await this.RunOrchestrationAsync(nameof(Functions.NoOp));
             DurableOrchestrationStatus instance4 = await this.RunOrchestrationAsync(nameof(Functions.NoOp));
 
-            await Task.Delay(TimeSpan.FromSeconds(2));
-            DateTime endTime = DateTime.UtcNow;
+            DateTime endTime = SharedTestHelpers.GetCurrentDatabaseTimeUtc();
 
             IDurableClient client = await this.GetDurableClientAsync();
             PurgeHistoryResult purgeResult;
