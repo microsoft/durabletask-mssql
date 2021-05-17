@@ -549,12 +549,32 @@ namespace DurableTask.SqlServer
             await SqlUtils.ExecuteNonQueryAsync(command, this.traceHelper, instanceId);
         }
 
+        public async Task<int> PurgeOrchestrationHistoryAsync(IEnumerable<string> instanceIds)
+        {
+            if (instanceIds?.Any() != true)
+            {
+                return 0;
+            }
+
+            using SqlConnection connection = await this.GetAndOpenConnectionAsync();
+            using SqlCommand command = this.GetSprocCommand(connection, "dt.PurgeInstanceStateByID");
+
+            SqlParameter instancesDeletedReturnValue = command.Parameters.Add("@InstancesDeleted", SqlDbType.Int);
+            instancesDeletedReturnValue.Direction = ParameterDirection.ReturnValue;
+
+            command.Parameters.AddInstanceIDsParameter("@InstanceIDs", instanceIds);
+
+            await SqlUtils.ExecuteNonQueryAsync(command, this.traceHelper);
+
+            return (int)instancesDeletedReturnValue.Value;
+        }
+
         public override async Task PurgeOrchestrationHistoryAsync(
             DateTime thresholdDateTimeUtc,
             OrchestrationStateTimeRangeFilterType timeRangeFilterType)
         {
             using SqlConnection connection = await this.GetAndOpenConnectionAsync();
-            using SqlCommand command = this.GetSprocCommand(connection, "dt.PurgeInstanceState");
+            using SqlCommand command = this.GetSprocCommand(connection, "dt.PurgeInstanceStateByTime");
 
             command.Parameters.Add("@ThresholdTime", SqlDbType.DateTime2).Value = thresholdDateTimeUtc;
             command.Parameters.Add("@FilterType", SqlDbType.TinyInt).Value = (int)timeRangeFilterType;

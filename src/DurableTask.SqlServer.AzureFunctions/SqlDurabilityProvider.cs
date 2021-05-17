@@ -43,7 +43,13 @@ namespace DurableTask.SqlServer.AzureFunctions
             this.durabilityOptions = durabilityOptions;
         }
 
+        public override bool GuaranteesOrderedDelivery => true;
+
         public override JObject ConfigurationJson => JObject.FromObject(this.durabilityOptions);
+
+        public override TimeSpan MaximumDelayTime { get; set; } = TimeSpan.MaxValue;
+
+        public override string EventSourceName =>  "DurableTask-SqlServer";
 
         public override async Task<IList<OrchestrationState>> GetOrchestrationStateWithInputsAsync(string instanceId, bool showInput = true)
         {
@@ -161,6 +167,50 @@ namespace DurableTask.SqlServer.AzureFunctions
                 }),
                 ContinuationToken = results.Count == query.PageSize ? (query.PageNumber + 1).ToString() : null,
             };
+        }
+
+        public override async Task<PurgeHistoryResult> PurgeInstanceHistoryByInstanceId(string instanceId)
+        {
+            int deletedInstances = await this.service.PurgeOrchestrationHistoryAsync(new[] { instanceId });
+            return new PurgeHistoryResult(deletedInstances);
+        }
+
+        /// <summary>
+        /// Purges the history of orchestrations and entities based on a set of filters.
+        /// </summary>
+        /// <remarks>
+        /// This method will purge at most 1000 instances. The caller can purge more than this by calling the method
+        /// multiple times, checking for a non-zero return value after each call.
+        /// </remarks>
+        /// <param name="createdTimeFrom">The minimum creation time filter. Only instances created after this date are purged.</param>
+        /// <param name="createdTimeTo">The maximum creation time filter. Only instances created before this date are purged.</param>
+        /// <param name="runtimeStatus">The set of orchestration status values to filter orchestrations by.</param>
+        /// <returns>Returns the number of purged instances.</returns>
+        public override async Task<int> PurgeHistoryByFilters(DateTime createdTimeFrom, DateTime? createdTimeTo, IEnumerable<OrchestrationStatus> runtimeStatus)
+        {
+            var purgeQuery = new SqlOrchestrationQuery
+            {
+                PageSize = 1000,
+                CreatedTimeFrom = createdTimeFrom,
+                FetchInput = false,
+                FetchOutput = false,
+            };
+
+            if (createdTimeTo != null)
+            {
+                purgeQuery.CreatedTimeTo = createdTimeTo.Value;
+            }
+
+            if (runtimeStatus?.Any() == true)
+            {
+                purgeQuery.StatusFilter = new HashSet<OrchestrationStatus>(runtimeStatus);
+            }
+
+            IReadOnlyCollection<OrchestrationState> results = await this.service.GetManyOrchestrationsAsync(purgeQuery, CancellationToken.None);
+
+            IEnumerable<string> instanceIds = results.Select(r => r.OrchestrationInstance.InstanceId);
+            int deletedInstances = await this.service.PurgeOrchestrationHistoryAsync(instanceIds);
+            return deletedInstances;
         }
 
         public override bool TryGetScaleMonitor(

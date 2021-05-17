@@ -4,6 +4,7 @@
 namespace DurableTask.SqlServer
 {
     using System;
+    using System.Collections.Generic;
     using System.Data;
     using System.Data.Common;
     using System.Data.SqlTypes;
@@ -346,6 +347,27 @@ namespace DurableTask.SqlServer
         {
             // The SQL client always assumes DateTimeKind.Unspecified. We need to modify the result so that it knows it is UTC.
             return DateTime.SpecifyKind(reader.GetDateTime(ordinal), DateTimeKind.Utc);
+        }
+
+        public static SqlParameter AddInstanceIDsParameter(
+            this SqlParameterCollection commandParameters,
+            string paramName,
+            IEnumerable<string> instanceIds)
+        {
+            static IEnumerable<SqlDataRecord> GetInstanceIdRecords(IEnumerable<string> instanceIds)
+            {
+                var record = new SqlDataRecord(new SqlMetaData("InstanceID", SqlDbType.VarChar, maxLength: 100));
+                foreach (string instanceId in instanceIds)
+                {
+                    record.SetString(0, instanceId);
+                    yield return record;
+                }
+            }
+
+            SqlParameter param = commandParameters.Add(paramName, SqlDbType.Structured);
+            param.TypeName = "dt.InstanceIDs";
+            param.Value = instanceIds.Any() ? GetInstanceIdRecords(instanceIds) : null;
+            return param;
         }
 
         public static Task<DbDataReader> ExecuteReaderAsync(

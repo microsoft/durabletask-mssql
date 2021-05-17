@@ -17,7 +17,8 @@ DROP PROCEDURE IF EXISTS dt.QuerySingleOrchestration
 DROP PROCEDURE IF EXISTS dt.RaiseEvent
 DROP PROCEDURE IF EXISTS dt.SetGlobalSetting
 DROP PROCEDURE IF EXISTS dt.TerminateInstance
-DROP PROCEDURE IF EXISTS dt.PurgeInstanceState
+DROP PROCEDURE IF EXISTS dt.PurgeInstanceStateByID
+DROP PROCEDURE IF EXISTS dt.PurgeInstanceStateByTime
 
 -- Private sprocs
 DROP PROCEDURE IF EXISTS dt._AddOrchestrationEvents
@@ -41,8 +42,9 @@ DROP TABLE IF EXISTS dt.Payloads
 DROP TABLE IF EXISTS dt.GlobalSettings
 
 -- Custom types
-DROP TYPE IF EXISTS dt.MessageIDs
 DROP TYPE IF EXISTS dt.HistoryEvents
+DROP TYPE IF EXISTS dt.InstanceIDs
+DROP TYPE IF EXISTS dt.MessageIDs
 DROP TYPE IF EXISTS dt.OrchestrationEvents
 DROP TYPE IF EXISTS dt.TaskEvents
 

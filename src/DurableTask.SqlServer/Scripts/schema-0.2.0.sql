@@ -12,6 +12,12 @@ IF NOT EXISTS (SELECT 1 FROM sys.schemas WHERE name = 'dt')
     EXEC('CREATE SCHEMA dt');
 
 -- Create custom types
+IF TYPE_ID(N'dt.InstanceIDs') IS NULL
+    CREATE TYPE dt.InstanceIDs AS TABLE (
+        [InstanceID] varchar(100) NOT NULL
+    )
+GO
+
 IF TYPE_ID(N'dt.MessageIDs') IS NULL
     -- WARNING: Reordering fields is a breaking change!
     CREATE TYPE dt.MessageIDs AS TABLE (
@@ -82,7 +88,7 @@ GO
 
 -- Rule #1: Use varchar instead of nvarchar
 -- Rule #2: Do not use varchar(MAX) except in the Payloads table
--- Rule #3: Try to follow existing nameing and ordering conventions
+-- Rule #3: Try to follow existing naming and ordering conventions
 
 IF OBJECT_ID(N'dt.Versions', 'U') IS NULL
 BEGIN

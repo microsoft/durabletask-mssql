@@ -407,25 +407,47 @@ END
 GO
 
 
-CREATE OR ALTER PROCEDURE dt.PurgeInstanceState
+CREATE OR ALTER PROCEDURE dt.PurgeInstanceStateByID
+    @InstanceIDs InstanceIDs READONLY
+AS
+BEGIN
+    DECLARE @TaskHub varchar(50) = dt.CurrentTaskHub()
+
+    BEGIN TRANSACTION
+
+    DELETE FROM NewEvents WHERE [TaskHub] = @TaskHub AND [InstanceID] IN (SELECT [InstanceID] FROM @InstanceIDs)
+    DELETE FROM Instances WHERE [TaskHub] = @TaskHub AND [InstanceID] IN (SELECT [InstanceID] FROM @InstanceIDs)
+    DECLARE @deletedInstances int = @@ROWCOUNT
+    DELETE FROM Payloads WHERE [TaskHub] = @TaskHub AND [InstanceID] IN (SELECT [InstanceID] FROM @InstanceIDs)
+    -- Other relevant tables are expected to be cleaned up via cascade deletes
+
+    COMMIT TRANSACTION
+
+    -- return the number of deleted instances
+    RETURN @deletedInstances
+END
+GO
+
+
+CREATE OR ALTER PROCEDURE dt.PurgeInstanceStateByTime
     @ThresholdTime datetime2,
     @FilterType tinyint = 0
 AS
 BEGIN
     DECLARE @TaskHub varchar(50) = dt.CurrentTaskHub()
 
-    DECLARE @InstanceIDs TABLE (InstanceID varchar(100))
+    DECLARE @instanceIDs InstanceIDs
 
     IF @FilterType = 0 -- created time
     BEGIN
-        INSERT INTO @InstanceIDs
+        INSERT INTO @instanceIDs
             SELECT [InstanceID] FROM Instances
             WHERE [TaskHub] = @TaskHub AND [RuntimeStatus] IN ('Completed', 'Terminated', 'Failed')
                 AND [CreatedTime] >= @ThresholdTime
     END
     ELSE IF @FilterType = 1 -- completed time
     BEGIN
-        INSERT INTO @InstanceIDs
+        INSERT INTO @instanceIDs
             SELECT [InstanceID] FROM Instances
             WHERE [TaskHub] = @TaskHub AND [RuntimeStatus] IN ('Completed', 'Terminated', 'Failed')
                 AND [CompletedTime] >= @ThresholdTime
@@ -436,17 +458,9 @@ BEGIN
         THROW 50000, @msg, 1;
     END
 
-    BEGIN TRANSACTION
-
-    DELETE FROM NewEvents WHERE [TaskHub] = @TaskHub AND [InstanceID] IN (SELECT [InstanceID] FROM @InstanceIDs)
-    DELETE FROM Instances WHERE [TaskHub] = @TaskHub AND [InstanceID] IN (SELECT [InstanceID] FROM @InstanceIDs)
-    DELETE FROM Payloads WHERE [TaskHub] = @TaskHub AND [InstanceID] IN (SELECT [InstanceID] FROM @InstanceIDs)
-    -- Other relevant tables are expected to be cleaned up via cascade deletes
-
-    COMMIT TRANSACTION
-
-    -- return the number of deleted instances
-    RETURN (SELECT COUNT(*) FROM @InstanceIDs)
+    DECLARE @deletedInstances int
+    EXECUTE @deletedInstances = dt.PurgeInstanceStateByID @instanceIDs
+    RETURN @deletedInstances
 END
 GO
 
