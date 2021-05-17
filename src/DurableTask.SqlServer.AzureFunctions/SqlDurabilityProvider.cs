@@ -6,6 +6,8 @@ namespace DurableTask.SqlServer.AzureFunctions
     using System;
     using System.Collections.Generic;
     using System.IO;
+    using System.Linq;
+    using System.Threading;
     using System.Threading.Tasks;
     using DurableTask.Core;
     using Microsoft.Azure.WebJobs.Extensions.DurableTask;
@@ -100,6 +102,65 @@ namespace DurableTask.SqlServer.AzureFunctions
             }
 
             return value.ToString();
+        }
+
+        public override Task<IList<OrchestrationState>> GetAllOrchestrationStates(CancellationToken cancellationToken)
+        {
+            throw new NotSupportedException($"Use the method overload that takes a {nameof(OrchestrationStatusQueryCondition)} parameter.");
+        }
+
+        public override async Task<OrchestrationStatusQueryResult> GetOrchestrationStateWithPagination(OrchestrationStatusQueryCondition condition, CancellationToken cancellationToken)
+        {
+            if (condition == null)
+            {
+                throw new ArgumentNullException(nameof(condition));
+            }
+
+            var query = new SqlOrchestrationQuery
+            {
+                PageSize = condition.PageSize,
+                FetchInput = condition.ShowInput,
+                CreatedTimeFrom = condition.CreatedTimeFrom,
+                CreatedTimeTo = condition.CreatedTimeTo,
+                InstanceIdPrefix = condition.InstanceIdPrefix,
+            };
+
+            if (condition.RuntimeStatus?.Any() == true)
+            {
+                query.StatusFilter = new HashSet<OrchestrationStatus>(condition.RuntimeStatus.Select(status => (OrchestrationStatus)status));
+            }
+
+            // The continuation token is just a page number.
+            if (string.IsNullOrWhiteSpace(condition.ContinuationToken))
+            {
+                query.PageNumber = 0;
+            }
+            else if (int.TryParse(condition.ContinuationToken, out int pageNumber))
+            {
+                query.PageNumber = pageNumber;
+            }
+            else
+            {
+                throw new ArgumentException($"The continuation token '{condition.ContinuationToken}' is invalid.", nameof(condition));
+            }
+
+            IReadOnlyCollection<OrchestrationState> results = await this.service.GetManyOrchestrationsAsync(query, cancellationToken);
+
+            return new OrchestrationStatusQueryResult
+            {
+                DurableOrchestrationState = results.Select(s => new DurableOrchestrationStatus
+                {
+                    Name = s.Name,
+                    InstanceId = s.OrchestrationInstance.InstanceId,
+                    RuntimeStatus = (OrchestrationRuntimeStatus)s.OrchestrationStatus,
+                    CustomStatus = s.Status,
+                    CreatedTime = s.CreatedTime,
+                    LastUpdatedTime = s.LastUpdatedTime,
+                    Input = s.Input,
+                    Output = s.Output,
+                }),
+                ContinuationToken = results.Count == query.PageSize ? (query.PageNumber + 1).ToString() : null,
+            };
         }
 
         public override bool TryGetScaleMonitor(

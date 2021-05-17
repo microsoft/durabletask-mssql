@@ -409,6 +409,26 @@ namespace DurableTask.SqlServer
             }
         }
 
+        public static SqlDateTime ToSqlDateTime(this DateTime dateTime, SqlDateTime defaultValue)
+        {
+            if (dateTime == default)
+            {
+                return defaultValue;
+            }
+            else if (dateTime > SqlDateTime.MaxValue)
+            {
+                return SqlDateTime.MaxValue;
+            }
+            else if (dateTime < SqlDateTime.MinValue)
+            {
+                return SqlDateTime.MinValue;
+            }
+            else
+            {
+                return dateTime;
+            }
+        }
+
         static async Task<T> WithRetry<T>(Func<Task<T>> func, SprocExecutionContext context, LogHelper traceHelper, string? instanceId, int maxRetries = 5)
         {
             context.RetryCount = 0;

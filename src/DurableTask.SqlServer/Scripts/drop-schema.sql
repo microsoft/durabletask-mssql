@@ -26,6 +26,7 @@ DROP PROCEDURE IF EXISTS dt._CompleteTasks
 DROP PROCEDURE IF EXISTS dt._GetVersions
 DROP PROCEDURE IF EXISTS dt._LockNextOrchestration
 DROP PROCEDURE IF EXISTS dt._LockNextTask
+DROP PROCEDURE IF EXISTS dt._QueryManyOrchestrations
 DROP PROCEDURE IF EXISTS dt._RenewOrchestrationLocks
 DROP PROCEDURE IF EXISTS dt._RenewTaskLocks
 DROP PROCEDURE IF EXISTS dt._UpdateVersion

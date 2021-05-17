@@ -136,6 +136,10 @@ BEGIN
     -- This index is used by LockNext and Purge logic
     CREATE INDEX IX_Instances_RuntimeStatus ON dt.Instances(TaskHub, RuntimeStatus)
         INCLUDE ([LockExpiration], [CreatedTime], [CompletedTime])
+    
+    -- This index is intended to help the performance of multi-instance query
+    CREATE INDEX IX_Instances_CreatedTime ON dt.Instances(TaskHub, CreatedTime)
+        INCLUDE ([RuntimeStatus], [CompletedTime], [InstanceID])
 END
 
 IF OBJECT_ID(N'dt.NewEvents', 'U') IS NULL

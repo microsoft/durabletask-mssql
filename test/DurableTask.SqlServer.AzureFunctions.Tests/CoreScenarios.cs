@@ -5,6 +5,8 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
 {
     using System;
     using System.Collections.Generic;
+    using System.Linq;
+    using System.Threading;
     using System.Threading.Tasks;
     using Microsoft.Azure.WebJobs;
     using Microsoft.Azure.WebJobs.Extensions.DurableTask;
@@ -117,6 +119,140 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
             // TODO: Check the content of the history for input/output fields
         }
 
+        [Fact]
+        public async Task MultiInstanceQueries()
+        {
+            DateTime startTime = DateTime.UtcNow;
+            string prefix = $"{startTime:HHmmss}";
+
+            await Enumerable.Range(0, 5).ParallelForEachAsync(5, i =>
+                this.RunOrchestrationAsync(
+                    nameof(Functions.Sequence),
+                    instanceId: $"{prefix}.sequence.{i}"));
+
+            DateTime sequencesFinishedTime = DateTime.UtcNow;
+            await Task.Delay(TimeSpan.FromSeconds(3));
+
+            await Enumerable.Range(0, 5).ParallelForEachAsync(5, i =>
+                this.StartOrchestrationAsync(
+                    nameof(Functions.WaitForEvent),
+                    input: i.ToString(),
+                    instanceId: $"{prefix}.waiter.{i}"));
+
+            IDurableClient client = await this.GetDurableClientAsync();
+
+            // Create one condition object and reuse it for multiple queries
+            var condition = new OrchestrationStatusQueryCondition();
+            OrchestrationStatusQueryResult result;
+
+            // Return all instances
+            result = await client.ListInstancesAsync(condition, CancellationToken.None);
+            Assert.Equal(10, result.DurableOrchestrationState.Count());
+
+            // Test CreatedTimeTo filter
+            condition.CreatedTimeTo = startTime;
+            result = await client.ListInstancesAsync(condition, CancellationToken.None);
+            Assert.Empty(result.DurableOrchestrationState);
+
+            condition.CreatedTimeTo = sequencesFinishedTime;
+            result = await client.ListInstancesAsync(condition, CancellationToken.None);
+            Assert.Equal(5, result.DurableOrchestrationState.Count());
+
+            condition.CreatedTimeTo = DateTime.UtcNow;
+            result = await client.ListInstancesAsync(condition, CancellationToken.None);
+            Assert.Equal(10, result.DurableOrchestrationState.Count());
+
+            // Test CreatedTimeFrom filter
+            condition.CreatedTimeFrom = DateTime.UtcNow;
+            result = await client.ListInstancesAsync(condition, CancellationToken.None);
+            Assert.Empty(result.DurableOrchestrationState);
+
+            condition.CreatedTimeFrom = sequencesFinishedTime;
+            result = await client.ListInstancesAsync(condition, CancellationToken.None);
+            Assert.Equal(5, result.DurableOrchestrationState.Count());
+
+            condition.CreatedTimeFrom = startTime;
+            result = await client.ListInstancesAsync(condition, CancellationToken.None);
+            Assert.Equal(10, result.DurableOrchestrationState.Count());
+
+            // Test RuntimeStatus filter
+            var statusFilters = new HashSet<OrchestrationRuntimeStatus>(new[]
+            {
+                OrchestrationRuntimeStatus.Failed,
+                OrchestrationRuntimeStatus.Pending,
+                OrchestrationRuntimeStatus.Terminated
+            });
+
+            condition.RuntimeStatus = statusFilters;
+            result = await client.ListInstancesAsync(condition, CancellationToken.None);
+            Assert.Empty(result.DurableOrchestrationState);
+
+            statusFilters.Add(OrchestrationRuntimeStatus.Running);
+            result = await client.ListInstancesAsync(condition, CancellationToken.None);
+            Assert.Equal(5, result.DurableOrchestrationState.Count());
+            Assert.All(result.DurableOrchestrationState, state => Assert.Equal(OrchestrationRuntimeStatus.Running, state.RuntimeStatus));
+
+            statusFilters.Add(OrchestrationRuntimeStatus.Completed);
+            result = await client.ListInstancesAsync(condition, CancellationToken.None);
+            Assert.Equal(10, result.DurableOrchestrationState.Count());
+
+            statusFilters.Remove(OrchestrationRuntimeStatus.Running);
+            result = await client.ListInstancesAsync(condition, CancellationToken.None);
+            Assert.Equal(5, result.DurableOrchestrationState.Count());
+            Assert.All(result.DurableOrchestrationState, state => Assert.Equal(OrchestrationRuntimeStatus.Completed, state.RuntimeStatus));
+
+            statusFilters.Clear();
+            result = await client.ListInstancesAsync(condition, CancellationToken.None);
+            Assert.Equal(10, result.DurableOrchestrationState.Count());
+
+            // Test InstanceIdPrefix
+            condition.InstanceIdPrefix = "Foo";
+            result = await client.ListInstancesAsync(condition, CancellationToken.None);
+            Assert.Empty(result.DurableOrchestrationState);
+
+            condition.InstanceIdPrefix = prefix;
+            result = await client.ListInstancesAsync(condition, CancellationToken.None);
+            Assert.Equal(10, result.DurableOrchestrationState.Count());
+
+            // Test PageSize and ContinuationToken
+            var instanceIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            condition.PageSize = 0;
+            while (condition.PageSize++ < 10)
+            {
+                result = await client.ListInstancesAsync(condition, CancellationToken.None);
+                int total = result.DurableOrchestrationState.Count();
+                Assert.Equal(condition.PageSize, total);
+
+                // Make sure all instance IDs are unique
+                Assert.All(result.DurableOrchestrationState, s => instanceIds.Add(s.InstanceId));
+
+                while (total < 10)
+                {
+                    condition.ContinuationToken = result.ContinuationToken;
+                    result = await client.ListInstancesAsync(condition, CancellationToken.None);
+                    int count = result.DurableOrchestrationState.Count();
+                    Assert.NotEqual(0, count);
+                    Assert.True(count <= condition.PageSize);
+                    total += count;
+                    Assert.True(total <= 10);
+                    Assert.All(result.DurableOrchestrationState, s => instanceIds.Add(s.InstanceId));
+                }
+
+                condition.ContinuationToken = null;
+            }
+
+            // Test ShowInput
+            condition.ShowInput = true;
+            condition.CreatedTimeFrom = sequencesFinishedTime;
+            result = await client.ListInstancesAsync(condition, CancellationToken.None);
+            Assert.All(result.DurableOrchestrationState, state => Assert.NotEqual(JValue.CreateNull(), state.Input));
+
+            condition.ShowInput = false;
+            condition.CreatedTimeFrom = startTime;
+            result = await client.ListInstancesAsync(condition, CancellationToken.None);
+            Assert.All(result.DurableOrchestrationState, state => Assert.Equal(JValue.CreateNull(), state.Input));
+        }
+
         static class Functions
         {
             [FunctionName(nameof(Sequence))]
@@ -220,6 +356,13 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
                     default:
                         throw new NotImplementedException("No such entity operation");
                 }
+            }
+
+            [FunctionName(nameof(WaitForEvent))]
+            public static Task<object> WaitForEvent([OrchestrationTrigger] IDurableOrchestrationContext ctx)
+            {
+                string name = ctx.GetInput<string>();
+                return ctx.WaitForExternalEvent<object>(name);
             }
         }
     }
