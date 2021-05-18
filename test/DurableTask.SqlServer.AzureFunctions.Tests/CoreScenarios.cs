@@ -8,6 +8,7 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
     using System.Linq;
     using System.Threading;
     using System.Threading.Tasks;
+    using DurableTask.SqlServer.Tests.Utils;
     using Microsoft.Azure.WebJobs;
     using Microsoft.Azure.WebJobs.Extensions.DurableTask;
     using Newtonsoft.Json;
@@ -130,8 +131,7 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
                     nameof(Functions.Sequence),
                     instanceId: $"{prefix}.sequence.{i}"));
 
-            DateTime sequencesFinishedTime = DateTime.UtcNow;
-            await Task.Delay(TimeSpan.FromSeconds(3));
+            DateTime sequencesFinishedTime = SharedTestHelpers.GetCurrentDatabaseTimeUtc();
 
             await Enumerable.Range(0, 5).ParallelForEachAsync(5, i =>
                 this.StartOrchestrationAsync(
@@ -253,6 +253,73 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
             Assert.All(result.DurableOrchestrationState, state => Assert.Equal(JValue.CreateNull(), state.Input));
         }
 
+        [Fact]
+        public async Task SingleInstancePurge()
+        {
+            DurableOrchestrationStatus status = await this.RunOrchestrationAsync(nameof(Functions.NoOp));
+            Assert.Equal(OrchestrationRuntimeStatus.Completed, status.RuntimeStatus);
+
+            IDurableClient client = await this.GetDurableClientAsync();
+            PurgeHistoryResult result;
+            
+            // First purge gets the active instance
+            result = await client.PurgeInstanceHistoryAsync(status.InstanceId);
+            Assert.NotNull(result);
+            Assert.Equal(1, result.InstancesDeleted);
+
+            // Verify that it's gone
+            DurableOrchestrationStatus statusAfterPurge = await client.GetStatusAsync(status.InstanceId);
+            Assert.Null(statusAfterPurge);
+
+            // Second purge should be a no-op
+            result = await client.PurgeInstanceHistoryAsync(status.InstanceId);
+            Assert.NotNull(result);
+            Assert.Equal(0, result.InstancesDeleted);
+        }
+
+        [Fact]
+        public async Task MultiInstancePurge()
+        {
+            DateTime startTime = SharedTestHelpers.GetCurrentDatabaseTimeUtc();
+
+            DurableOrchestrationStatus instance1 = await this.RunOrchestrationAsync(nameof(Functions.NoOp));
+            DurableOrchestrationStatus instance2 = await this.RunOrchestrationAsync(nameof(Functions.NoOp));
+
+            DateTime midTime = SharedTestHelpers.GetCurrentDatabaseTimeUtc();
+
+            DurableOrchestrationStatus instance3 = await this.RunOrchestrationAsync(nameof(Functions.NoOp));
+            DurableOrchestrationStatus instance4 = await this.RunOrchestrationAsync(nameof(Functions.NoOp));
+
+            DateTime endTime = SharedTestHelpers.GetCurrentDatabaseTimeUtc();
+
+            IDurableClient client = await this.GetDurableClientAsync();
+            PurgeHistoryResult purgeResult;
+
+            // First attempt should delete nothing because it's out of range
+            purgeResult = await client.PurgeInstanceHistoryAsync(endTime, null, null);
+            Assert.NotNull(purgeResult);
+            Assert.Equal(0, purgeResult.InstancesDeleted);
+
+            // Purging from the test's mid-point should purge instance3 and instance4
+            purgeResult = await client.PurgeInstanceHistoryAsync(midTime, null, null);
+            Assert.NotNull(purgeResult);
+            Assert.Equal(2, purgeResult.InstancesDeleted);
+            Assert.NotNull(await client.GetStatusAsync(instance1.InstanceId));
+            Assert.NotNull(await client.GetStatusAsync(instance2.InstanceId));
+            Assert.Null(await client.GetStatusAsync(instance3.InstanceId));
+            Assert.Null(await client.GetStatusAsync(instance4.InstanceId));
+
+            // Purging from the test start time should purge instance1 and instance2
+            purgeResult = await client.PurgeInstanceHistoryAsync(startTime, null, null);
+            Assert.Equal(2, purgeResult.InstancesDeleted);
+            Assert.Null(await client.GetStatusAsync(instance1.InstanceId));
+            Assert.Null(await client.GetStatusAsync(instance2.InstanceId));
+
+            // Purging again should be a no-op
+            purgeResult = await client.PurgeInstanceHistoryAsync(startTime, null, null);
+            Assert.Equal(0, purgeResult.InstancesDeleted);
+        }
+
         static class Functions
         {
             [FunctionName(nameof(Sequence))]
@@ -364,6 +431,9 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
                 string name = ctx.GetInput<string>();
                 return ctx.WaitForExternalEvent<object>(name);
             }
+
+            [FunctionName(nameof(NoOp))]
+            public static Task NoOp([OrchestrationTrigger] IDurableOrchestrationContext ctx) => Task.CompletedTask;
         }
     }
 }

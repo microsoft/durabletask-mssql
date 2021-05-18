@@ -29,20 +29,23 @@ namespace DurableTask.SqlServer.Tests.Utils
         {
             // The default for local development on a Windows OS
             string defaultConnectionString = "Server=localhost;Database=DurableDB;Trusted_Connection=True;";
+            var builder = new SqlConnectionStringBuilder(defaultConnectionString);
 
             // The use of SA_PASSWORD is intended for use with the mssql docker container
             string saPassword = Environment.GetEnvironmentVariable("SA_PASSWORD");
-            if (string.IsNullOrEmpty(saPassword))
+            if (!string.IsNullOrEmpty(saPassword))
             {
-                return defaultConnectionString;
+                builder.IntegratedSecurity = false;
+                builder.UserID = "sa";
+                builder.Password = saPassword;
             }
 
-            var builder = new SqlConnectionStringBuilder(defaultConnectionString)
-            {
-                IntegratedSecurity = false,
-                UserID = "sa",
-                Password = saPassword,
-            };
+            // Overrides for ad-hoc testing against alternate setups
+            ////builder.IntegratedSecurity = false;
+            ////builder.UserID = "sa";
+            ////builder.Password = "XXX";
+            ////builder.DataSource = "127.0.0.1,14330";
+            ////builder.DataSource = "20.190.19.170";
 
             return builder.ToString();
         }
@@ -66,7 +69,18 @@ namespace DurableTask.SqlServer.Tests.Utils
                 {
                     // 15434 : Could not drop login 'XXX' as the user is currently logged in.
                 }
+                catch (SqlException e) when (e.Number == 6106)
+                {
+                    // 6106 : Process ID 'XXX' is not an active process ID
+                }
             }
+        }
+
+        public static async Task InitializeDatabaseAsync()
+        {
+            var options = new SqlOrchestrationServiceSettings(GetDefaultConnectionString());
+            var service = new SqlOrchestrationService(options);
+            await service.CreateIfNotExistsAsync();
         }
 
         public static async Task<TestCredential> CreateTaskHubLoginAsync(string prefix)
@@ -138,6 +152,18 @@ namespace DurableTask.SqlServer.Tests.Utils
             }
 
             return result.ToString();
+        }
+
+        public static DateTime GetCurrentDatabaseTimeUtc()
+        {
+            string connectionString = GetDefaultConnectionString();
+            using SqlConnection connection = new SqlConnection(connectionString);
+            using SqlCommand command = connection.CreateCommand();
+            command.Connection.Open();
+
+            command.CommandText = "SELECT SYSUTCDATETIME()";
+            DateTime currentDatabaseTimeUtc = (DateTime)command.ExecuteScalar();
+            return DateTime.SpecifyKind(currentDatabaseTimeUtc, DateTimeKind.Utc);
         }
 
         static bool MeetsSqlPasswordConstraint(string password)

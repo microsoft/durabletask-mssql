@@ -23,7 +23,8 @@ GRANT EXECUTE ON OBJECT::dt.GetInstanceHistory TO dt_runtime
 GRANT EXECUTE ON OBJECT::dt.QuerySingleOrchestration TO dt_runtime
 GRANT EXECUTE ON OBJECT::dt.RaiseEvent TO dt_runtime
 GRANT EXECUTE ON OBJECT::dt.TerminateInstance TO dt_runtime
-GRANT EXECUTE ON OBJECT::dt.PurgeInstanceState TO dt_runtime
+GRANT EXECUTE ON OBJECT::dt.PurgeInstanceStateByID TO dt_runtime
+GRANT EXECUTE ON OBJECT::dt.PurgeInstanceStateByTime TO dt_runtime
 
 -- Internal sprocs
 GRANT EXECUTE ON OBJECT::dt._AddOrchestrationEvents TO dt_runtime
@@ -40,6 +41,7 @@ GRANT EXECUTE ON OBJECT::dt._UpdateVersion TO dt_runtime
 -- Types
 GRANT EXECUTE ON TYPE::dt.HistoryEvents TO dt_runtime
 GRANT EXECUTE ON TYPE::dt.MessageIDs TO dt_runtime
+GRANT EXECUTE ON TYPE::dt.InstanceIDs TO dt_runtime
 GRANT EXECUTE ON TYPE::dt.OrchestrationEvents TO dt_runtime
 GRANT EXECUTE ON TYPE::dt.TaskEvents TO dt_runtime
 

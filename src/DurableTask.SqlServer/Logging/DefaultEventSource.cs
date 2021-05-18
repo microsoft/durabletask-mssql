@@ -214,5 +214,23 @@ namespace DurableTask.SqlServer.Logging
                 AppName,
                 ExtensionVersion);
         }
+
+        [Event(EventIds.PurgedInstances, Level = EventLevel.Informational)]
+        internal void PurgedInstances(
+            string UserId,
+            int InstanceCount,
+            long LatencyMs,
+            string AppName,
+            string ExtensionVersion)
+        {
+            // TODO: Use WriteEventCore for better performance
+            this.WriteEvent(
+                EventIds.PurgedInstances,
+                UserId,
+                InstanceCount,
+                LatencyMs,
+                AppName,
+                ExtensionVersion);
+        }
     }
 }

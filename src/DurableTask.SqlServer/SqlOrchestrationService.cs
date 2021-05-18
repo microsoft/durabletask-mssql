@@ -34,6 +34,7 @@ namespace DurableTask.SqlServer
         readonly LogHelper traceHelper;
         readonly SqlDbManager dbManager;
         readonly string lockedByValue;
+        readonly string userId;
 
         public SqlOrchestrationService(SqlOrchestrationServiceSettings? settings)
         {
@@ -41,6 +42,7 @@ namespace DurableTask.SqlServer
             this.traceHelper = new LogHelper(this.settings.LoggerFactory.CreateLogger("DurableTask.SqlServer"));
             this.dbManager = new SqlDbManager(this.settings, this.traceHelper);
             this.lockedByValue = $"{this.settings.AppName}|{Process.GetCurrentProcess().Id}";
+            this.userId = new SqlConnectionStringBuilder(this.settings.TaskHubConnectionString).UserID ?? string.Empty;
         }
 
         public override int MaxConcurrentTaskOrchestrationWorkItems => this.settings.MaxActiveOrchestrations;
@@ -549,12 +551,41 @@ namespace DurableTask.SqlServer
             await SqlUtils.ExecuteNonQueryAsync(command, this.traceHelper, instanceId);
         }
 
+        public async Task<int> PurgeOrchestrationHistoryAsync(IEnumerable<string> instanceIds)
+        {
+            if (instanceIds?.Any() != true)
+            {
+                return 0;
+            }
+
+            using SqlConnection connection = await this.GetAndOpenConnectionAsync();
+            using SqlCommand command = this.GetSprocCommand(connection, "dt.PurgeInstanceStateByID");
+
+            SqlParameter instancesDeletedReturnValue = command.Parameters.Add("@InstancesDeleted", SqlDbType.Int);
+            instancesDeletedReturnValue.Direction = ParameterDirection.ReturnValue;
+
+            command.Parameters.AddInstanceIDsParameter("@InstanceIDs", instanceIds);
+
+            Stopwatch latencyStopwatch = Stopwatch.StartNew();
+            await SqlUtils.ExecuteNonQueryAsync(command, this.traceHelper);
+            int purgedInstanceCount = (int)instancesDeletedReturnValue.Value;
+            if (purgedInstanceCount > 0)
+            {
+                this.traceHelper.PurgedInstances(
+                    this.userId,
+                    purgedInstanceCount,
+                    latencyStopwatch);
+            }
+
+            return purgedInstanceCount;
+        }
+
         public override async Task PurgeOrchestrationHistoryAsync(
             DateTime thresholdDateTimeUtc,
             OrchestrationStateTimeRangeFilterType timeRangeFilterType)
         {
             using SqlConnection connection = await this.GetAndOpenConnectionAsync();
-            using SqlCommand command = this.GetSprocCommand(connection, "dt.PurgeInstanceState");
+            using SqlCommand command = this.GetSprocCommand(connection, "dt.PurgeInstanceStateByTime");
 
             command.Parameters.Add("@ThresholdTime", SqlDbType.DateTime2).Value = thresholdDateTimeUtc;
             command.Parameters.Add("@FilterType", SqlDbType.TinyInt).Value = (int)timeRangeFilterType;

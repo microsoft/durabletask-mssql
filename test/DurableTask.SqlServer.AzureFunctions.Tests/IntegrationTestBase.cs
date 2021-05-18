@@ -66,6 +66,8 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
 
         async Task IAsyncLifetime.InitializeAsync()
         {
+            await SharedTestHelpers.InitializeDatabaseAsync();
+
             // Create a user login specifically for this test to isolate it from other tests
             await SharedTestHelpers.EnableMultitenancyAsync();
             this.testCredential = await SharedTestHelpers.CreateTaskHubLoginAsync(this.testName);
