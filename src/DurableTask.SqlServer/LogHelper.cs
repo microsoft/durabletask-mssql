@@ -103,6 +103,15 @@ namespace DurableTask.SqlServer
             this.WriteLog(logEvent);
         }
 
+        public void PurgedInstances(string userId, int purgedInstanceCount, Stopwatch latencyStopwatch)
+        {
+            var logEvent = new LogEvents.PurgedInstances(
+                userId,
+                purgedInstanceCount,
+                latencyStopwatch.ElapsedMilliseconds);
+            this.WriteLog(logEvent);
+        }
+
         void WriteLog(ILogEvent logEvent)
         {
             // LogDurableEvent is an extension method defined in DurableTask.Core

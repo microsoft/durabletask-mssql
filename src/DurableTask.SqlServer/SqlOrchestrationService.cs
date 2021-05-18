@@ -34,6 +34,7 @@ namespace DurableTask.SqlServer
         readonly LogHelper traceHelper;
         readonly SqlDbManager dbManager;
         readonly string lockedByValue;
+        readonly string userId;
 
         public SqlOrchestrationService(SqlOrchestrationServiceSettings? settings)
         {
@@ -41,6 +42,7 @@ namespace DurableTask.SqlServer
             this.traceHelper = new LogHelper(this.settings.LoggerFactory.CreateLogger("DurableTask.SqlServer"));
             this.dbManager = new SqlDbManager(this.settings, this.traceHelper);
             this.lockedByValue = $"{this.settings.AppName}|{Process.GetCurrentProcess().Id}";
+            this.userId = new SqlConnectionStringBuilder(this.settings.TaskHubConnectionString).UserID ?? string.Empty;
         }
 
         public override int MaxConcurrentTaskOrchestrationWorkItems => this.settings.MaxActiveOrchestrations;
@@ -564,9 +566,18 @@ namespace DurableTask.SqlServer
 
             command.Parameters.AddInstanceIDsParameter("@InstanceIDs", instanceIds);
 
+            Stopwatch latencyStopwatch = Stopwatch.StartNew();
             await SqlUtils.ExecuteNonQueryAsync(command, this.traceHelper);
+            int purgedInstanceCount = (int)instancesDeletedReturnValue.Value;
+            if (purgedInstanceCount > 0)
+            {
+                this.traceHelper.PurgedInstances(
+                    this.userId,
+                    purgedInstanceCount,
+                    latencyStopwatch);
+            }
 
-            return (int)instancesDeletedReturnValue.Value;
+            return purgedInstanceCount;
         }
 
         public override async Task PurgeOrchestrationHistoryAsync(

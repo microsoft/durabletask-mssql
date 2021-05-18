@@ -379,5 +379,41 @@ namespace DurableTask.SqlServer.Logging
                     DTUtils.AppName,
                     DTUtils.ExtensionVersionString);
         }
+
+        internal class PurgedInstances : StructuredLogEvent, IEventSourceEvent
+        {
+            public PurgedInstances(string userId, int purgedInstanceCount, long latencyMs)
+            {
+                this.UserId = userId;
+                this.InstanceCount = purgedInstanceCount;
+                this.LatencyMs = latencyMs;
+            }
+
+            [StructuredLogField]
+            public int InstanceCount { get; }
+
+            [StructuredLogField]
+            public string UserId { get; }
+
+            [StructuredLogField]
+            public long LatencyMs { get; }
+
+            public override EventId EventId => new EventId(
+                EventIds.PurgedInstances,
+                nameof(EventIds.PurgedInstances));
+
+            public override LogLevel Level => LogLevel.Information;
+
+            protected override string CreateLogMessage() =>
+                $"User '{this.UserId}' purged {this.InstanceCount} orchestration instances. Latency = {this.LatencyMs}ms.";
+
+            void IEventSourceEvent.WriteEventSource() =>
+                DefaultEventSource.Log.PurgedInstances(
+                    this.UserId,
+                    this.InstanceCount,
+                    this.LatencyMs,
+                    DTUtils.AppName,
+                    DTUtils.ExtensionVersionString);
+        }
     }
 }
