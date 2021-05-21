@@ -13,7 +13,7 @@ namespace DurableTask.SqlServer
     static class DTUtils
     {
         public static readonly SemanticVersion ExtensionVersion = GetExtensionVersion();
-        public static readonly string ExtensionVersionString = ExtensionVersion.ToString();
+        public static readonly string ExtensionVersionString = GetExtensionVersionForLogging(ExtensionVersion);
 
         // DurableTask.Core has a public static variable that contains the app name
         public static readonly string AppName = DurableTask.Core.Common.Utils.AppName;
@@ -25,6 +25,30 @@ namespace DurableTask.SqlServer
             string productVersion = FileVersionInfo.GetVersionInfo(
                 typeof(SqlOrchestrationService).Assembly.Location).ProductVersion;
             return SemanticVersion.Parse(productVersion);
+        }
+
+        static string GetExtensionVersionForLogging(SemanticVersion version)
+        {
+            var builder = new StringBuilder();
+            builder
+                .Append(version.Major)
+                .Append('.')
+                .Append(version.Minor)
+                .Append('.')
+                .Append(version.Patch);
+
+            if (!string.IsNullOrEmpty(version.Prerelease))
+            {
+                builder.Append('-').Append(version.Prerelease);
+            }
+#if DEBUG
+            // Include the build information only in debug builds
+            if (!string.IsNullOrEmpty(version.Build))
+            {
+                builder.Append('+').Append(version.Build);
+            }
+#endif
+            return builder.ToString();
         }
 
         public static int GetTaskEventId(HistoryEvent historyEvent)

@@ -17,13 +17,15 @@ namespace PerformanceTests
     {
         public static async Task<string> ScheduleManyInstances(
             IDurableOrchestrationClient client,
+            ILogger log,
             string orchestrationName,
             int count,
-            ILogger log)
+            string prefix)
         {
-            log.LogWarning($"Scheduling {count} orchestration(s)...");
             DateTime utcNow = DateTime.UtcNow;
-            string prefix = utcNow.ToString("yyyyMMdd-hhmmss");
+            prefix += utcNow.ToString("yyyyMMdd-hhmmss");
+
+            log.LogWarning($"Scheduling {count} orchestration(s) with a prefix of '{prefix}'...");
 
             await Enumerable.Range(0, count).ParallelForEachAsync(200, i =>
             {
