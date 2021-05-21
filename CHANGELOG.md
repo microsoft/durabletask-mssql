@@ -1,5 +1,21 @@
 # Changelog
 
+## v0.8.0-beta
+
+### New
+
+* Support for multi-instance queries in Azure Functions ([#21](https://github.com/microsoft/durabletask-mssql/pull/21))
+* Instance purge, long timers, and internal Linux telemetry support in Azure Functions ([#22](https://github.com/microsoft/durabletask-mssql/pull/22))
+
+### Updates
+
+* Fix deadlock on activity message deletion ([#20](https://github.com/microsoft/durabletask-mssql/pull/20))
+* Updated [Microsoft.Azure.WebJobs.Extensions.DurableTask](https://www.nuget.org/packages/Microsoft.Azure.WebJobs.Extensions.DurableTask) dependency to [v2.4.3](https://github.com/Azure/azure-functions-durable-extension/releases/tag/v2.4.3).
+
+### Breaking changes
+
+* Renamed `dt.PurgeInstanceState` SQL stored procedure to `dt.PurgeInstanceStateByTime`
+
 ## v0.7.0-alpha
 
 ### New
