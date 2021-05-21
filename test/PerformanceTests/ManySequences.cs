@@ -28,8 +28,10 @@ namespace PerformanceTests
                 return new BadRequestObjectResult("A 'count' query string parameter is required and it must contain a positive number.");
             }
 
-            string prefix = await Common.ScheduleManyInstances(starter, nameof(HelloSequence), count, log);
-            return new OkObjectResult($"Scheduled {count} orchestrations prefixed with '{prefix}'.");
+            string initialPrefix = (string)req.Query["prefix"] ?? string.Empty;
+
+            string finalPrefix = await Common.ScheduleManyInstances(starter, log, nameof(HelloSequence), count, initialPrefix);
+            return new OkObjectResult($"Scheduled {count} orchestrations prefixed with '{finalPrefix}'.");
         }
 
         [FunctionName(nameof(HelloSequence))]

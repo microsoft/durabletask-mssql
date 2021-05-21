@@ -21,7 +21,7 @@ dotnet add package Microsoft.DurableTask.SqlServer.AzureFunctions --prerelease
 JavaScript, Python, and PowerShell projects can add the [Microsoft.DurableTask.SqlServer.AzureFunction](https://www.nuget.org/packages/Microsoft.DurableTask.SqlServer.AzureFunctions) package by running the following `func` CLI command. Note that in addition to the Azure Functions Core Tools, you must also have a recent [.NET SDK](https://dotnet.microsoft.com/download/dotnet-core/3.1) installed locally.
 
 ```bash
-func extensions install -p Microsoft.DurableTask.SqlServer.AzureFunctions -v 0.7.0-alpha
+func extensions install -p Microsoft.DurableTask.SqlServer.AzureFunctions -v 0.8.0-beta
 ```
 
 ?> Check [here](https://www.nuget.org/packages/Microsoft.DurableTask.SqlServer.AzureFunctions) to see if newer versions of the SQL provider package are available, and update the above command to reference the latest available version.
