@@ -24,6 +24,8 @@ namespace DurableTask.SqlServer.AzureFunctions
         [JsonProperty("taskEventBatchSize")]
         public int TaskEventBatchSize { get; set; } = 10;
 
+        public ManagedIdentityOptions? ManagedIdentityOptions { get; set; }
+
         internal ILoggerFactory LoggerFactory { get; set; } = NullLoggerFactory.Instance;
         
         internal SqlOrchestrationServiceSettings GetOrchestrationServiceSettings(
@@ -67,6 +69,16 @@ namespace DurableTask.SqlServer.AzureFunctions
             if (extensionOptions.MaxConcurrentOrchestratorFunctions.HasValue)
             {
                 settings.MaxActiveOrchestrations = extensionOptions.MaxConcurrentOrchestratorFunctions.Value;
+            }
+
+            if (this.ManagedIdentityOptions != null)
+            {
+                settings.ManagedIdentitySettings = new ManagedIdentitySettings
+                {
+                    UseAzureManagedIdentity = this.ManagedIdentityOptions.UseAzureManagedIdentity,
+                    AuthorityHost = this.ManagedIdentityOptions.AuthorityHost,
+                    TenantId = this.ManagedIdentityOptions.TenantId
+                };
             }
 
             return settings;
