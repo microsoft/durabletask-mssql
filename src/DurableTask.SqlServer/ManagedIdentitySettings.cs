@@ -3,9 +3,11 @@
 
 namespace DurableTask.SqlServer
 {
-    using System;
-    using Newtonsoft.Json;
+using System;
+using Newtonsoft.Json;
 
+namespace DurableTask.SqlServer
+{
     /// <summary>
     /// Configuration options for Azure Managed Identity.
     /// </summary>
