@@ -4,16 +4,12 @@
 namespace DurableTask.SqlServer
 {
     using System;
-using System.Threading.Tasks;
-
-using Azure.Core;
-using Azure.Identity;
-
-using Microsoft.Data.SqlClient;
+    using System.Threading.Tasks;
+    using Azure.Core;
+    using Azure.Identity;
+    using Microsoft.Data.SqlClient;
 
     class SqlConnectionFactory
-{
-    internal class SqlConnectionFactory
     {
         readonly string connectionString;
         readonly ManagedIdentitySettings? managedIdentitySettings;
@@ -54,14 +50,14 @@ using Microsoft.Data.SqlClient;
                 return this.cachedAccessToken;
             }
 
-                var azureCredentialOptions = new DefaultAzureCredentialOptions();
+            var azureCredentialOptions = new DefaultAzureCredentialOptions();
             if (managedIdentitySettings.AuthorityHost != null)
-                {
+            {
                 azureCredentialOptions.AuthorityHost = managedIdentitySettings.AuthorityHost;
-                }
+            }
 
             if (!string.IsNullOrEmpty(managedIdentitySettings.TenantId))
-                {
+            {
                 azureCredentialOptions.InteractiveBrowserTenantId = managedIdentitySettings.TenantId;
             }
 

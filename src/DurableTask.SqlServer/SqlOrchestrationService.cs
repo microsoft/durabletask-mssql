@@ -42,9 +42,10 @@ namespace DurableTask.SqlServer
             this.settings = ValidateSettings(settings) ?? throw new ArgumentNullException(nameof(settings));
             this.traceHelper = new LogHelper(this.settings.LoggerFactory.CreateLogger("DurableTask.SqlServer"));
             this.connectionFactory = new SqlConnectionFactory(
-                this.settings.TaskHubConnectionString, this.settings.ManagedIdentitySettings);
+                this.settings.TaskHubConnectionString,
+                this.settings.ManagedIdentitySettings);
             this.dbManager = new SqlDbManager(this.connectionFactory, this.traceHelper);
-            this.lockedByValue = $"{this.settings.AppName}|{Process.GetCurrentProcess().Id}";
+            this.lockedByValue = $"{this.settings.AppName},{Process.GetCurrentProcess().Id}";
             this.userId = new SqlConnectionStringBuilder(this.settings.TaskHubConnectionString).UserID ?? string.Empty;
         }
 
