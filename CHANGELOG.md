@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.9.0-beta
+
+### New
+
+* Support for Azure Managed Identities ([#25](https://github.com/microsoft/durabletask-mssql/pull/25)) - contributed by [@usemam](https://github.com/usemam)
+
 ## v0.8.0-beta
 
 ### New
