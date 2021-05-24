@@ -131,6 +131,9 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
                     nameof(Functions.Sequence),
                     instanceId: $"{prefix}.sequence.{i}"));
 
+            // Extra delay to account for test flakiness in the GitHub CI (TODO: Why is this necessary?)
+            await Task.Delay(TimeSpan.FromSeconds(1));
+
             DateTime sequencesFinishedTime = SharedTestHelpers.GetCurrentDatabaseTimeUtc();
 
             await Enumerable.Range(0, 5).ParallelForEachAsync(5, i =>
@@ -285,10 +288,16 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
             DurableOrchestrationStatus instance1 = await this.RunOrchestrationAsync(nameof(Functions.NoOp));
             DurableOrchestrationStatus instance2 = await this.RunOrchestrationAsync(nameof(Functions.NoOp));
 
+            // Extra delay to account for test flakiness in the GitHub CI (TODO: Why is this necessary?)
+            await Task.Delay(TimeSpan.FromSeconds(1));
+
             DateTime midTime = SharedTestHelpers.GetCurrentDatabaseTimeUtc();
 
             DurableOrchestrationStatus instance3 = await this.RunOrchestrationAsync(nameof(Functions.NoOp));
             DurableOrchestrationStatus instance4 = await this.RunOrchestrationAsync(nameof(Functions.NoOp));
+
+            // Extra delay to account for test flakiness in the GitHub CI (TODO: Why is this necessary?)
+            await Task.Delay(TimeSpan.FromSeconds(1));
 
             DateTime endTime = SharedTestHelpers.GetCurrentDatabaseTimeUtc();
 
