@@ -46,12 +46,12 @@ No. You can run on Azure if you want, but this provider was designed specificall
 
 ## Contact and support
 
-* Create a [GitHub issue](https://github.com/Azure/durabletask-mssql/issues) for bug reports, feature requests, or questions.
+* Create a [GitHub issue](https://github.com/microsoft/durabletask-mssql/issues) for bug reports, feature requests, or questions.
 * Follow [@cgillum](https://twitter.com/cgillum) and [@AzureFunctions](https://twitter.com/AzureFunctions) on Twitter for announcements.
 * Add a ⭐️ star on GitHub or ❤️ tweets to support the project!
 
 ## License
 
-This project is licensed under the [MIT license](https://github.com/Azure/durabletask-mssql/blob/main/LICENSE).
+This project is licensed under the [MIT license](https://github.com/microsoft/durabletask-mssql/blob/main/LICENSE).
 
 Copyright (c) Microsoft Corporation.

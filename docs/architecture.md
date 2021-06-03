@@ -6,7 +6,7 @@ The Microsoft SQL Provider for the Durable Task Framework (DTFx) and Durable Fun
 
 The DTFx schema is provisioned in the target database when the orchestration service is created. When using DTFx, this happens during the call to `SqlOrchestrationService.CreateAsync()`. When using Durable Functions, this happens automatically when the Functions host first starts up. It is not necessary to run any database provisioning scripts manually.
 
-The database provisioning scripts are compiled directly into the main provider DLL file as assembly resources. You can view these scripts in GitHub [here](https://github.com/Azure/durabletask-mssql/tree/main/src/DurableTask.SqlServer/Scripts). All tables, views, and stored procedures are provisioned under a `dt` schema to distinguish it from any existing schema in the database.
+The database provisioning scripts are compiled directly into the main provider DLL file as assembly resources. You can view these scripts in GitHub [here](https://github.com/microsoft/durabletask-mssql/tree/main/src/DurableTask.SqlServer/Scripts). All tables, views, and stored procedures are provisioned under a `dt` schema to distinguish it from any existing schema in the database.
 
 ![Schema](media/schema.png)
 
@@ -115,7 +115,7 @@ The following tests demonstrate the performance characteristics of the SQL provi
 * App instance count: **1**
 * Operating system: **Windows**
 * Application Insights: **Enabled, warnings only**
-* Host configuration: **See the [host.json](https://github.com/Azure/durabletask-mssql/blob/main/test/PerformanceTests/host.json) file**
+* Host configuration: **See the [host.json](https://github.com/microsoft/durabletask-mssql/blob/main/test/PerformanceTests/host.json) file**
 
 The following are the test results as of `v0.4.0-alpha`. Note that _Events/sec_ represents a one way messaging operation. For example, calling an activity function and handling the response is two distinct events. Resuming from a durable timer or receiving an external event would be consider one event.
 
