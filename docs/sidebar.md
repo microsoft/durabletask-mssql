@@ -1,5 +1,5 @@
 * [Introduction](introduction.md "Durable Task SQL Provider")
-* [Getting started](quickstart.md)
+* [Getting Started](quickstart.md)
 * [Architecture](architecture.md)
 * [Scaling](scaling.md)
 * [Task Hubs](taskhubs.md)

@@ -48,7 +48,7 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
                     {
                         webJobsBuilder.AddDurableTask(options =>
                         {
-                            options.StorageProvider["type"] = SqlDurabilityProvider.Name;
+                            options.StorageProvider["type"] = "mssql";
                         });
                     })
                 .ConfigureServices(
@@ -57,7 +57,7 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
                         services.AddSingleton<INameResolver>(this.settingsResolver);
                         services.AddSingleton<IConnectionStringResolver>(this.settingsResolver);
                         services.AddSingleton<ITypeLocator>(this.typeLocator);
-                        services.AddSingleton<IDurabilityProviderFactory, SqlDurabilityProviderFactory>();
+                        services.AddDurableTaskSqlProvider();
                     })
                 .Build();
 

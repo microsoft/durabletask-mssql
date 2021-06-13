@@ -11,6 +11,9 @@ namespace DurableTask.SqlServer.AzureFunctions
     using Microsoft.Extensions.Options;
     using Newtonsoft.Json;
 
+    /// <summary>
+    /// Microsoft SQL <see cref="IDurabilityProviderFactory"/> implementation for Durable Tasks in Azure Functions.
+    /// </summary>
     class SqlDurabilityProviderFactory : IDurabilityProviderFactory
     {
         readonly Dictionary<string, DurabilityProvider> clientProviders =
@@ -25,7 +28,15 @@ namespace DurableTask.SqlServer.AzureFunctions
         SqlOrchestrationService? service;
         SqlDurabilityProvider? defaultProvider;
 
-        // Called by the Azure Functions runtime dependency injection infrastructure
+        /// <summary>
+        /// Initializes a new instance of the <see cref="SqlDurabilityProviderFactory"/> class.
+        /// </summary>
+        /// <remarks>
+        /// Intended to be called by the Azure Functions runtime dependency injection infrastructure.
+        /// </remarks>
+        /// <param name="extensionOptions">Durable task extension configuration options.</param>
+        /// <param name="loggerFactory">Logger factory registered with the Azure Functions runtime.</param>
+        /// <param name="connectionStringResolver">Resolver service for fetching Durable Task connection string information.</param>
         public SqlDurabilityProviderFactory(
             IOptions<DurableTaskOptions> extensionOptions,
             ILoggerFactory loggerFactory,
