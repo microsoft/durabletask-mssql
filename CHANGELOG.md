@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.9.1-beta
+
+### New
+
+* Added extension method for Azure Functions service registration ([#31](https://github.com/microsoft/durabletask-mssql/pull/31))
+
+### Updates
+
+* Updated [Microsoft.Azure.WebJobs.Extensions.DurableTask](https://www.nuget.org/packages/Microsoft.Azure.WebJobs.Extensions.DurableTask) dependency to [v2.5.0](https://github.com/Azure/azure-functions-durable-extension/releases/tag/v2.5.0).
+* Updated [Microsoft.Azure.DurableTask.Core](https://www.nuget.org/packages/Microsoft.Azure.DurableTask.Core) dependency to [v2.5.5](https://github.com/Azure/durabletask/releases/tag/durabletask.core-v2.5.5).
+
 ## v0.9.0-beta
 
 ### New

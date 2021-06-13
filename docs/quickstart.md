@@ -21,7 +21,7 @@ dotnet add package Microsoft.DurableTask.SqlServer.AzureFunctions --prerelease
 JavaScript, Python, and PowerShell projects can add the [Microsoft.DurableTask.SqlServer.AzureFunction](https://www.nuget.org/packages/Microsoft.DurableTask.SqlServer.AzureFunctions) package by running the following `func` CLI command. Note that in addition to the Azure Functions Core Tools, you must also have a recent [.NET SDK](https://dotnet.microsoft.com/download/dotnet-core/3.1) installed locally.
 
 ```bash
-func extensions install -p Microsoft.DurableTask.SqlServer.AzureFunctions -v 0.9.0-beta
+func extensions install -p Microsoft.DurableTask.SqlServer.AzureFunctions -v 0.9.1-beta
 ```
 
 ?> Check [here](https://www.nuget.org/packages/Microsoft.DurableTask.SqlServer.AzureFunctions) to see if newer versions of the SQL provider package are available, and update the above command to reference the latest available version.
@@ -74,6 +74,8 @@ To enable diagnostic logging, you can also add the following `logging` configura
 ```
 
 It is recommended to always configure the `DurableTask.*` log categories to at least `Warning` to ensure you have visibility into issues that might impact reliability and runtime performance.
+
+?> By default, task hub names configured in host.json are ignored. Instead, the task hub name is inferred from the SQL database login username. For more information, see the [Task Hubs](taskhubs.md) documentation.
 
 ## Self-hosted .NET apps
 
