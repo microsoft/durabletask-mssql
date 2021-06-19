@@ -24,18 +24,6 @@ namespace DurableTask.SqlServer.AzureFunctions
         [JsonProperty("taskEventBatchSize")]
         public int TaskEventBatchSize { get; set; } = 10;
 
-        [JsonProperty("azureManagedIdentityAuthorityHost")]
-        public string? AzureManagedIdentityAuthorityHost { get; set; }
-
-        [JsonProperty("azureManagedIdentityTenantId")]
-        public string? AzureManagedIdentityTenantId { get; set; }
-
-        [JsonProperty("azureManagedIdentityEnabled")]
-        public bool AzureManagedIdentityEnabled { get; set; }
-
-        [JsonProperty("azureManagedIdentityResource")]
-        public string? AzureManagedIdentityResource { get; set; }
-
         internal ILoggerFactory LoggerFactory { get; set; } = NullLoggerFactory.Instance;
         
         internal SqlOrchestrationServiceSettings GetOrchestrationServiceSettings(
@@ -79,25 +67,6 @@ namespace DurableTask.SqlServer.AzureFunctions
             if (extensionOptions.MaxConcurrentOrchestratorFunctions.HasValue)
             {
                 settings.MaxActiveOrchestrations = extensionOptions.MaxConcurrentOrchestratorFunctions.Value;
-            }
-
-            if (this.AzureManagedIdentityEnabled)
-            {
-                settings.ManagedIdentitySettings = new ManagedIdentitySettings
-                {
-                    UseAzureManagedIdentity = this.AzureManagedIdentityEnabled,
-                    TenantId = this.AzureManagedIdentityTenantId,
-                };
-
-                if (!string.IsNullOrEmpty(this.AzureManagedIdentityAuthorityHost))
-                {
-                    settings.ManagedIdentitySettings.AuthorityHost = new Uri(this.AzureManagedIdentityAuthorityHost);
-                }
-
-                if (!string.IsNullOrEmpty(this.AzureManagedIdentityResource))
-                {
-                    settings.ManagedIdentitySettings.Resource = new Uri(this.AzureManagedIdentityResource);
-                }
             }
 
             return settings;

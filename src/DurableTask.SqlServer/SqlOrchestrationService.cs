@@ -30,7 +30,6 @@ namespace DurableTask.SqlServer
             minimumInterval: TimeSpan.FromMilliseconds(50),
             maximumInterval: TimeSpan.FromSeconds(3)); // TODO: Configurable
 
-        readonly SqlConnectionFactory connectionFactory;
         readonly SqlOrchestrationServiceSettings settings;
         readonly LogHelper traceHelper;
         readonly SqlDbManager dbManager;
@@ -41,10 +40,7 @@ namespace DurableTask.SqlServer
         {
             this.settings = ValidateSettings(settings) ?? throw new ArgumentNullException(nameof(settings));
             this.traceHelper = new LogHelper(this.settings.LoggerFactory.CreateLogger("DurableTask.SqlServer"));
-            this.connectionFactory = new SqlConnectionFactory(
-                this.settings.TaskHubConnectionString,
-                this.settings.ManagedIdentitySettings);
-            this.dbManager = new SqlDbManager(this.connectionFactory, this.traceHelper);
+            this.dbManager = new SqlDbManager(this.settings, this.traceHelper);
             this.lockedByValue = $"{this.settings.AppName},{Process.GetCurrentProcess().Id}";
             this.userId = new SqlConnectionStringBuilder(this.settings.TaskHubConnectionString).UserID ?? string.Empty;
         }
@@ -83,7 +79,7 @@ namespace DurableTask.SqlServer
                 cancelToken = this.ShutdownToken;
             }
 
-            SqlConnection connection = await this.connectionFactory.CreateConnection();
+            SqlConnection connection = this.settings.CreateConnection();
             await connection.OpenAsync(cancelToken);
             return connection;
         }
