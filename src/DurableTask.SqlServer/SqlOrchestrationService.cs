@@ -615,8 +615,8 @@ namespace DurableTask.SqlServer
                 throw new ArgumentOutOfRangeException(nameof(query), $"{nameof(query.PageNumber)} must be between 0 and {short.MaxValue} (inclusive).");
             }
 
-            SqlDateTime createdTimeFrom = query.CreatedTimeFrom.ToSqlDateTime(SqlDateTime.MinValue);
-            SqlDateTime createdTimeTo = query.CreatedTimeTo.ToSqlDateTime(SqlDateTime.MaxValue);
+            SqlDateTime createdTimeFrom = query.CreatedTimeFrom.ToSqlUtcDateTime(SqlDateTime.MinValue);
+            SqlDateTime createdTimeTo = query.CreatedTimeTo.ToSqlUtcDateTime(SqlDateTime.MaxValue);
 
             using SqlConnection connection = await this.GetAndOpenConnectionAsync(cancellationToken);
             using SqlCommand command = this.GetSprocCommand(connection, "dt._QueryManyOrchestrations");

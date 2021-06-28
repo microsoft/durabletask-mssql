@@ -431,7 +431,7 @@ namespace DurableTask.SqlServer
             }
         }
 
-        public static SqlDateTime ToSqlDateTime(this DateTime dateTime, SqlDateTime defaultValue)
+        public static SqlDateTime ToSqlUtcDateTime(this DateTime dateTime, SqlDateTime defaultValue)
         {
             if (dateTime == default)
             {
@@ -445,9 +445,12 @@ namespace DurableTask.SqlServer
             {
                 return SqlDateTime.MinValue;
             }
-            else
+            else if (dateTime.Kind == DateTimeKind.Utc)
             {
                 return dateTime;
+            }
+            else {
+                return dateTime.ToUniversalTime();
             }
         }
 
