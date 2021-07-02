@@ -449,7 +449,8 @@ namespace DurableTask.SqlServer
             {
                 return dateTime;
             }
-            else {
+            else
+            {
                 return dateTime.ToUniversalTime();
             }
         }
