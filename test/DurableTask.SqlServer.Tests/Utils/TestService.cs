@@ -73,10 +73,10 @@ namespace DurableTask.SqlServer.Tests.Utils
 
         public Task StartWorkerAsync() => this.worker?.StartAsync() ?? Task.CompletedTask;
 
-        public Task PurgeAsync(DateTime minimumThreshold, OrchestrationStateTimeRangeFilterType filterType)
+        public Task PurgeAsync(DateTime maximumThreshold, OrchestrationStateTimeRangeFilterType filterType)
         {
             return this.client.PurgeOrchestrationInstanceHistoryAsync(
-                minimumThreshold,
+                maximumThreshold,
                 filterType);
         }
 
