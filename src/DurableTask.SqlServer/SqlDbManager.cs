@@ -19,12 +19,12 @@ namespace DurableTask.SqlServer
 
     class SqlDbManager
     {
-        readonly SqlConnectionFactory connectionFactory;
+        readonly SqlOrchestrationServiceSettings settings;
         readonly LogHelper traceHelper;
 
-        public SqlDbManager(SqlConnectionFactory connectionFactory, LogHelper traceHelper)
+        public SqlDbManager(SqlOrchestrationServiceSettings settings, LogHelper traceHelper)
         {
-            this.connectionFactory = connectionFactory ?? throw new ArgumentNullException(nameof(connectionFactory));
+            this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
             this.traceHelper = traceHelper ?? throw new ArgumentNullException(nameof(traceHelper));
         }
 
@@ -133,7 +133,7 @@ namespace DurableTask.SqlServer
 
         async Task<DatabaseLock> AcquireDatabaseLockAsync()
         {
-            SqlConnection connection = await this.connectionFactory.CreateConnection();
+            SqlConnection connection = this.settings.CreateConnection();
             await connection.OpenAsync();
 
             // It's possible that more than one worker may attempt to execute this creation logic at the same
@@ -187,7 +187,7 @@ namespace DurableTask.SqlServer
             string schemaCommands = await GetScriptTextAsync(scriptName);
 
             // Reference: https://stackoverflow.com/questions/650098/how-to-execute-an-sql-script-file-using-c-sharp
-            using SqlConnection scriptRunnerConnection = await this.connectionFactory.CreateConnection();
+            using SqlConnection scriptRunnerConnection = this.settings.CreateConnection();
             var serverConnection = new ServerConnection(scriptRunnerConnection);
 
             Stopwatch latencyStopwatch = Stopwatch.StartNew();

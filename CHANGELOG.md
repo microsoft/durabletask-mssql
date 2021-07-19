@@ -2,8 +2,13 @@
 
 ## v0.10.0-beta
 
+### Updates
+
+* Updated [Microsoft.Data.SqlClient](https://www.nuget.org/packages/Microsoft.Data.SqlClient) to v3.0.0 - contributed by [@usemam](https://github.com/usemam)
+
 ### Breaking changes
 
+* Removed manual Azure Managed Identity configuration (it's configured in the MSSQL connection string now) - contributed by [@usemam](https://github.com/usemam)
 * Fixed backwards purge history threshold check ([#39](https://github.com/microsoft/durabletask-mssql/pull/39)) - contributed by [Jaah](https://github.com/Jaah)
 
 ## v0.9.1-beta

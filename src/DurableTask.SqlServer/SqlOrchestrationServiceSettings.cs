@@ -91,10 +91,6 @@ namespace DurableTask.SqlServer
         [JsonIgnore]
         public ILoggerFactory LoggerFactory { get; set; } = NullLoggerFactory.Instance;
 
-        /// <summary>
-        /// Gets or sets managed identity settings used to connect to a database.
-        /// </summary>
-        [JsonProperty("managedIdentitySettings")]
-        public ManagedIdentitySettings? ManagedIdentitySettings { get; set; }
+        internal SqlConnection CreateConnection() => new SqlConnection(this.TaskHubConnectionString);
     }
 }
