@@ -34,8 +34,6 @@ namespace DurableTask.SqlServer.Tests.Integration
         [InlineData(OrchestrationStateTimeRangeFilterType.OrchestrationCompletedTimeFilter)]
         public async Task PurgesInstancesByStatus(OrchestrationStateTimeRangeFilterType filterType)
         {
-            DateTime startTime = DateTime.UtcNow;
-
             var events = new ConcurrentDictionary<string, TaskCompletionSource<bool>>();
 
             // Waits for an external event and then either completes or fails depending on that event
@@ -66,7 +64,7 @@ namespace DurableTask.SqlServer.Tests.Integration
             await Task.WhenAll(instances.Select(instance => instance.WaitForStart()));
 
             // Try to purge the instance and check that it still exists
-            await this.testService.PurgeAsync(startTime, filterType);
+            await this.testService.PurgeAsync(DateTime.MaxValue, filterType);
             foreach (TestInstance<string> instance in instances)
             {
                 OrchestrationState runningState = await instance.GetStateAsync();
@@ -108,7 +106,7 @@ namespace DurableTask.SqlServer.Tests.Integration
             await Task.WhenAll(tasks);
 
             // This time-based purge should remove all the instances
-            await this.testService.PurgeAsync(startTime, filterType);
+            await this.testService.PurgeAsync(DateTime.MaxValue, filterType);
             foreach (TestInstance<string> instance in instances)
             {
                 OrchestrationState purgedState = await instance.GetStateAsync();
@@ -116,7 +114,7 @@ namespace DurableTask.SqlServer.Tests.Integration
             }
 
             // One more purge, just to make sure there are no failures when there is nothing left to purge
-            await this.testService.PurgeAsync(startTime, filterType);
+            await this.testService.PurgeAsync(DateTime.MaxValue, filterType);
         }
     }
 }

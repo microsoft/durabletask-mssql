@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.10.0-beta
+
+### Breaking changes
+
+* Fixed backwards purge history threshold check ([#39](https://github.com/microsoft/durabletask-mssql/pull/39)) - contributed by [Jaah](https://github.com/Jaah)
+
 ## v0.9.1-beta
 
 ### New
