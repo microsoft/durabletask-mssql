@@ -443,14 +443,14 @@ BEGIN
         INSERT INTO @instanceIDs
             SELECT [InstanceID] FROM Instances
             WHERE [TaskHub] = @TaskHub AND [RuntimeStatus] IN ('Completed', 'Terminated', 'Failed')
-                AND [CreatedTime] >= @ThresholdTime
+                AND [CreatedTime] <= @ThresholdTime
     END
     ELSE IF @FilterType = 1 -- completed time
     BEGIN
         INSERT INTO @instanceIDs
             SELECT [InstanceID] FROM Instances
             WHERE [TaskHub] = @TaskHub AND [RuntimeStatus] IN ('Completed', 'Terminated', 'Failed')
-                AND [CompletedTime] >= @ThresholdTime
+                AND [CompletedTime] <= @ThresholdTime
     END
     ELSE
     BEGIN

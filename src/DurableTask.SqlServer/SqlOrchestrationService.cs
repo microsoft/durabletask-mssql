@@ -585,13 +585,13 @@ namespace DurableTask.SqlServer
         }
 
         public override async Task PurgeOrchestrationHistoryAsync(
-            DateTime thresholdDateTimeUtc,
+            DateTime maxThresholdDateTimeUtc,
             OrchestrationStateTimeRangeFilterType timeRangeFilterType)
         {
             using SqlConnection connection = await this.GetAndOpenConnectionAsync();
             using SqlCommand command = this.GetSprocCommand(connection, "dt.PurgeInstanceStateByTime");
 
-            command.Parameters.Add("@ThresholdTime", SqlDbType.DateTime2).Value = thresholdDateTimeUtc;
+            command.Parameters.Add("@ThresholdTime", SqlDbType.DateTime2).Value = maxThresholdDateTimeUtc;
             command.Parameters.Add("@FilterType", SqlDbType.TinyInt).Value = (int)timeRangeFilterType;
 
             await SqlUtils.ExecuteNonQueryAsync(command, this.traceHelper);
