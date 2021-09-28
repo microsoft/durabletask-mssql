@@ -21,12 +21,23 @@ dotnet add package Microsoft.DurableTask.SqlServer.AzureFunctions --prerelease
 JavaScript, Python, and PowerShell projects can add the [Microsoft.DurableTask.SqlServer.AzureFunction](https://www.nuget.org/packages/Microsoft.DurableTask.SqlServer.AzureFunctions) package by running the following `func` CLI command. Note that in addition to the Azure Functions Core Tools, you must also have a recent [.NET SDK](https://dotnet.microsoft.com/download/dotnet-core/3.1) installed locally.
 
 ```bash
-func extensions install -p Microsoft.DurableTask.SqlServer.AzureFunctions -v 0.9.1-beta
+func extensions install -p Microsoft.DurableTask.SqlServer.AzureFunctions -v 0.10.1-beta
 ```
 
 ?> Check [here](https://www.nuget.org/packages/Microsoft.DurableTask.SqlServer.AzureFunctions) to see if newer versions of the SQL provider package are available, and update the above command to reference the latest available version.
 
 !> The Durable SQL backend is not currently supported with extension bundles. Support for extension bundles will be available at or before the *General Availability* release.
+
+This command will generate a file named **extensions.csproj** in the local directory, or update the file if one already exists. At the time of writing, you'll need to make an additional edit to this file to work around [this Azure Functions tooling issue](https://github.com/Azure/azure-functions-host/issues/6925#issuecomment-885253901):
+
+```xml
+  <!-- Workaround for https://github.com/Azure/azure-functions-host/issues/6925 -->
+  <Target Name="PostBuild" AfterTargets="PostBuildEvent">
+    <Move SourceFiles="$(OutDir)/extensions.deps.json" DestinationFiles="$(OutDir)/function.deps.json" />
+  </Target>
+```
+
+This ensures that all native dependencies are available when you try to start up the Function app.
 
 ### Host.json configuration
 
@@ -48,6 +59,8 @@ You can configure the Durable SQL provider by updating the `extensions/durableTa
 ```
 
 The `"type": "mssql"` specification is required to inform the Durable Functions extension that it should use the SQL backend instead of the default Azure Storage backend.
+
+The `taskEventLockTimeout` setting is an optional time-span value in the form hh:mm:ss. This setting controls how long events in the *dt.NewTasks* and *dt.NewEvents* tables remain locked after being queried. While locked, no other app instance can process these tasks. If an app instance that has locked these tasks crashes or becomes unresponsive, another app instance will be able to start processing these tasks once the timeout has expired. The default value is 2 minutes (00:02:00).
 
 The `connectionStringName` setting is required and must be set to the name of the app setting or environment variable that contains your SQL connection string. In the above example, `SQLDB_Connection` is the name of an existing app setting or environment variable. If you're running locally and using a **local.settings.json** file, you can configure it as follows:
 
