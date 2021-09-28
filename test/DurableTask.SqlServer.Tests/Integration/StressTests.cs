@@ -15,6 +15,7 @@ namespace DurableTask.SqlServer.Tests.Integration
     /// These tests are expected to take longer to complete compared to functional integration
     /// tests and therefore may not be appropriate for all CI or rapid testing scenarios.
     /// </summary>
+    [Trait("Category", "Stress")]
     public class StressTests : IAsyncLifetime
     {
         readonly TestService testService;
@@ -68,8 +69,8 @@ namespace DurableTask.SqlServer.Tests.Integration
                 });
 
             // On a fast Windows desktop machine, a 2000 sub-orchestration test should complete in 30-40 seconds.
-            // Extra time is provided to accomodate slower CI machines.
-            await testInstance.WaitForCompletion(TimeSpan.FromMinutes(2));
+            // On slower CI machines, this test could take several minutes to complete.
+            await testInstance.WaitForCompletion(TimeSpan.FromMinutes(5));
         }
     }
 }

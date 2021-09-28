@@ -33,6 +33,6 @@ jobs:
       run: test/setup.ps1
       shell: pwsh
     - name: Durable framework tests
-      run: dotnet test --no-build --verbosity normal ./test/DurableTask.SqlServer.Tests/DurableTask.SqlServer.Tests.csproj
+      run: dotnet test --no-build --verbosity normal --filter Category!=Stress ./test/DurableTask.SqlServer.Tests/DurableTask.SqlServer.Tests.csproj
     - name: Functions runtime tests
       run: dotnet test --no-build --verbosity normal ./test/DurableTask.SqlServer.AzureFunctions.Tests/DurableTask.SqlServer.AzureFunctions.Tests.csproj
