@@ -134,9 +134,7 @@ BEGIN
         [ParentInstanceID] varchar(100) NULL,
 
         CONSTRAINT PK_Instances PRIMARY KEY (TaskHub, InstanceID),
-        CONSTRAINT FK_Instances_Input_Payloads FOREIGN KEY (TaskHub, InstanceID, InputPayloadID) REFERENCES dt.Payloads(TaskHub, InstanceID, PayloadID),
-        CONSTRAINT FK_Instances_Output_Payloads FOREIGN KEY (TaskHub, InstanceID, OutputPayloadID) REFERENCES dt.Payloads(TaskHub, InstanceID, PayloadID),
-        CONSTRAINT FK_Instances_CustomStatus_Payloads FOREIGN KEY (TaskHub, InstanceID, CustomStatusPayloadID) REFERENCES dt.Payloads(TaskHub, InstanceID, PayloadID)
+        -- NOTE: No FK constraints for the Payloads table because of high performance cost and deadlock risk
 	)
 
     -- This index is used by LockNext and Purge logic
@@ -165,12 +163,13 @@ BEGIN
         [PayloadID] uniqueidentifier NULL,
 
         CONSTRAINT PK_NewEvents PRIMARY KEY (TaskHub, InstanceID, SequenceNumber),
-        CONSTRAINT FK_NewEvents_Payloads FOREIGN KEY (TaskHub, InstanceID, PayloadID) REFERENCES dt.Payloads(TaskHub, InstanceID, PayloadID)
-        -- NOTE: no FK constraint to Instances table because we want to allow events to create new instances
+        -- NOTE: no FK constraint to Instances and Payloads tables because of high performance cost and deadlock risk.
+        --       Also, we want to allow events to create new instances, which means an Instances row might not yet exist.
     )
 END
 
 IF OBJECT_ID(N'dt.History', 'U') IS NULL
+BEGIN
     CREATE TABLE dt.History (
         [TaskHub] varchar(50) NOT NULL,
         [InstanceID] varchar(100) NOT NULL,
@@ -186,11 +185,12 @@ IF OBJECT_ID(N'dt.History', 'U') IS NULL
 	    [DataPayloadID] uniqueidentifier NULL,
 
         CONSTRAINT PK_History PRIMARY KEY (TaskHub, InstanceID, ExecutionID, SequenceNumber),
-        CONSTRAINT FK_History_Instances FOREIGN KEY (TaskHub, InstanceID) REFERENCES dt.Instances(TaskHub, InstanceID) ON DELETE CASCADE,
-        CONSTRAINT FK_History_Payloads FOREIGN KEY (TaskHub, InstanceID, DataPayloadID) REFERENCES dt.Payloads(TaskHub, InstanceID, PayloadID)
+        -- NOTE: no FK constraint to Payloads or Instances tables because of high performance cost and deadlock risk
     )
+END
 
 IF OBJECT_ID(N'dt.NewTasks', 'U') IS NULL
+BEGIN
     CREATE TABLE dt.NewTasks (
         [TaskHub] varchar(50) NOT NULL,
         [SequenceNumber] bigint IDENTITY NOT NULL,  -- order is important for FIFO
@@ -207,13 +207,13 @@ IF OBJECT_ID(N'dt.NewTasks', 'U') IS NULL
         [Version] varchar(100) NULL,
 
         CONSTRAINT PK_NewTasks PRIMARY KEY (TaskHub, SequenceNumber),
-        CONSTRAINT FK_NewTasks_Instances FOREIGN KEY (TaskHub, InstanceID) REFERENCES dt.Instances(TaskHub, InstanceID) ON DELETE CASCADE,
-        CONSTRAINT FK_NewTasks_Payloads FOREIGN KEY (TaskHub, InstanceID, PayloadID) REFERENCES dt.Payloads(TaskHub, InstanceID, PayloadID)
+        -- NOTE: no FK constraint to Payloads or Instances tables because of high performance cost and deadlock risk
     )
 
     -- This index is used by vScaleHints
     CREATE NONCLUSTERED INDEX IX_NewTasks_InstanceID ON dt.NewTasks(TaskHub, InstanceID)
         INCLUDE ([SequenceNumber], [Timestamp], [LockExpiration], [VisibleTime])
+END
 GO
 
 IF OBJECT_ID(N'dt.GlobalSettings', 'U') IS NULL

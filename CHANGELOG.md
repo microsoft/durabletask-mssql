@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.10.1-beta
+
+### Updates
+
+* Removed foreign key constraints from all tables to dramatically improve performance and eliminate common sources of deadlocks ([#46](https://github.com/microsoft/durabletask-mssql/pull/46))
+* Added documentation for how to work around native dependency issues in Azure Functions.
+* Added documentation about the taskEventLockTimeout setting in the Azure Functions host.json file.
+
 ## v0.10.0-beta
 
 ### Updates

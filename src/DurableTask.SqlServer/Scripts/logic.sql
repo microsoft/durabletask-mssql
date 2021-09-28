@@ -416,10 +416,11 @@ BEGIN
     BEGIN TRANSACTION
 
     DELETE FROM NewEvents WHERE [TaskHub] = @TaskHub AND [InstanceID] IN (SELECT [InstanceID] FROM @InstanceIDs)
+    DELETE FROM NewTasks  WHERE [TaskHub] = @TaskHub AND [InstanceID] IN (SELECT [InstanceID] FROM @InstanceIDs)
     DELETE FROM Instances WHERE [TaskHub] = @TaskHub AND [InstanceID] IN (SELECT [InstanceID] FROM @InstanceIDs)
     DECLARE @deletedInstances int = @@ROWCOUNT
+    DELETE FROM History  WHERE [TaskHub] = @TaskHub AND [InstanceID] IN (SELECT [InstanceID] FROM @InstanceIDs)
     DELETE FROM Payloads WHERE [TaskHub] = @TaskHub AND [InstanceID] IN (SELECT [InstanceID] FROM @InstanceIDs)
-    -- Other relevant tables are expected to be cleaned up via cascade deletes
 
     COMMIT TRANSACTION
 
