@@ -231,6 +231,13 @@ az sql db create \
 
 If you prefer to use the Azure portal, you can alternatively follow [this Azure portal quickstart](https://docs.microsoft.com/azure/azure-sql/database/single-database-create-quickstart?tabs=azure-portal) to learn how to get started with Azure SQL database. When configuring the database in the portal, make sure to set the **Database collation** (under *Additional settings*) to `Latin1_General_100_BIN2_UTF8`.
 
+Starting from version 0.10.0 you can also use [Managed Identities](https://docs.microsoft.com/en-us/sql/connect/ado-net/sql/azure-active-directory-authentication?view=sql-server-ver15) to access the database in Azure. Make sure your application has a system or user assigned identity and uses a connection string that includes the `;Authentication=Active Directory Managed Identity` option (or `;Authentication=Active Directory Default` if you want to use this locally as well). Give the application permission to access the database using the below SQL statements:
+
+```sql
+CREATE USER [nameofapplication] FROM EXTERNAL PROVIDER;
+ALTER ROLE db_owner ADD MEMBER [nameofapplication];
+```
+
 ### Provisioning database schemas
 
 When the task hub worker for your app starts up, it will automatically check to see if the configured database has been updated with the latest DTFx schema. If the schema is not found, it will be provisioned on-demand. This automatic process also takes care of upgrading schemas if older versions are found in the database.
