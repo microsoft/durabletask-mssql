@@ -30,27 +30,9 @@ namespace DurableTask.SqlServer
 
         public async Task CreateOrUpgradeSchemaAsync(bool recreateIfExists)
         {
-            // Note that we may not be able to connect to the DB, let alone obtain the lock,
-            // if the database does not exist yet. So we obtain a connection to the 'master' database for now.
-            SqlConnection connection = this.settings.CreateConnection("master");
-            await connection.OpenAsync();
-
-            if (!await this.DoesDatabaseExistAsync(this.settings.DatabaseName, connection))
-            {
-                if (!this.settings.CreateDatabaseIfNotExists)
-                {
-                    throw new InvalidOperationException($"Database '{this.settings.DatabaseName}' does not exist.");
-                }
-
-                await this.CreateDatabaseAsync(this.settings.DatabaseName, connection);
-            }
+            SqlConnection connection = await this.CreateDatabaseConnectionAsync();
 
             // Prevent other create or delete operations from executing at the same time.
-#if NETSTANDARD2_0
-            connection.ChangeDatabase(this.settings.DatabaseName);
-#else
-            await connection.ChangeDatabaseAsync(this.settings.DatabaseName);
-#endif
             await using DatabaseLock dbLock = await this.AcquireDatabaseLockAsync(connection);
 
             var currentSchemaVersion = new SemanticVersion(0, 0, 0);
@@ -144,20 +126,15 @@ namespace DurableTask.SqlServer
         public async Task DeleteSchemaAsync()
         {
             // Prevent other create or delete operations from executing at the same time.
-            await using DatabaseLock dbLock = await this.AcquireDatabaseLockAsync();
+            SqlConnection connection = this.settings.CreateConnection();
+            await connection.OpenAsync();
+
+            await using DatabaseLock dbLock = await this.AcquireDatabaseLockAsync(connection);
             await this.DropSchemaAsync(dbLock);
             await dbLock.CommitAsync();
         }
 
         Task DropSchemaAsync(DatabaseLock dbLock) => this.ExecuteSqlScriptAsync("drop-schema.sql", dbLock);
-
-        async Task<DatabaseLock> AcquireDatabaseLockAsync()
-        {
-            SqlConnection connection = this.settings.CreateConnection();
-            await connection.OpenAsync();
-
-            return await this.AcquireDatabaseLockAsync(connection);
-        }
 
         async Task<DatabaseLock> AcquireDatabaseLockAsync(SqlConnection connection)
         {
@@ -194,6 +171,31 @@ namespace DurableTask.SqlServer
             }
 
             return new DatabaseLock(connection, lockTransaction);
+        }
+
+        async Task<SqlConnection> CreateDatabaseConnectionAsync()
+        {
+            if (!this.settings.CreateDatabaseIfNotExists)
+            {
+                return this.settings.CreateConnection();
+            }
+
+            // Note that we may not be able to connect to the DB, let alone obtain the lock,
+            // if the database does not exist yet. So we obtain a connection to the 'master' database for now.
+            SqlConnection connection = this.settings.CreateConnection("master");
+            await connection.OpenAsync();
+
+            if (!await this.DoesDatabaseExistAsync(this.settings.DatabaseName, connection))
+            {
+                await this.CreateDatabaseAsync(this.settings.DatabaseName, connection);
+            }
+
+#if NETSTANDARD2_0
+            connection.ChangeDatabase(this.settings.DatabaseName);
+#else
+            await connection.ChangeDatabaseAsync(this.settings.DatabaseName);
+#endif
+            return connection;
         }
 
         async Task<bool> DoesDatabaseExistAsync(string databaseName, SqlConnection connection)

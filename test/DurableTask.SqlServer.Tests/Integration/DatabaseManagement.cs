@@ -201,6 +201,12 @@ namespace DurableTask.SqlServer.Tests.Integration
                     isDatabaseMissing,
                     LogAssert.CommandCompleted($"CREATE DATABASE [{testDb.Name}]"),
                     LogAssert.CreatedDatabase(testDb.Name))
+                .OptionallyContainsIf(
+                    // Anywhere from 0 to 3 of the workers may end up attempting to create the database.
+                    isDatabaseMissing,
+                    LogAssert.CommandCompleted($"CREATE DATABASE [{testDb.Name}]"),
+                    LogAssert.CommandCompleted($"CREATE DATABASE [{testDb.Name}]"),
+                    LogAssert.CommandCompleted($"CREATE DATABASE [{testDb.Name}]"))
                 .Expect(
                     // 1st
                     LogAssert.AcquiredAppLock(statusCode: 0),
@@ -338,38 +344,44 @@ namespace DurableTask.SqlServer.Tests.Integration
         sealed class TestDatabase : IDisposable
         {
             readonly Server server;
-            readonly Lazy<Database> testDb;
+            readonly Database testDb;
             readonly ITestOutputHelper output;
+            bool created = false;
 
             public TestDatabase(ITestOutputHelper output)
             {
-                this.Name = $"TestDB_{DateTime.UtcNow:yyyyMMddhhmmssfffffff}";
-
                 string defaultConnectionString = SharedTestHelpers.GetDefaultConnectionString("master");
                 this.server = new Server(new ServerConnection(new SqlConnection(defaultConnectionString)));
-                this.testDb = new Lazy<Database>(
-                    () => new Database(this.server, this.Name) { Collation = "Latin1_General_100_BIN2_UTF8" });
+                this.testDb = new Database(this.server, $"TestDB_{DateTime.UtcNow:yyyyMMddhhmmssfffffff}")
+                {
+                    Collation = "Latin1_General_100_BIN2_UTF8"
+                };
 
                 this.ConnectionString =
-                    new SqlConnectionStringBuilder(SharedTestHelpers.GetDefaultConnectionString(this.Name)).ConnectionString;
+                    new SqlConnectionStringBuilder(this.server.ConnectionContext.ConnectionString)
+                    {
+                        InitialCatalog = this.testDb.Name,
+                    }
+                    .ConnectionString;
 
                 this.output = output;
             }
 
             public string ConnectionString { get; }
 
-            public string Name { get; }
+            public string Name => this.testDb.Name;
 
             public void Create()
             {
                 this.output.WriteLine($"Creating database: {this.server.Name}/{this.Name}");
-                this.testDb.Value.Create();
+                this.testDb.Create();
+                this.created = true;
             }
 
             public IEnumerable<string> GetSchemas()
             {
-                this.testDb.Value.Schemas.Refresh();
-                foreach (Schema schema in this.testDb.Value.Schemas)
+                this.testDb.Schemas.Refresh();
+                foreach (Schema schema in this.testDb.Schemas)
                 {
                     yield return schema.Name;
                 }
@@ -377,8 +389,8 @@ namespace DurableTask.SqlServer.Tests.Integration
 
             public IEnumerable<string> GetTables()
             {
-                this.testDb.Value.Tables.Refresh();
-                foreach (Table table in this.testDb.Value.Tables)
+                this.testDb.Tables.Refresh();
+                foreach (Table table in this.testDb.Tables)
                 {
                     // e.g. "dt.History"
                     yield return $"{table.Schema}.{table.Name}";
@@ -387,8 +399,8 @@ namespace DurableTask.SqlServer.Tests.Integration
 
             public IEnumerable<string> GetSprocs()
             {
-                this.testDb.Value.StoredProcedures.Refresh();
-                foreach (StoredProcedure sproc in this.testDb.Value.StoredProcedures)
+                this.testDb.StoredProcedures.Refresh();
+                foreach (StoredProcedure sproc in this.testDb.StoredProcedures)
                 {
                     if (sproc.Schema == "sys")
                     {
@@ -402,8 +414,8 @@ namespace DurableTask.SqlServer.Tests.Integration
 
             public IEnumerable<string> GetViews()
             {
-                this.testDb.Value.Views.Refresh();
-                foreach (View view in this.testDb.Value.Views)
+                this.testDb.Views.Refresh();
+                foreach (View view in this.testDb.Views)
                 {
                     if (view.Schema == "sys" || view.Schema == "INFORMATION_SCHEMA")
                     {
@@ -416,8 +428,8 @@ namespace DurableTask.SqlServer.Tests.Integration
 
             public IEnumerable<string> GetFunctions()
             {
-                this.testDb.Value.UserDefinedFunctions.Refresh();
-                foreach (UserDefinedFunction function in this.testDb.Value.UserDefinedFunctions)
+                this.testDb.UserDefinedFunctions.Refresh();
+                foreach (UserDefinedFunction function in this.testDb.UserDefinedFunctions)
                 {
                     if (function.Schema == "sys" || function.Schema == "INFORMATION_SCHEMA")
                     {
@@ -430,8 +442,11 @@ namespace DurableTask.SqlServer.Tests.Integration
 
             public void Dispose()
             {
-                this.output.WriteLine($"Dropping database: {this.server.Name}/{this.Name}");
-                this.server.KillDatabase(this.Name);
+                if (this.created)
+                {
+                    this.output.WriteLine($"Dropping database: {this.server.Name}/{this.Name}");
+                    this.server.KillDatabase(this.Name);
+                }
             }
         }
     }

@@ -16,29 +16,7 @@
         }
 
         public static IEnumerable<LogEntry> Contains(this IEnumerable<LogEntry> logs, params LogAssert[] asserts)
-        {
-            var remaining = new HashSet<LogAssert>(asserts);
-
-            foreach (LogEntry logEntry in logs)
-            {
-                LogAssert match = remaining.FirstOrDefault(assert =>
-                    string.Equals(assert.EventName, logEntry.EventId.Name) &&
-                    assert.EventId == logEntry.EventId.Id &&
-                    assert.Level == logEntry.LogLevel &&
-                    logEntry.Message.Contains(assert.MessageSubstring));
-
-                if (match != null)
-                {
-                    remaining.Remove(match);
-                }
-                else
-                {
-                    yield return logEntry;
-                }
-            }
-
-            Assert.Empty(remaining);
-        }
+            => logs.Contains(optional: false, asserts: asserts);
 
         public static IEnumerable<LogEntry> ContainsIf(this IEnumerable<LogEntry> logs, bool predicate, params LogAssert[] asserts) =>
             predicate ? logs.Contains(asserts) : logs;
@@ -68,5 +46,36 @@
 
         public static IEnumerable<LogEntry> ExpectIf(this IEnumerable<LogEntry> logs, bool predicate, params LogAssert[] asserts) =>
             predicate ? logs.Expect(asserts) : logs;
+
+        public static IEnumerable<LogEntry> OptionallyContainsIf(this IEnumerable<LogEntry> logs, bool predicate, params LogAssert[] asserts) =>
+            predicate ? logs.Contains(optional: true, asserts: asserts) : logs;
+
+        static IEnumerable<LogEntry> Contains(this IEnumerable<LogEntry> logs, bool optional, params LogAssert[] asserts)
+        {
+            var remaining = new HashSet<LogAssert>(asserts);
+
+            foreach (LogEntry logEntry in logs)
+            {
+                LogAssert match = remaining.FirstOrDefault(assert =>
+                    string.Equals(assert.EventName, logEntry.EventId.Name) &&
+                    assert.EventId == logEntry.EventId.Id &&
+                    assert.Level == logEntry.LogLevel &&
+                    logEntry.Message.Contains(assert.MessageSubstring));
+
+                if (match != null)
+                {
+                    remaining.Remove(match);
+                }
+                else
+                {
+                    yield return logEntry;
+                }
+            }
+
+            if (!optional)
+            {
+                Assert.Empty(remaining);
+            }
+        }
     }
 }
