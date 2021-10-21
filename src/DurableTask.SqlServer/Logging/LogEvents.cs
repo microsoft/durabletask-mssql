@@ -415,5 +415,71 @@ namespace DurableTask.SqlServer.Logging
                     DTUtils.AppName,
                     DTUtils.ExtensionVersionString);
         }
+
+        internal class CommandCompletedEvent : StructuredLogEvent, IEventSourceEvent
+        {
+            public CommandCompletedEvent(string commandText, long latencyMs, int retryCount, string? instanceId)
+            {
+                this.CommandText = commandText;
+                this.LatencyMs = latencyMs;
+                this.RetryCount = retryCount;
+                this.InstanceId = instanceId;
+            }
+
+            [StructuredLogField]
+            public string CommandText { get; }
+
+            [StructuredLogField]
+            public long LatencyMs { get; }
+
+            [StructuredLogField]
+            public int RetryCount { get; }
+
+            [StructuredLogField]
+            public string? InstanceId { get; }
+
+            public override LogLevel Level => LogLevel.Debug;
+
+            public override EventId EventId => new EventId(
+                EventIds.CommandCompleted,
+                nameof(EventIds.CommandCompleted));
+
+            protected override string CreateLogMessage() =>
+                string.IsNullOrEmpty(this.InstanceId) ?
+                    $"Executed SQL statement(s) '{this.CommandText}' in {this.LatencyMs}ms" :
+                    $"{this.InstanceId}: Executed SQL statement(s) '{this.CommandText}' in {this.LatencyMs}ms";
+
+            void IEventSourceEvent.WriteEventSource() =>
+                DefaultEventSource.Log.CommandCompleted(
+                    this.InstanceId,
+                    this.CommandText,
+                    this.LatencyMs,
+                    this.RetryCount,
+                    DTUtils.AppName,
+                    DTUtils.ExtensionVersionString);
+        }
+
+        internal class CreatedDatabaseEvent : StructuredLogEvent, IEventSourceEvent
+        {
+            public CreatedDatabaseEvent(string databaseName) =>
+                this.DatabaseName = databaseName;
+
+            [StructuredLogField]
+            public string DatabaseName { get; }
+
+            public override EventId EventId => new EventId(
+                EventIds.CreatedDatabase,
+                nameof(EventIds.CreatedDatabase));
+
+            public override LogLevel Level => LogLevel.Information;
+
+            protected override string CreateLogMessage() => $"Created database '{this.DatabaseName}'.";
+
+            void IEventSourceEvent.WriteEventSource() =>
+                DefaultEventSource.Log.CreatedDatabase(
+                    this.DatabaseName,
+                    DTUtils.AppName,
+                    DTUtils.ExtensionVersionString);
+        }
     }
 }

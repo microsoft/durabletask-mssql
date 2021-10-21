@@ -44,7 +44,7 @@ namespace DurableTask.SqlServer
             var logEvent = new LogEvents.AcquiredAppLockEvent(
                 statusCode,
                 latencyStopwatch.ElapsedMilliseconds);
-            
+
             this.WriteLog(logEvent);
         }
 
@@ -109,6 +109,23 @@ namespace DurableTask.SqlServer
                 userId,
                 purgedInstanceCount,
                 latencyStopwatch.ElapsedMilliseconds);
+            this.WriteLog(logEvent);
+        }
+
+        public void CommandCompleted(string commandText, Stopwatch latencyStopwatch, int retryCount, string? instanceId)
+        {
+            var logEvent = new LogEvents.CommandCompletedEvent(
+                commandText,
+                latencyStopwatch.ElapsedMilliseconds,
+                retryCount,
+                instanceId);
+
+            this.WriteLog(logEvent);
+        }
+
+        public void CreatedDatabase(string databaseName)
+        {
+            var logEvent = new LogEvents.CreatedDatabaseEvent(databaseName);
             this.WriteLog(logEvent);
         }
 

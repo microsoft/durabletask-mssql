@@ -20,5 +20,7 @@ namespace DurableTask.SqlServer.Logging
         public const int TransientDatabaseFailure = 308;
         public const int ReplicaCountChangeRecommended = 309;
         public const int PurgedInstances = 310;
+        public const int CommandCompleted = 311;
+        public const int CreatedDatabase = 312;
     }
 }
