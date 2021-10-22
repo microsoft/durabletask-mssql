@@ -24,6 +24,9 @@ namespace DurableTask.SqlServer.AzureFunctions
         [JsonProperty("taskEventBatchSize")]
         public int TaskEventBatchSize { get; set; } = 10;
 
+        [JsonProperty("createDatabaseIfNotExists")]
+        public bool CreateDatabaseIfNotExists { get; set; }
+
         internal ILoggerFactory LoggerFactory { get; set; } = NullLoggerFactory.Instance;
         
         internal SqlOrchestrationServiceSettings GetOrchestrationServiceSettings(
@@ -54,9 +57,10 @@ namespace DurableTask.SqlServer.AzureFunctions
 
             var settings = new SqlOrchestrationServiceSettings(connectionString, this.TaskHubName)
             {
+                CreateDatabaseIfNotExists = this.CreateDatabaseIfNotExists,
                 LoggerFactory = this.LoggerFactory,
-                WorkItemLockTimeout = this.TaskEventLockTimeout,
                 WorkItemBatchSize = this.TaskEventBatchSize,
+                WorkItemLockTimeout = this.TaskEventLockTimeout,
             };
 
             if (extensionOptions.MaxConcurrentActivityFunctions.HasValue)

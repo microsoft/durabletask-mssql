@@ -30,10 +30,8 @@ namespace DurableTask.SqlServer
 
         public async Task CreateOrUpgradeSchemaAsync(bool recreateIfExists)
         {
-            SqlConnection connection = await this.OpenInitialDatabaseConnectionAsync();
-
             // Prevent other create or delete operations from executing at the same time.
-            await using DatabaseLock dbLock = await this.AcquireDatabaseLockAsync(connection);
+            await using DatabaseLock dbLock = await this.AcquireDatabaseLockAsync(this.settings.CreateDatabaseIfNotExists);
 
             var currentSchemaVersion = new SemanticVersion(0, 0, 0);
             if (recreateIfExists)
@@ -126,18 +124,23 @@ namespace DurableTask.SqlServer
         public async Task DeleteSchemaAsync()
         {
             // Prevent other create or delete operations from executing at the same time.
-            SqlConnection connection = this.settings.CreateConnection();
-            await connection.OpenAsync();
-
-            await using DatabaseLock dbLock = await this.AcquireDatabaseLockAsync(connection);
+            await using DatabaseLock dbLock = await this.AcquireDatabaseLockAsync();
             await this.DropSchemaAsync(dbLock);
             await dbLock.CommitAsync();
         }
 
         Task DropSchemaAsync(DatabaseLock dbLock) => this.ExecuteSqlScriptAsync("drop-schema.sql", dbLock);
 
-        async Task<DatabaseLock> AcquireDatabaseLockAsync(SqlConnection connection)
+        async Task<DatabaseLock> AcquireDatabaseLockAsync(bool createDatabaseIfNotExists = false)
         {
+            if (createDatabaseIfNotExists)
+            {
+                await this.EnsureDatabaseExistsAsync();
+            }
+
+            SqlConnection connection = this.settings.CreateConnection();
+            await connection.OpenAsync();
+
             // It's possible that more than one worker may attempt to execute this creation logic at the same
             // time. To avoid update conflicts, we use an app lock + a transaction to ensure only a single worker
             // can perform an upgrade at a time. All other workers will wait for the first one to complete.
@@ -173,34 +176,17 @@ namespace DurableTask.SqlServer
             return new DatabaseLock(connection, lockTransaction);
         }
 
-        async Task<SqlConnection> OpenInitialDatabaseConnectionAsync()
+        async Task EnsureDatabaseExistsAsync()
         {
-            SqlConnection connection;
-            if (!this.settings.CreateDatabaseIfNotExists)
+            // Note that we may not be able to connect to the DB, let alone obtain the lock,
+            // if the database does not exist yet. So we obtain a connection to the 'master' database for now.
+            using SqlConnection connection = this.settings.CreateConnection("master");
+            await connection.OpenAsync();
+
+            if (!await this.DoesDatabaseExistAsync(this.settings.DatabaseName, connection))
             {
-                connection = this.settings.CreateConnection();
-                await connection.OpenAsync();
+                await this.CreateDatabaseAsync(this.settings.DatabaseName, connection);
             }
-            else
-            {
-                // Note that we may not be able to connect to the DB, let alone obtain the lock,
-                // if the database does not exist yet. So we obtain a connection to the 'master' database for now.
-                connection = this.settings.CreateConnection("master");
-                await connection.OpenAsync();
-
-                if (!await this.DoesDatabaseExistAsync(this.settings.DatabaseName, connection))
-                {
-                    await this.CreateDatabaseAsync(this.settings.DatabaseName, connection);
-                }
-
-#if NETSTANDARD2_0
-                connection.ChangeDatabase(this.settings.DatabaseName);
-#else
-                await connection.ChangeDatabaseAsync(this.settings.DatabaseName);
-#endif
-            }
-
-            return connection;
         }
 
         async Task<bool> DoesDatabaseExistAsync(string databaseName, SqlConnection connection)
@@ -213,7 +199,7 @@ namespace DurableTask.SqlServer
             return exists;
         }
 
-        async Task CreateDatabaseAsync(string databaseName, SqlConnection connection)
+        async Task<bool> CreateDatabaseAsync(string databaseName, SqlConnection connection)
         {
             using SqlCommand command = connection.CreateCommand();
             command.CommandText = $"CREATE DATABASE {Identifier.Escape(databaseName)} COLLATE Latin1_General_100_BIN2_UTF8";
@@ -222,10 +208,12 @@ namespace DurableTask.SqlServer
             {
                 await SqlUtils.ExecuteNonQueryAsync(command, this.traceHelper);
                 this.traceHelper.CreatedDatabase(databaseName);
+                return true;
             }
             catch (SqlException e) when (e.Number == 1801 /* Database already exists */)
             {
                 // Ignore
+                return false;
             }
         }
 
