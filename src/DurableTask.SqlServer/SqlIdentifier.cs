@@ -6,7 +6,7 @@ namespace DurableTask.SqlServer
     using System;
     using System.Text;
 
-    static class Identifier
+    static class SqlIdentifier
     {
         public static string Escape(string value)
         {

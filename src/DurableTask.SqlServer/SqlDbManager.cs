@@ -202,7 +202,7 @@ namespace DurableTask.SqlServer
         async Task<bool> CreateDatabaseAsync(string databaseName, SqlConnection connection)
         {
             using SqlCommand command = connection.CreateCommand();
-            command.CommandText = $"CREATE DATABASE {Identifier.Escape(databaseName)} COLLATE Latin1_General_100_BIN2_UTF8";
+            command.CommandText = $"CREATE DATABASE {SqlIdentifier.Escape(databaseName)} COLLATE Latin1_General_100_BIN2_UTF8";
 
             try
             {
