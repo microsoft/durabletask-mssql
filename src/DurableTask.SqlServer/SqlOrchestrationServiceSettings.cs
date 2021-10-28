@@ -35,6 +35,12 @@ namespace DurableTask.SqlServer
                 ApplicationName = this.TaskHubName,
             };
 
+            if (string.IsNullOrEmpty(builder.InitialCatalog))
+            {
+                throw new ArgumentException("Database or Initial Catalog must be specified in the connection string.", nameof(connectionString));
+            }
+
+            this.DatabaseName = builder.InitialCatalog;
             this.TaskHubConnectionString = builder.ToString();
         }
 
@@ -80,6 +86,15 @@ namespace DurableTask.SqlServer
         public int MaxActiveOrchestrations { get; set; } = Environment.ProcessorCount;
 
         /// <summary>
+        /// Gets or sets a flag indicating whether the database should be automatically created if it does not exist.
+        /// </summary>
+        /// <remarks>
+        /// If <see langword="true"/>, the user requires the permission <c>CREATE DATABASE</c>.
+        /// </remarks>
+        [JsonProperty("createDatabaseIfNotExists")]
+        public bool CreateDatabaseIfNotExists { get; set; }
+
+        /// <summary>
         /// Gets a SQL connection string associated with the configured task hub.
         /// </summary>
         [JsonIgnore]
@@ -91,6 +106,31 @@ namespace DurableTask.SqlServer
         [JsonIgnore]
         public ILoggerFactory LoggerFactory { get; set; } = NullLoggerFactory.Instance;
 
+        /// <summary>
+        /// Gets or sets the name of the database that contains the instance store.
+        /// </summary>
+        /// <remarks>
+        /// This value is derived from the value of the <c>"Initial Catalog"</c> or <c>"Database"</c>
+        /// attribute in the <see cref="TaskHubConnectionString"/>.
+        /// </remarks>
+        [JsonIgnore]
+        public string DatabaseName { get; set; }
+
         internal SqlConnection CreateConnection() => new SqlConnection(this.TaskHubConnectionString);
+
+        internal SqlConnection CreateConnection(string databaseName)
+        {
+            if (databaseName == this.DatabaseName)
+            {
+                return this.CreateConnection();
+            }
+
+            SqlConnectionStringBuilder builder = new SqlConnectionStringBuilder(this.TaskHubConnectionString)
+            {
+                InitialCatalog = databaseName
+            };
+
+            return new SqlConnection(builder.ToString());
+        }
     }
 }

@@ -52,7 +52,7 @@ namespace DurableTask.SqlServer
             int eventId = GetTaskId(reader);
 
             HistoryEvent historyEvent;
-            switch(eventType)
+            switch (eventType)
             {
                 case EventType.ContinueAsNew:
                     historyEvent = new ContinueAsNewEvent(eventId, GetPayloadText(reader));
@@ -396,6 +396,19 @@ namespace DurableTask.SqlServer
                 cmd => cmd.ExecuteNonQueryAsync(cancellationToken));
         }
 
+        public static Task<object> ExecuteScalarAsync(
+            DbCommand command,
+            LogHelper traceHelper,
+            string? instanceId = null,
+            CancellationToken cancellationToken = default)
+        {
+            return ExecuteSprocAndTraceAsync(
+                command,
+                traceHelper,
+                instanceId,
+                cmd => cmd.ExecuteScalarAsync(cancellationToken));
+        }
+
         static async Task<T> ExecuteSprocAndTraceAsync<T>(
             DbCommand command,
             LogHelper traceHelper,
@@ -410,7 +423,15 @@ namespace DurableTask.SqlServer
             finally
             {
                 context.LatencyStopwatch.Stop();
-                traceHelper.SprocCompleted(command.CommandText, context.LatencyStopwatch, context.RetryCount, instanceId);
+                switch (command.CommandType)
+                {
+                    case CommandType.StoredProcedure:
+                        traceHelper.SprocCompleted(command.CommandText, context.LatencyStopwatch, context.RetryCount, instanceId);
+                        break;
+                    default:
+                        traceHelper.CommandCompleted(command.CommandText, context.LatencyStopwatch, context.RetryCount, instanceId);
+                        break;
+                }
             }
         }
 

@@ -55,16 +55,16 @@ namespace DurableTask.SqlServer.Tests.Logging
         {
             readonly string category;
             readonly ITestOutputHelper output;
-            readonly List<LogEntry> entries;
+            readonly ConcurrentQueue<LogEntry> entries;
 
             public TestLogger(string category, ITestOutputHelper output)
             {
                 this.category = category;
                 this.output = output;
-                this.entries = new List<LogEntry>();
+                this.entries = new ConcurrentQueue<LogEntry>();
             }
 
-            public IReadOnlyCollection<LogEntry> GetLogs() => this.entries.AsReadOnly();
+            public IReadOnlyCollection<LogEntry> GetLogs() => this.entries;
 
             public void ClearLogs() => this.entries.Clear();
 
@@ -86,7 +86,7 @@ namespace DurableTask.SqlServer.Tests.Logging
                     exception,
                     formatter(state, exception),
                     state);
-                this.entries.Add(entry);
+                this.entries.Enqueue(entry);
 
                 try
                 {

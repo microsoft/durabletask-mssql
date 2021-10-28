@@ -69,24 +69,34 @@ namespace DurableTask.SqlServer.Tests.Integration
         /// that the CreateItNotExist API doesn't attempt to create it again,
         /// and then that the schema can be subsequently deleted.
         /// </summary>
-        [Fact]
-        public async Task CanCreateAndDropSchema()
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public async Task CanCreateAndDropSchema(bool isDatabaseMissing)
         {
-            using TestDatabase testDb = this.CreateTestDb();
+            using TestDatabase testDb = this.CreateTestDb(!isDatabaseMissing);
             IOrchestrationService service = this.CreateServiceWithTestDb(testDb);
 
             // Create the DB schema for the first time
             await service.CreateAsync(recreateInstanceStore: true);
 
             LogAssert.NoWarningsOrErrors(this.logProvider);
-            LogAssert.Sequence(
-                this.logProvider,
-                LogAssert.AcquiredAppLock(),
-                LogAssert.ExecutedSqlScript("drop-schema.sql"),
-                LogAssert.ExecutedSqlScript("schema-0.2.0.sql"),
-                LogAssert.ExecutedSqlScript("logic.sql"),
-                LogAssert.ExecutedSqlScript("permissions.sql"),
-                LogAssert.SprocCompleted("dt._UpdateVersion"));
+            LogAssert
+                .For(this.logProvider)
+                .Expect(
+                    LogAssert.CheckedDatabase())
+                .ExpectIf(
+                    isDatabaseMissing,
+                    LogAssert.CommandCompleted($"CREATE DATABASE [{testDb.Name}]"),
+                    LogAssert.CreatedDatabase(testDb.Name))
+                .Expect(
+                    LogAssert.AcquiredAppLock(),
+                    LogAssert.ExecutedSqlScript("drop-schema.sql"),
+                    LogAssert.ExecutedSqlScript("schema-0.2.0.sql"),
+                    LogAssert.ExecutedSqlScript("logic.sql"),
+                    LogAssert.ExecutedSqlScript("permissions.sql"),
+                    LogAssert.SprocCompleted("dt._UpdateVersion"))
+                .EndOfLog();
 
             ValidateDatabaseSchema(testDb);
 
@@ -100,6 +110,7 @@ namespace DurableTask.SqlServer.Tests.Integration
             LogAssert.NoWarningsOrErrors(this.logProvider);
             LogAssert.Sequence(
                 this.logProvider,
+                LogAssert.CheckedDatabase(),
                 LogAssert.AcquiredAppLock(),
                 LogAssert.SprocCompleted("dt._GetVersions"));
 
@@ -122,23 +133,33 @@ namespace DurableTask.SqlServer.Tests.Integration
         /// DB schema. The previous test covered CreateAsync from scratch. This one covers
         /// CreateIfNotExistsAsync from scratch.
         /// </summary>
-        [Fact]
-        public async Task CanCreateIfNotExists()
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public async Task CanCreateIfNotExists(bool isDatabaseMissing)
         {
-            using TestDatabase testDb = this.CreateTestDb();
+            using TestDatabase testDb = this.CreateTestDb(!isDatabaseMissing);
             IOrchestrationService service = this.CreateServiceWithTestDb(testDb);
 
             await service.CreateIfNotExistsAsync();
 
             LogAssert.NoWarningsOrErrors(this.logProvider);
-            LogAssert.Sequence(
-                this.logProvider,
-                LogAssert.AcquiredAppLock(),
-                LogAssert.SprocCompleted("dt._GetVersions"),
-                LogAssert.ExecutedSqlScript("schema-0.2.0.sql"),
-                LogAssert.ExecutedSqlScript("logic.sql"),
-                LogAssert.ExecutedSqlScript("permissions.sql"),
-                LogAssert.SprocCompleted("dt._UpdateVersion"));
+            LogAssert
+                .For(this.logProvider)
+                .Expect(
+                    LogAssert.CheckedDatabase())
+                .ExpectIf(
+                    isDatabaseMissing,
+                    LogAssert.CommandCompleted($"CREATE DATABASE [{testDb.Name}]"),
+                    LogAssert.CreatedDatabase(testDb.Name))
+                .Expect(
+                    LogAssert.AcquiredAppLock(),
+                    LogAssert.SprocCompleted("dt._GetVersions"),
+                    LogAssert.ExecutedSqlScript("schema-0.2.0.sql"),
+                    LogAssert.ExecutedSqlScript("logic.sql"),
+                    LogAssert.ExecutedSqlScript("permissions.sql"),
+                    LogAssert.SprocCompleted("dt._UpdateVersion"))
+                .EndOfLog();
 
             ValidateDatabaseSchema(testDb);
         }
@@ -147,10 +168,12 @@ namespace DurableTask.SqlServer.Tests.Integration
         /// Verifies that CreateIfNotExistsAsync is thread-safe.
         /// </summary>
         /// <returns></returns>
-        [Fact]
-        public void SchemaCreationIsSerializedAndIdempotent()
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public void SchemaCreationIsSerializedAndIdempotent(bool isDatabaseMissing)
         {
-            using TestDatabase testDb = this.CreateTestDb();
+            using TestDatabase testDb = this.CreateTestDb(!isDatabaseMissing);
             IOrchestrationService service = this.CreateServiceWithTestDb(testDb);
 
             // Simulate 4 workers starting up concurrently and trying to initialize
@@ -163,30 +186,55 @@ namespace DurableTask.SqlServer.Tests.Integration
             ValidateDatabaseSchema(testDb);
 
             // Operations are expected to be serialized, making the log output deterministic.
-            LogAssert.Sequence(
-                this.logProvider,
-                // 1st
-                LogAssert.AcquiredAppLock(statusCode: 0),
-                LogAssert.SprocCompleted("dt._GetVersions"),
-                LogAssert.ExecutedSqlScript("schema-0.2.0.sql"),
-                LogAssert.ExecutedSqlScript("logic.sql"),
-                LogAssert.ExecutedSqlScript("permissions.sql"),
-                LogAssert.SprocCompleted("dt._UpdateVersion"),
-                // 2nd
-                LogAssert.AcquiredAppLock(statusCode: 1),
-                LogAssert.SprocCompleted("dt._GetVersions"),
-                // 3rd
-                LogAssert.AcquiredAppLock(statusCode: 1),
-                LogAssert.SprocCompleted("dt._GetVersions"),
-                // 4th
-                LogAssert.AcquiredAppLock(statusCode: 1),
-                LogAssert.SprocCompleted("dt._GetVersions"));
+            LogAssert
+                .For(this.logProvider)
+                .Expect(
+                    // At least 1 worker will check the database first
+                    LogAssert.CheckedDatabase())
+                .Contains(
+                    // The other 3 workers will check in some non-deterministic order
+                    LogAssert.CheckedDatabase(),
+                    LogAssert.CheckedDatabase(),
+                    LogAssert.CheckedDatabase())
+                .ContainsIf(
+                    // One worker may obtain the lock after another worker created the database.
+                    isDatabaseMissing,
+                    LogAssert.CommandCompleted($"CREATE DATABASE [{testDb.Name}]"),
+                    LogAssert.CreatedDatabase(testDb.Name))
+                .OptionallyContainsIf(
+                    // Anywhere from 0 to 3 of the workers may end up attempting to create the database.
+                    isDatabaseMissing,
+                    LogAssert.CommandCompleted($"CREATE DATABASE [{testDb.Name}]"),
+                    LogAssert.CommandCompleted($"CREATE DATABASE [{testDb.Name}]"),
+                    LogAssert.CommandCompleted($"CREATE DATABASE [{testDb.Name}]"))
+                .Expect(
+                    // 1st
+                    LogAssert.AcquiredAppLock(statusCode: 0),
+                    LogAssert.SprocCompleted("dt._GetVersions"),
+                    LogAssert.ExecutedSqlScript("schema-0.2.0.sql"),
+                    LogAssert.ExecutedSqlScript("logic.sql"),
+                    LogAssert.ExecutedSqlScript("permissions.sql"),
+                    LogAssert.SprocCompleted("dt._UpdateVersion"),
+                    // 2nd
+                    LogAssert.AcquiredAppLock(),
+                    LogAssert.SprocCompleted("dt._GetVersions"),
+                    // 3rd
+                    LogAssert.AcquiredAppLock(),
+                    LogAssert.SprocCompleted("dt._GetVersions"),
+                    // 4th
+                    LogAssert.AcquiredAppLock(),
+                    LogAssert.SprocCompleted("dt._GetVersions"))
+                .EndOfLog();
         }
 
-        TestDatabase CreateTestDb()
+        TestDatabase CreateTestDb(bool initializeDatabase = true)
         {
             var testDb = new TestDatabase(this.output);
-            testDb.Create();
+            if (initializeDatabase)
+            {
+                testDb.Create();
+            }
+
             return testDb;
         }
 
@@ -194,6 +242,7 @@ namespace DurableTask.SqlServer.Tests.Integration
         {
             var options = new SqlOrchestrationServiceSettings(testDb.ConnectionString)
             {
+                CreateDatabaseIfNotExists = true,
                 LoggerFactory = LoggerFactory.Create(builder =>
                 {
                     builder.SetMinimumLevel(LogLevel.Trace);
@@ -297,18 +346,18 @@ namespace DurableTask.SqlServer.Tests.Integration
             readonly Server server;
             readonly Database testDb;
             readonly ITestOutputHelper output;
+            bool created = false;
 
             public TestDatabase(ITestOutputHelper output)
             {
-                string databaseName = $"TestDB_{DateTime.UtcNow:yyyyMMddhhmmssfffffff}";
-
-                this.server = new Server(new ServerConnection(new SqlConnection(SharedTestHelpers.GetDefaultConnectionString())));
-                this.testDb = new Database(this.server, databaseName)
+                string defaultConnectionString = SharedTestHelpers.GetDefaultConnectionString("master");
+                this.server = new Server(new ServerConnection(new SqlConnection(defaultConnectionString)));
+                this.testDb = new Database(this.server, $"TestDB_{DateTime.UtcNow:yyyyMMddhhmmssfffffff}")
                 {
-                    Collation = "Latin1_General_100_BIN2_UTF8",
+                    Collation = "Latin1_General_100_BIN2_UTF8"
                 };
 
-                this.ConnectionString = 
+                this.ConnectionString =
                     new SqlConnectionStringBuilder(this.server.ConnectionContext.ConnectionString)
                     {
                         InitialCatalog = this.testDb.Name,
@@ -320,10 +369,13 @@ namespace DurableTask.SqlServer.Tests.Integration
 
             public string ConnectionString { get; }
 
+            public string Name => this.testDb.Name;
+
             public void Create()
             {
-                this.output.WriteLine($"Creating database: {this.server.Name}/{this.testDb.Name}");
+                this.output.WriteLine($"Creating database: {this.server.Name}/{this.Name}");
                 this.testDb.Create();
+                this.created = true;
             }
 
             public IEnumerable<string> GetSchemas()
@@ -390,8 +442,11 @@ namespace DurableTask.SqlServer.Tests.Integration
 
             public void Dispose()
             {
-                this.output.WriteLine($"Dropping database: {this.server.Name}/{this.testDb.Name}");
-                this.server.KillDatabase(this.testDb.Name);
+                if (this.created)
+                {
+                    this.output.WriteLine($"Dropping database: {this.server.Name}/{this.Name}");
+                    this.server.KillDatabase(this.Name);
+                }
             }
         }
     }

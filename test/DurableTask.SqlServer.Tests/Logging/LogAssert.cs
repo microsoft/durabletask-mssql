@@ -40,6 +40,9 @@ namespace DurableTask.SqlServer.Tests.Logging
         public static LogAssert AcquiredAppLock(int statusCode = 0) =>
             new LogAssert(300, "AcquiredAppLock", LogLevel.Information, $"status code = {statusCode}");
 
+        public static LogAssert AcquiredAppLock() =>
+            new LogAssert(300, "AcquiredAppLock", LogLevel.Information, "");
+
         public static LogAssert ExecutedSqlScript(string scriptName) =>
             new LogAssert(301, "ExecutedSqlScript", LogLevel.Information, scriptName);
 
@@ -61,60 +64,35 @@ namespace DurableTask.SqlServer.Tests.Logging
         public static LogAssert DuplicateExecutionDetected(string name) =>
             new LogAssert(307, "DuplicateExecutionDetected", LogLevel.Warning, name);
 
-        public static void LogEntryCount(TestLogProvider logProvider, int expected) =>
-            Assert.Equal(expected, GetLogs(logProvider).Count());
+        public static LogAssert CommandCompleted(string commandSnippet) =>
+            new LogAssert(311, "CommandCompleted", LogLevel.Debug, commandSnippet);
 
-        static IEnumerable<LogEntry> GetLogs(TestLogProvider logProvider)
+        public static LogAssert CheckedDatabase()
+            => CommandCompleted("SELECT 1 FROM sys.databases WHERE name = @databaseName");
+
+        public static LogAssert CreatedDatabase(string name) =>
+            new LogAssert(312, "CreatedDatabase", LogLevel.Information, name);
+
+        public static void LogEntryCount(TestLogProvider logProvider, int expected) =>
+            Assert.Equal(expected, GetLogs(logProvider).Count);
+
+        static IReadOnlyCollection<LogEntry> GetLogs(TestLogProvider logProvider)
         {
             Assert.True(logProvider.TryGetLogs("DurableTask.SqlServer", out IReadOnlyCollection<LogEntry> logs));
             return logs;
         }
 
-        public static void Sequence(TestLogProvider logProvider, params LogAssert[] asserts)
+        public static IReadOnlyCollection<LogEntry> For(TestLogProvider logProvider)
         {
-            LogEntry[] actualLogs = GetLogs(logProvider).ToArray();
-
-            string expected = Environment.NewLine + string.Join(Environment.NewLine, asserts.Select(log => log.EventName)) + Environment.NewLine;
-            string actual = Environment.NewLine + string.Join(Environment.NewLine, actualLogs.Select(log => log.EventId.Name)) + Environment.NewLine;
-
-            for (int i = 0; i < actualLogs.Length; i++)
-            {
-                Assert.True(asserts.Length > i, $"{asserts.Length} log entries were expected but {actualLogs.Length} were found. Expected:{expected}Actual:{actual}");
-
-                Assert.Equal(asserts[i].EventName, actualLogs[i].EventId.Name);
-                Assert.Equal(asserts[i].EventId, actualLogs[i].EventId.Id);
-                Assert.Equal(asserts[i].Level, actualLogs[i].LogLevel);
-                Assert.Contains(asserts[i].MessageSubstring, actualLogs[i].Message);
-
-                ValidateStructuredLogFields(actualLogs[i]);
-            }
-
-            // If this fails, it means that more logs were expected.
-            Assert.True(
-                asserts.Length == actualLogs.Length,
-                $"{asserts.Length} log entries were expected but only {actualLogs.Length} were found. Expected:{expected}Actual:{actual}");
+            Assert.True(logProvider.TryGetLogs("DurableTask.SqlServer", out IReadOnlyCollection<LogEntry> logs));
+            return logs;
         }
 
-        public static void Contains(TestLogProvider logProvider, params LogAssert[] asserts)
-        {
-            var remaining = new HashSet<LogAssert>(asserts);
+        public static void Sequence(TestLogProvider logProvider, params LogAssert[] asserts) =>
+            For(logProvider).Expect(asserts).EndOfLog();
 
-            foreach (LogEntry logEntry in GetLogs(logProvider))
-            {
-                foreach (LogAssert assert in remaining.ToArray())
-                {
-                    if (string.Equals(assert.EventName, logEntry.EventId.Name) &&
-                        assert.EventId == logEntry.EventId.Id &&
-                        assert.Level == logEntry.LogLevel &&
-                        logEntry.Message.Contains(assert.MessageSubstring))
-                    {
-                        remaining.Remove(assert);
-                    }
-                }
-            }
-
-            Assert.Empty(remaining);
-        }
+        public static void Contains(TestLogProvider logProvider, params LogAssert[] asserts) =>
+            For(logProvider).Contains(asserts).AllowAdditionalLogs();
 
         internal static void ValidateStructuredLogFields(LogEntry log)
         {
@@ -157,6 +135,13 @@ namespace DurableTask.SqlServer.Tests.Logging
                 case EventIds.ReplicaCountChangeRecommended:
                     Assert.Contains("CurrentCount", fields);
                     Assert.Contains("RecommendedCount", fields);
+                    break;
+                case EventIds.CommandCompleted:
+                    Assert.True(fields.ContainsKey("CommandText"));
+                    Assert.True(fields.ContainsKey("LatencyMs"));
+                    break;
+                case EventIds.CreatedDatabase:
+                    Assert.True(fields.ContainsKey("DatabaseName"));
                     break;
                 default:
                     throw new ArgumentException($"Log event {log.EventId} is not known. Does it need to be added to the log validator?", nameof(log));

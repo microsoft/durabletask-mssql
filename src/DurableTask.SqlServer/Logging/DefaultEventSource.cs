@@ -232,5 +232,39 @@ namespace DurableTask.SqlServer.Logging
                 AppName,
                 ExtensionVersion);
         }
+
+        [Event(EventIds.CommandCompleted, Level = EventLevel.Verbose)]
+        public void CommandCompleted(
+            string? InstanceId,
+            string CommandText,
+            long LatencyMs,
+            int RetryCount,
+            string AppName,
+            string ExtensionVersion)
+        {
+            // TODO: Switch to WriteEventCore for better performance
+            this.WriteEvent(
+                EventIds.CommandCompleted,
+                InstanceId ?? string.Empty,
+                CommandText,
+                LatencyMs,
+                RetryCount,
+                AppName,
+                ExtensionVersion);
+        }
+
+        [Event(EventIds.CreatedDatabase, Level = EventLevel.Informational)]
+        internal void CreatedDatabase(
+            string DatabaseName,
+            string AppName,
+            string ExtensionVersion)
+        {
+            // TODO: Use WriteEventCore for better performance
+            this.WriteEvent(
+                EventIds.CreatedDatabase,
+                DatabaseName,
+                AppName,
+                ExtensionVersion);
+        }
     }
 }
