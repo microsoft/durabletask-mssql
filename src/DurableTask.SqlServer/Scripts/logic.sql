@@ -1152,7 +1152,7 @@ BEGIN
        We need to do this first and hold the lock to avoid race conditions and deadlocks with other operations. */
     DECLARE @ExistingInstanceID varchar(100)
 
-    SELECT @ExistingInstanceID = R.[InstanceId]
+    SELECT @ExistingInstanceID = R.[InstanceID]
     FROM Instances I WITH (HOLDLOCK)
         INNER JOIN @Results R ON 
             I.[TaskHub] = @TaskHub AND
