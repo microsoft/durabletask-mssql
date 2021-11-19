@@ -101,7 +101,12 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
 
         protected Task CallFunctionAsync(string name, IDictionary<string, object?>? args = null)
         {
-            IJobHost jobHost = this.functionsHost.Services.GetService<IJobHost>();
+            IJobHost? jobHost = this.functionsHost.Services.GetService<IJobHost>();
+            if (jobHost == null)
+            {
+                throw new InvalidOperationException("Failed to find the IJobHost service in the Functions host!");
+            }
+
             return jobHost.CallAsync(name, args);
         }
 

@@ -139,7 +139,7 @@ namespace DurableTask.SqlServer.Tests.Utils
         {
             var result = new StringBuilder(length);
             byte[] randomBytes = new byte[length * 4];
-            using (var rng = new RNGCryptoServiceProvider())
+            using (var rng = RandomNumberGenerator.Create())
             {
                 rng.GetBytes(randomBytes);
 
