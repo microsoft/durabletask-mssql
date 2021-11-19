@@ -51,7 +51,8 @@ You can configure the Durable SQL provider by updating the `extensions/durableTa
       "storageProvider": {
         "type": "mssql",
         "connectionStringName": "SQLDB_Connection",
-        "taskEventLockTimeout": "00:02:00"
+        "taskEventLockTimeout": "00:02:00",
+        "createDatabaseIfNotExists": true
       }
     }
   }
@@ -61,6 +62,8 @@ You can configure the Durable SQL provider by updating the `extensions/durableTa
 The `"type": "mssql"` specification is required to inform the Durable Functions extension that it should use the SQL backend instead of the default Azure Storage backend.
 
 The `taskEventLockTimeout` setting is an optional time-span value in the form hh:mm:ss. This setting controls how long events in the *dt.NewTasks* and *dt.NewEvents* tables remain locked after being queried. While locked, no other app instance can process these tasks. If an app instance that has locked these tasks crashes or becomes unresponsive, another app instance will be able to start processing these tasks once the timeout has expired. The default value is 2 minutes (00:02:00).
+
+The `createDatabaseIfNotExists` setting is an optional boolean value with a default of `false`. If set to `true`, the database will be created automatically when the app starts up with the name `DurableDB` and the `Latin1_General_100_BIN2_UTF8` collation.
 
 The `connectionStringName` setting is required and must be set to the name of the app setting or environment variable that contains your SQL connection string. In the above example, `SQLDB_Connection` is the name of an existing app setting or environment variable. If you're running locally and using a **local.settings.json** file, you can configure it as follows:
 

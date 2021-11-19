@@ -7,6 +7,9 @@
     <LangVersion>8.0</LangVersion>
     <Nullable>enable</Nullable>
     <AssemblyOriginatorKeyFile>..\..\sign.snk</AssemblyOriginatorKeyFile>
+
+    <!-- Durable Functions analyzer warnings that are either wrong or not applicable -->
+    <NoWarn>DF0108;DF0110;DF0305</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

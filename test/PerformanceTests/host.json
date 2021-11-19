@@ -6,7 +6,8 @@
       "maxConcurrentActivityFunctions": 8,
       "storageProvider": {
         "type": "mssql",
-        "connectionStringName": "SQLDB_Connection"
+        "connectionStringName": "SQLDB_Connection",
+        "createDatabaseIfNotExists": true
       }
     }
   },

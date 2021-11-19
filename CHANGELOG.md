@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.11.0-beta
+
+### New
+
+* Feature to automatically create database if not present ([#49](https://github.com/microsoft/durabletask-mssql/pull/49)) - contributed by [@wsugarman](https://github.com/wsugarman)
+
+### Updates
+
+* Fix logic.sql's invalid column usage ([#52](https://github.com/microsoft/durabletask-mssql/pull/52)) - contributed by [@jasonwun](https://github.com/jasonwun)
+* Fix for Timer events fire before completion ([#50](https://github.com/microsoft/durabletask-mssql/issues/50)) - thanks to [@vivogaet](https://github.com/vivogaet) for pointing out the issue and the fix.
+* Updated performance testing app to Functions v4 and .NET 6
+* Updated [Microsoft.Azure.DurableTask.Core](https://www.nuget.org/packages/Microsoft.Azure.DurableTask.Core) dependency to v2.6.*.
+* Updated [Microsoft.Azure.WebJobs.Extensions.DurableTask](https://www.nuget.org/packages/Microsoft.Azure.WebJobs.Extensions.DurableTask) dependency to v2.6.*.
+
 ## v0.10.1-beta
 
 ### Updates

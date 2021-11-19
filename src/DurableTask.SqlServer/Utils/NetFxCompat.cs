@@ -83,15 +83,4 @@ namespace DurableTask.SqlServer
         }
     }
 }
-
-// https://www.strathweb.com/2019/11/using-async-disposable-and-async-enumerable-in-frameworks-older-than-net-core-3-0/
-namespace System
-{
-    using System.Threading.Tasks;
-
-    public interface IAsyncDisposable
-    {
-        ValueTask DisposeAsync();
-    }
-}
 #endif

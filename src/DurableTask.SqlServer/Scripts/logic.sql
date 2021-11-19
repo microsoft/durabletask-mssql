@@ -555,7 +555,10 @@ BEGIN
             P.[TaskHub] = @TaskHub AND
             P.[InstanceID] = N.[InstanceID] AND
             P.[PayloadID] = N.[PayloadID]
-    WHERE N.[TaskHub] = @TaskHub AND N.[InstanceID] = @instanceID
+    WHERE
+        N.[TaskHub] = @TaskHub AND
+        N.[InstanceID] = @instanceID AND
+        (N.[VisibleTime] IS NULL OR N.[VisibleTime] < @now)
 
     -- Bail if no events are returned - this implies that another thread already took them (???)
     IF @@ROWCOUNT = 0
