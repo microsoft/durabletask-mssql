@@ -5,6 +5,12 @@ pool:
   vmImage: 'windows-latest'
 
 steps:
+- task: UseDotNet@2
+  displayName: 'Use the .NET 6 SDK'
+  inputs:
+    packageType: 'sdk'
+    version: '6.0.x'
+
 # Start by restoring all the dependencies. This needs to be its own task
 # from what I can tell.
 - task: DotNetCoreCLI@2
@@ -20,7 +26,7 @@ steps:
   displayName: 'Build'
   inputs:
     solution: '**/*.sln'
-    vsVersion: 16.0
+    vsVersion: 'latest'
     logFileVerbosity: minimal
     configuration: Release
     msbuildArgs: /p:GITHUB_RUN_NUMBER=$(Build.BuildId) /p:ContinuousIntegrationBuild=true

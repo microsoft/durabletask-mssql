@@ -27,8 +27,10 @@ namespace PerformanceTests
 
         public int Get() => this.CurrentValue;
 
-#pragma warning disable DF0307 // DispatchAsync must be used with the entity name, equal to the name of the function it's used in.
+#pragma warning disable DF0305 // Entity function name must match an existing entity class name.
         [FunctionName(EntityName)]
+#pragma warning restore DF0305 // Entity function name must match an existing entity class name.
+#pragma warning disable DF0307 // DispatchAsync must be used with the entity name, equal to the name of the function it's used in.
         public static Task Run([EntityTrigger] IDurableEntityContext ctx) => ctx.DispatchAsync<ManyEntities>();
 #pragma warning restore DF0307 // DispatchAsync must be used with the entity name, equal to the name of the function it's used in.
 

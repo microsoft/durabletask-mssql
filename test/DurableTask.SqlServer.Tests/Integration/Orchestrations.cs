@@ -226,6 +226,33 @@ namespace DurableTask.SqlServer.Tests.Integration
         }
 
         [Fact]
+        public async Task TimerCancellation()
+        {
+            TestInstance<string> instance = await this.testService.RunOrchestration(
+                input: "",
+                orchestrationName: "TimerCancellationTest",
+                implementation: async (ctx, input) =>
+                {
+                    using var cts = new CancellationTokenSource();
+                    Task task = ctx.ScheduleTask<string>("SayHello", "", input);
+                    Task timer = ctx.CreateTimer(ctx.CurrentUtcDateTime.AddSeconds(20), "", cts.Token);
+                    Task winner = await Task.WhenAny(task, timer);
+                    if (timer.IsCompleted)
+                    {
+                        return "Failed: timer shouldn't be completed!";
+                    }
+
+                    // Need to cancel the timer to allow the orchestration to complete
+                    cts.Cancel();
+                    return "done";
+                },
+                activities: ("SayHello", TestService.MakeActivity((TaskContext ctx, string input) => $"Hello, {input}!")));
+
+            OrchestrationState state = await instance.WaitForCompletion(
+                expectedOutput: $"done");
+        }
+
+        [Fact]
         public async Task OrchestrationException()
         {
             string errorMessage = "Kah-BOOOOOM!!!";
@@ -401,7 +428,7 @@ namespace DurableTask.SqlServer.Tests.Integration
                     if (input < 3)
                     {
                         int subResult =
-                            await ctx.CreateSubOrchestrationInstance<int>(orchestrationName, string.Empty, input+1);
+                            await ctx.CreateSubOrchestrationInstance<int>(orchestrationName, string.Empty, $"Sub{input}", input+1);
                         result += subResult;
                     }
                     return result;

@@ -329,6 +329,14 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
             Assert.Equal(0, purgeResult.InstancesDeleted);
         }
 
+        [Fact]
+        public async Task CanInvokeSubOrchestration()
+        {
+            DurableOrchestrationStatus status = await this.RunOrchestrationAsync(nameof(Functions.SubOrchestrationTest));
+            Assert.Equal(OrchestrationRuntimeStatus.Completed, status.RuntimeStatus);
+            Assert.Equal("done", status.Output);
+        }
+
         static class Functions
         {
             [FunctionName(nameof(Sequence))]
@@ -443,6 +451,13 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
 
             [FunctionName(nameof(NoOp))]
             public static Task NoOp([OrchestrationTrigger] IDurableOrchestrationContext ctx) => Task.CompletedTask;
+
+            [FunctionName(nameof(SubOrchestrationTest))]
+            public static async Task<string> SubOrchestrationTest([OrchestrationTrigger] IDurableOrchestrationContext ctx)
+            {
+                await ctx.CallSubOrchestratorAsync(nameof(NoOp), "NoOpInstanceId", null);
+                return "done";
+            }
         }
     }
 }
