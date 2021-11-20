@@ -6,6 +6,12 @@ pool:
 
 steps:
 - task: UseDotNet@2
+  displayName: 'Use the .NET Core 2.1 SDK (required for building signing)'
+  inputs:
+    packageType: 'sdk'
+    version: '2.1.x'
+
+- task: UseDotNet@2
   displayName: 'Use the .NET 6 SDK'
   inputs:
     packageType: 'sdk'
