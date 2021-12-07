@@ -43,7 +43,8 @@ IF TYPE_ID(N'dt.HistoryEvents') IS NULL
         [PayloadText] varchar(max) NULL,
         [PayloadID] uniqueidentifier NULL,
         [ParentInstanceID] varchar(100) NULL,
-        [Version] varchar(100) NULL
+        [Version] varchar(100) NULL,
+        [ParentTraceContext] varchar(600) NULL
     )
 GO
 
@@ -62,7 +63,8 @@ IF TYPE_ID(N'dt.OrchestrationEvents') IS NULL
         [PayloadText] varchar(max) NULL,
         [PayloadID] uniqueidentifier NULL,
         [ParentInstanceID] varchar(100) NULL,
-        [Version] varchar(100) NULL
+        [Version] varchar(100) NULL,
+        [ParentTraceContext] varchar(600) NULL
     )
 GO
 
@@ -80,7 +82,8 @@ IF TYPE_ID(N'dt.TaskEvents') IS NULL
         [Reason] varchar(max) NULL,
         [PayloadText] varchar(max) NULL,
         [PayloadID] uniqueidentifier NULL,
-        [Version] varchar(100) NULL
+        [Version] varchar(100) NULL,
+        [ParentTraceContext] varchar(600) NULL
     )
 GO
 
@@ -132,6 +135,7 @@ BEGIN
 		[OutputPayloadID] uniqueidentifier NULL,
 		[CustomStatusPayloadID] uniqueidentifier NULL,
         [ParentInstanceID] varchar(100) NULL,
+        [ParentTraceContext] varchar(600) NULL,
 
         CONSTRAINT PK_Instances PRIMARY KEY (TaskHub, InstanceID),
         -- NOTE: No FK constraints for the Payloads table because of high performance cost and deadlock risk
@@ -205,6 +209,7 @@ BEGIN
         [LockExpiration] datetime2 NULL,
         [PayloadID] uniqueidentifier NULL,
         [Version] varchar(100) NULL,
+        [ParentTraceContext] varchar(600) NULL,
 
         CONSTRAINT PK_NewTasks PRIMARY KEY (TaskHub, SequenceNumber),
         -- NOTE: no FK constraint to Payloads or Instances tables because of high performance cost and deadlock risk

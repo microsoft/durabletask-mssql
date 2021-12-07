@@ -149,7 +149,8 @@ CREATE OR ALTER PROCEDURE dt.CreateInstance
     @InstanceID varchar(100) = NULL,
     @ExecutionID varchar(50) = NULL,
     @InputText varchar(MAX) = NULL,
-    @StartTime datetime2 = NULL
+    @StartTime datetime2 = NULL,
+    @ParentTraceContext varchar(600) = NULL
 AS
 BEGIN
     DECLARE @TaskHub varchar(50) = dt.CurrentTaskHub()
@@ -202,6 +203,7 @@ BEGIN
         [InstanceID],
         [ExecutionID],
         [RuntimeStatus],
+        [ParentTraceContext],
         [InputPayloadID])
     VALUES (
         @Name,
@@ -210,6 +212,7 @@ BEGIN
         @InstanceID,
         @ExecutionID,
         @RuntimeStatus,
+        @ParentTraceContext,
         @InputPayloadID
     )
 
@@ -501,6 +504,7 @@ BEGIN
     DECLARE @instanceID varchar(100)
     DECLARE @parentInstanceID varchar(100)
     DECLARE @version varchar(100)
+    DECLARE @parentTraceContext varchar(600)
     DECLARE @TaskHub varchar(50) = dt.CurrentTaskHub()
 
     BEGIN TRANSACTION
@@ -519,7 +523,8 @@ BEGIN
 	    [LockExpiration] = @LockExpiration,
         @instanceID = I.[InstanceID],
         @parentInstanceID = I.[ParentInstanceID],
-        @version = I.[Version]
+        @version = I.[Version],
+        @parentTraceContext = I.[ParentTraceContext]
     FROM 
         dt.Instances I WITH (READPAST) INNER JOIN NewEvents E WITH (READPAST) ON
             E.[TaskHub] = @TaskHub AND
@@ -549,7 +554,8 @@ BEGIN
         P.[PayloadID],
         DATEDIFF(millisecond, [Timestamp], @now) AS [WaitTime],
         @parentInstanceID as [ParentInstanceID],
-        @version as [Version]
+        @version as [Version],
+        @parentTraceContext as [ParentTraceContext]
     FROM NewEvents N
         LEFT OUTER JOIN dt.[Payloads] P ON 
             P.[TaskHub] = @TaskHub AND
@@ -585,7 +591,8 @@ BEGIN
         (CASE WHEN [EventType] IN ('TaskScheduled', 'SubOrchestrationInstanceCreated') THEN NULL ELSE P.[Text] END) AS [PayloadText],
         [PayloadID],
         @parentInstanceID as [ParentInstanceID],
-        @version as [Version]
+        @version as [Version],
+        @parentTraceContext as [ParentTraceContext]
     FROM History H WITH (INDEX (PK_History))
         LEFT OUTER JOIN Payloads P ON
             P.[TaskHub] = @TaskHub AND
@@ -734,14 +741,16 @@ BEGIN
         [ExecutionID],
         [Name],
         [Version],
-        [RuntimeStatus])
+        [RuntimeStatus],
+        [ParentTraceContext])
     SELECT DISTINCT
         @TaskHub,
         E.[InstanceID],
         NEWID(),
         SUBSTRING(E.[InstanceID], 2, CHARINDEX('@', E.[InstanceID], 2) - 2),
         '',
-        'Pending'
+        'Pending',
+        E.[ParentTraceContext]
     FROM @NewOrchestrationEvents E
     WHERE LEFT(E.[InstanceID], 1) = '@'
         AND CHARINDEX('@', E.[InstanceID], 2) > 0
@@ -749,7 +758,7 @@ BEGIN
             SELECT 1
             FROM dt.Instances I
             WHERE [TaskHub] = @TaskHub AND I.[InstanceID] = E.[InstanceID])
-    GROUP BY E.[InstanceID]
+    GROUP BY E.[InstanceID], E.[ParentTraceContext]
     ORDER BY E.[InstanceID] ASC
 
     -- Create sub-orchestration instances
@@ -760,7 +769,8 @@ BEGIN
         [Name],
         [Version],
         [ParentInstanceID],
-        [RuntimeStatus])
+        [RuntimeStatus],
+        [ParentTraceContext])
     SELECT DISTINCT
         @TaskHub,
         E.[InstanceID],
@@ -768,7 +778,8 @@ BEGIN
         E.[Name],
         E.[Version],
         E.[ParentInstanceID],
-        'Pending'
+        'Pending',
+        E.[ParentTraceContext]
     FROM @NewOrchestrationEvents E
     WHERE E.[EventType] IN ('ExecutionStarted')
         AND NOT EXISTS (
@@ -865,7 +876,8 @@ BEGIN
         [LockedBy],
         [LockExpiration],
         [PayloadID],
-        [Version]
+        [Version],
+        [ParentTraceContext]
     )
     OUTPUT
         INSERTED.[SequenceNumber],
@@ -880,7 +892,8 @@ BEGIN
         [LockedBy],
         [LockExpiration],
         [PayloadID],
-        [Version]
+        [Version],
+        [ParentTraceContext]
     FROM @NewTaskEvents
 
     COMMIT TRANSACTION
@@ -911,20 +924,22 @@ BEGIN
             [ExecutionID],
             [Name],
             [Version],
-            [RuntimeStatus])
+            [RuntimeStatus],
+            [ParentTraceContext])
         SELECT DISTINCT
             @TaskHub,
             E.[InstanceID],
             NEWID(),
             SUBSTRING(E.[InstanceID], 2, CHARINDEX('@', E.[InstanceID], 2) - 2),
             '',
-            'Pending'
+            'Pending',
+            E.[ParentTraceContext]
         FROM @NewOrchestrationEvents E
         WHERE NOT EXISTS (
             SELECT 1
             FROM Instances I
             WHERE [TaskHub] = @TaskHub AND I.[InstanceID] = E.[InstanceID])
-        GROUP BY E.[InstanceID]
+        GROUP BY E.[InstanceID], E.[ParentTraceContext]
         ORDER BY E.[InstanceID] ASC
     END TRY
     BEGIN CATCH
@@ -998,7 +1013,8 @@ BEGIN
         CASE WHEN @FetchOutput = 1 THEN (SELECT TOP 1 [Text] FROM Payloads P WHERE
             P.[TaskHub] = @TaskHub AND
             P.[InstanceID] = I.[InstanceID] AND
-            P.[PayloadID] = I.[OutputPayloadID]) ELSE NULL END AS [OutputText]
+            P.[PayloadID] = I.[OutputPayloadID]) ELSE NULL END AS [OutputText],
+        I.[ParentTraceContext]
     FROM Instances I
     WHERE
         I.[TaskHub] = @TaskHub AND
@@ -1041,7 +1057,8 @@ BEGIN
         CASE WHEN @FetchOutput = 1 THEN (SELECT TOP 1 [Text] FROM Payloads P WHERE
             P.[TaskHub] = @TaskHub AND
             P.[InstanceID] = I.[InstanceID] AND
-            P.[PayloadID] = I.[OutputPayloadID]) ELSE NULL END AS [OutputText]
+            P.[PayloadID] = I.[OutputPayloadID]) ELSE NULL END AS [OutputText],
+        I.[ParentTraceContext]
     FROM
         Instances I
     WHERE
@@ -1103,7 +1120,8 @@ BEGIN
             P.[TaskHub] = @TaskHub AND
             P.[InstanceID] = N.[InstanceID] AND
             P.[PayloadID] = N.[PayloadID]) AS [PayloadText],
-        DATEDIFF(millisecond, [Timestamp], @now) AS [WaitTime]
+        DATEDIFF(millisecond, [Timestamp], @now) AS [WaitTime],
+        [ParentTraceContext]
     FROM NewTasks N
     WHERE [TaskHub] = @TaskHub AND [SequenceNumber] = @SequenceNumber
 

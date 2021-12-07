@@ -18,7 +18,6 @@ namespace DurableTask.SqlServer
     using DurableTask.SqlServer.SqlTypes;
     using DurableTask.SqlServer.Utils;
     using Microsoft.Data.SqlClient;
-    using Newtonsoft.Json;
 
     public class SqlOrchestrationService : OrchestrationServiceBase
     {
@@ -414,6 +413,7 @@ namespace DurableTask.SqlServer
             command.Parameters.Add("@ExecutionID", SqlDbType.VarChar, size: 50).Value = instance.ExecutionId;
             command.Parameters.Add("@InputText", SqlDbType.VarChar).Value = startEvent.Input;
             command.Parameters.Add("@StartTime", SqlDbType.DateTime2).Value = startEvent.ScheduledStartTime;
+            command.Parameters.Add("@ParentTraceContext", SqlDbType.VarChar, size: 600).Value = SqlUtils.GetParentTraceContext(startEvent);
 
             await SqlUtils.ExecuteNonQueryAsync(command, this.traceHelper, instance.InstanceId);
         }
@@ -510,7 +510,7 @@ namespace DurableTask.SqlServer
             using DbDataReader reader = await SqlUtils.ExecuteReaderAsync(command, this.traceHelper, instanceId);
 
             List<HistoryEvent> history = await ReadHistoryEventsAsync(reader, executionIdFilter);
-            return JsonConvert.SerializeObject(history);
+            return Newtonsoft.Json.JsonConvert.SerializeObject(history);
         }
 
         static async Task<List<HistoryEvent>> ReadHistoryEventsAsync(

@@ -32,6 +32,7 @@ namespace DurableTask.SqlServer.SqlTypes
             new SqlMetaData("PayloadID", SqlDbType.UniqueIdentifier),
             new SqlMetaData("ParentInstanceID", SqlDbType.VarChar, 100),
             new SqlMetaData("Version", SqlDbType.VarChar, 100),
+            new SqlMetaData("ParentTraceContext", SqlDbType.VarChar, 600),
         };
 
         static class ColumnOrdinals
@@ -52,6 +53,7 @@ namespace DurableTask.SqlServer.SqlTypes
             public const int PayloadID = 12;
             public const int ParentInstanceID = 13;
             public const int Version = 14;
+            public const int ParentTraceContext = 15;
         };
 
         public static SqlParameter AddHistoryEventsParameter(
@@ -105,6 +107,8 @@ namespace DurableTask.SqlServer.SqlTypes
                     SqlGuid newPayloadId = reason.IsNull && payload.IsNull ? SqlGuid.Null : new SqlGuid(Guid.NewGuid());
                     record.SetSqlGuid(ColumnOrdinals.PayloadID, newPayloadId);
                 }
+
+                record.SetSqlString(ColumnOrdinals.ParentTraceContext, SqlUtils.GetParentTraceContext(e));
 
                 yield return record;
             }

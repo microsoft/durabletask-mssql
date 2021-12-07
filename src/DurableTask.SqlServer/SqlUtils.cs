@@ -14,6 +14,7 @@ namespace DurableTask.SqlServer
     using System.Threading.Tasks;
     using DurableTask.Core;
     using DurableTask.Core.History;
+    using DurableTask.Core.Tracing;
     using Microsoft.Data.SqlClient;
     using Microsoft.Data.SqlClient.Server;
     using SemVersion;
@@ -94,6 +95,7 @@ namespace DurableTask.SqlServer
                         },
                         Tags = null, // TODO
                         Version = GetVersion(reader),
+                        ParentTraceContext = GetParentTraceContext(reader),
                     };
                     string? parentInstanceId = GetParentInstanceId(reader);
                     if (parentInstanceId != null)
@@ -158,6 +160,7 @@ namespace DurableTask.SqlServer
                         Input = GetPayloadText(reader),
                         Name = GetName(reader),
                         Version = GetVersion(reader),
+                        ParentTraceContext = GetParentTraceContext(reader),
                     };
                     break;
                 case EventType.TimerCreated:
@@ -347,6 +350,57 @@ namespace DurableTask.SqlServer
         {
             // The SQL client always assumes DateTimeKind.Unspecified. We need to modify the result so that it knows it is UTC.
             return DateTime.SpecifyKind(reader.GetDateTime(ordinal), DateTimeKind.Utc);
+        }
+
+        internal static SqlString GetParentTraceContext(HistoryEvent e)
+        {
+            DistributedTraceContext? parentTraceContext = e switch
+            {
+                ExecutionStartedEvent startedEvent => startedEvent.ParentTraceContext,
+                TaskScheduledEvent scheduledEvent => scheduledEvent.ParentTraceContext,
+                _ => null,
+            };
+
+            if (parentTraceContext == null)
+            {
+                return SqlString.Null;
+            }
+
+            if (parentTraceContext.TraceState == null)
+            {
+                return parentTraceContext.TraceParent;
+            }
+
+            // Join with a newline mainly for readability purposes
+            return parentTraceContext.TraceParent + "\n" + parentTraceContext.TraceState;
+        }
+
+        static DistributedTraceContext? GetParentTraceContext(DbDataReader reader)
+        {
+            int ordinal = reader.GetOrdinal("ParentTraceContext");
+            string? traceContext = reader.GetStringOrNull(ordinal);
+            if (traceContext == null)
+            {
+                return null;
+            }
+
+            string traceParent;
+            string? traceState;
+
+            // Newline separater exists only if there is a traceState value
+            int splitIndex = traceContext.IndexOf('\n');
+            if (splitIndex < 0)
+            {
+                traceParent = traceContext;
+                traceState = null;
+            }
+            else
+            {
+                traceParent = traceContext.Substring(0, splitIndex);
+                traceState = traceContext.Substring(splitIndex + 1);
+            }
+
+            return new DistributedTraceContext(traceParent, traceState);
         }
 
         public static SqlParameter AddInstanceIDsParameter(

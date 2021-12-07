@@ -5,6 +5,7 @@ namespace DurableTask.SqlServer.AzureFunctions
 {
     using System;
     using System.Collections.Generic;
+    using System.Diagnostics;
     using DurableTask.Core;
     using Microsoft.Azure.WebJobs.Extensions.DurableTask;
     using Microsoft.Extensions.Logging;
@@ -105,6 +106,16 @@ namespace DurableTask.SqlServer.AzureFunctions
         {
             if (this.service == null)
             {
+                // TODO: Remove this
+                ActivitySource.AddActivityListener(new ActivityListener
+                {
+                    ShouldListenTo = src => src.Name == "DurableTask",
+                    ActivityStarted = activity => Console.WriteLine($"{activity.ParentId}:{activity.Id} - Start"),
+                    ActivityStopped = activity => Console.WriteLine($"{activity.ParentId}:{activity.Id} - Stop"),
+                    SampleUsingParentId = (ref ActivityCreationOptions<string> activityOptions) => ActivitySamplingResult.AllData,
+                    Sample = (ref ActivityCreationOptions<ActivityContext> activityOptions) => ActivitySamplingResult.AllData,
+                });
+
                 SqlOrchestrationServiceSettings settings = this.GetOrchestrationServiceSettings();
                 this.service = new SqlOrchestrationService(settings);
             }
