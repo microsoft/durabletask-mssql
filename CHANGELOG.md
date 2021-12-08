@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.11.1-beta
+
+### Updates
+
+* Added .NET Standard 2.0 support to Microsoft.DurableTask.SqlServer.AzureFunctions ([#63](https://github.com/microsoft/durabletask-mssql/pull/63))
+
 ## v0.11.0-beta
 
 ### New
