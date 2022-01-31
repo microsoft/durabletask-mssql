@@ -38,7 +38,11 @@ namespace PerformanceTests
         }
 
         [FunctionName(nameof(SayHello))]
-        public static string SayHello([ActivityTrigger] string name) => $"Hello {name}!";
+        public static string SayHello([ActivityTrigger] string name, string instanceId, ILogger logger)
+        {
+            logger.LogInformation("Hello from {city} - {id}", name, instanceId);
+            return $"Hello {name}!";
+        }
 
         public static bool TryGetPositiveIntQueryStringParam(this HttpRequest req, string name, out int value)
         {

@@ -5,6 +5,7 @@ namespace PerformanceTests
 {
     using System;
     using System.Collections.Generic;
+    using System.Diagnostics;
     using System.Threading.Tasks;
     using Microsoft.AspNetCore.Http;
     using Microsoft.AspNetCore.Mvc;
@@ -30,14 +31,18 @@ namespace PerformanceTests
 
             string initialPrefix = (string)req.Query["prefix"] ?? string.Empty;
 
-            string finalPrefix = await Common.ScheduleManyInstances(starter, log, nameof(HelloSequence), count, initialPrefix);
-            return new OkObjectResult($"Scheduled {count} orchestrations prefixed with '{finalPrefix}'.");
+            string finalPrefix = await Common.ScheduleManyInstances(starter, log, nameof(HelloCities), count, initialPrefix);
+            return new OkObjectResult($"Scheduled {count} orchestrations prefixed with '{finalPrefix}'. ActivityId: {Activity.Current?.Id}");
         }
 
-        [FunctionName(nameof(HelloSequence))]
-        public static async Task<List<string>> HelloSequence(
-            [OrchestrationTrigger] IDurableOrchestrationContext context)
+        [FunctionName(nameof(HelloCities))]
+        public static async Task<List<string>> HelloCities(
+            [OrchestrationTrigger] IDurableOrchestrationContext context,
+            ILogger logger)
         {
+            logger = context.CreateReplaySafeLogger(logger);
+            logger.LogInformation("Starting '{name}' orchestration with ID = 'id'", context.Name, context.InstanceId);
+
             var outputs = new List<string>
             {
                 await context.CallActivityAsync<string>(nameof(Common.SayHello), "Tokyo"),
@@ -47,6 +52,7 @@ namespace PerformanceTests
                 await context.CallActivityAsync<string>(nameof(Common.SayHello), "Mumbai")
             };
 
+            logger.LogInformation("Finished '{name}' orchestration with ID = 'id'", context.Name, context.InstanceId);
             return outputs;
         }
     }

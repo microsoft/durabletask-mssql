@@ -107,6 +107,32 @@ The `targetValue` should always be `"1"` when using the `dt.GetScaleRecommendati
 
 !> Make sure that the database credentials used by the `ScaledObject` are the same as those used by the app. Otherwise the `dt.GetScaledRecommendation` might return incorrect recommendations. See the [Multitenancy](multitenancy.md) topic for more information about how database credentials are mapped to task hubs.
 
-## SQL database scale-out
+## How to increase throughput
 
-The current version of the Durable SQL provider supports connecting to a single database instance. In many cases, the database will be the primary performance bottleneck. The recommended way to scale-out the database compute capacity is to increase the number of cores allocated to the SQL Server instance. Instructions for scaling up a SQL Server instance is out of scope for this article. However, if you are using [Azure SQL Database](https://docs.microsoft.com/azure/azure-sql/database/sql-database-paas-overview), you have the option of using the [Serverless tier](https://docs.microsoft.com/azure/azure-sql/database/serverless-tier-overview), which auto-scales the database based on CPU usage.
+There are two primary ways to increase the throughput of your Durable app when using the SQL provider.
+
+1. **Scale-up the SQL database**: The Durable SQL provider is a write-heavy engine that does much of the work in stored procedures running within the database. Sharding across multiple databases isn't supported, so scaling up the database with faster disks, more memory, and more CPU cores is the best way to increase throughput when the database is the bottleneck. This is often the case when processing large numbers of orchestrations concurrently, each of which do only small amounts of work.
+1. **Scale-out the DTFx compute**: DTFx workers (and Durable Functions instances) can be scaled-out to an arbitrary number of instances. Each instance can also run an arbitrary number of orchestrations, activities, and entities concurrently. Depending on your workload, adding new instances (best for CPU-heavy workloads) and/or increasing the concurrency of individual instances (best for I/O-heavy workloads) can result in higher throughput.
+
+?> If you've used the Azure Storage provider for DTFx before, you may have been aware that it uses partitions to distribute orchestrations and entities across compute instances. The maximum partition count for the Azure Storage provider was 16, which meant that the maximum number of compute instances for orchestrations and entities was also 16 (activities had no limits). The Durable SQL provider has no concept of partitions. It's therefore possible to run orchestrations and entities across *any* number of compute instances.
+
+The scale-up or scale-out strategy you pick will depend on the nature of your workload and the set of natural bottlenecks it faces. Ultimately, you'll want to test your workload against a variety of configurations to see which performs best. You may also want to consider serverless hosting platforms, such as [Azure Durable Functions](https://docs.microsoft.com/azure/azure-functions/durable/durable-functions-overview) and [Azure SQL Database's Serverless tier](https://docs.microsoft.com/azure/azure-sql/database/serverless-tier-overview) as a way to automatically scale resources when necessary to save costs and avoid many of the hassles of capacity planning.
+
+## Orchestration throughput benchmarks
+
+The maximum throughput of a Durable app is primarily determined by the power of the SQL database. "Maximum throughput" refers to the number of orchestrations that can be completed per second.
+
+The following table shows the maximum throughput when running 5,000 orchestrations, each with 5 sequential "hello, world" activities that take a small input and return a small output. The testbed consists of four 2-core Azure Dv2-series VMs running in the [Azure Functions Elastic Premium](https://docs.microsoft.com/azure/azure-functions/functions-premium-plan) hosting plan. The SQL database was a hosted Gen5 Azure SQL Database with a different number of cores for each test. The test app used version [v0.11.1-beta](https://github.com/microsoft/durabletask-mssql/releases/tag/v0.11.1-beta) of the SQL storage provider.
+
+| SQL vCores | Throughput | Max DB Utilization
+| -  | - | - |
+|  2 |  ~5 orchestrations/sec | 99% CPU, 13% I/O |
+|  4 |  ~9 orchestrations/sec | 84% CPU, 11% I/O |
+|  8 | ~13 orchestrations/sec | 57% CPU, 11% I/O |
+| 16 | ~16 orchestrations/sec | 36% CPU, 6% I/O  |
+
+!> In this test, adding more workers made no difference in throughput. This is almost certainly because the orchestrations and activities required very minimal compute power, making the database the primary scale bottleneck. In some cases, reducing the number of workers was shown to *increase* throughput, presumably because of lower database contention.
+
+!> These results are specific to this particular test, and different orchestration implementations may result in different throughput numbers. Your results may vary.
+
+The Azure SQL Database Serverless tier mentioned earlier was also tested and demonstrated just over 16 orchestrations per second. Since the Serverless tier performed just as well or better than the provisioned capacity options, and because of the cost benefits of the Serverless tier, the Serverless SQL Database tier is recommended if you're hosting in Azure. If you're not using Azure or don't have the option of using the Serverless tier, then using a database server with **6-8 CPU cores** is recommended for high throughput workloads. Any more than this provides diminishing returns.
