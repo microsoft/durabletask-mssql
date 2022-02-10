@@ -158,6 +158,8 @@ namespace DurableTask.SqlServer
                             eventPayloadMappings.Add(message.Event, payloadId.Value);
                         }
 
+                        // TODO: We're not currently using this value for anything. Ideally it would be included
+                        //       in some logging that still needs to be introduced.
                         longestWaitTime = Math.Max(longestWaitTime, reader.GetInt32("WaitTime"));
                     }
 
