@@ -547,7 +547,7 @@ BEGIN
         P.[Reason],
         P.[Text] AS [PayloadText],
         P.[PayloadID],
-        DATEDIFF(millisecond, [Timestamp], @now) AS [WaitTime],
+        DATEDIFF(SECOND, [Timestamp], @now) AS [WaitTime],
         @parentInstanceID as [ParentInstanceID],
         @version as [Version]
     FROM NewEvents N
@@ -1103,7 +1103,7 @@ BEGIN
             P.[TaskHub] = @TaskHub AND
             P.[InstanceID] = N.[InstanceID] AND
             P.[PayloadID] = N.[PayloadID]) AS [PayloadText],
-        DATEDIFF(millisecond, [Timestamp], @now) AS [WaitTime]
+        DATEDIFF(SECOND, [Timestamp], @now) AS [WaitTime]
     FROM NewTasks N
     WHERE [TaskHub] = @TaskHub AND [SequenceNumber] = @SequenceNumber
 
