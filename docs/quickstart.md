@@ -6,22 +6,22 @@ For local development using Azure Functions, select one of the [tools available 
 
 !> At the time of writing, the Durable SQL provider is in its early stages and does not yet work with the Azure Functions Consumption plan. It does work with the Azure Functions Elastic Premium plan but you must enable [Runtime Scale Monitoring](https://docs.microsoft.com/azure/azure-functions/functions-networking-options#premium-plan-with-virtual-network-triggers) to get automatic scaling. App Service plans are also supported. Consumption plan support and Scale Controller support for Elastic Premium is coming in a later release.
 
-### .NET Core 3.1
+### .NET
 
-Durable Functions projects targeting .NET Core 3.1 can add the [Microsoft.DurableTask.SqlServer.AzureFunction](https://www.nuget.org/packages/Microsoft.DurableTask.SqlServer.AzureFunctions) package by running the following `dotnet` CLI command:
+Durable Functions projects targeting the .NET in-process worker can add the [Microsoft.DurableTask.SqlServer.AzureFunction](https://www.nuget.org/packages/Microsoft.DurableTask.SqlServer.AzureFunctions) package by running the following `dotnet` CLI command:
 
 ```bash
 dotnet add package Microsoft.DurableTask.SqlServer.AzureFunctions --prerelease
 ```
 
-!> Durable Functions is not currently supported in the .NET 5 language worker.
+!> Durable Functions is not currently supported in the .NET Isolated worker.
 
-### JavaScript, Python, and PowerShell
+### JavaScript, Python, Java, and PowerShell
 
-JavaScript, Python, and PowerShell projects can add the [Microsoft.DurableTask.SqlServer.AzureFunction](https://www.nuget.org/packages/Microsoft.DurableTask.SqlServer.AzureFunctions) package by running the following `func` CLI command. Note that in addition to the Azure Functions Core Tools, you must also have a recent [.NET SDK](https://dotnet.microsoft.com/download/dotnet-core/3.1) installed locally.
+JavaScript, Python, and PowerShell projects can add the [Microsoft.DurableTask.SqlServer.AzureFunction](https://www.nuget.org/packages/Microsoft.DurableTask.SqlServer.AzureFunctions) package by running the following `func` CLI command. Note that in addition to the Azure Functions Core Tools, you must also have a recent [.NET SDK](https://dotnet.microsoft.com/download) installed locally.
 
 ```bash
-func extensions install -p Microsoft.DurableTask.SqlServer.AzureFunctions -v 0.10.1-beta
+func extensions install -p Microsoft.DurableTask.SqlServer.AzureFunctions -v 0.11.1-beta
 ```
 
 ?> Check [here](https://www.nuget.org/packages/Microsoft.DurableTask.SqlServer.AzureFunctions) to see if newer versions of the SQL provider package are available, and update the above command to reference the latest available version.
