@@ -163,16 +163,29 @@ BEGIN
     END
     ELSE
     BEGIN
+        BEGIN TRANSACTION
+
         DECLARE @existingStatus varchar(30) = (
             SELECT TOP 1 existing.[RuntimeStatus]
             FROM Instances existing WITH (HOLDLOCK)
             WHERE [TaskHub] = @TaskHub AND [InstanceID] = @InstanceID
         )
 
-        -- TODO: Allow overwriting if the existing status is a non-running status
-        -- REVIEW: Do we need to explicitly rollback the transaction or is this automatic?
-        IF @existingStatus IS NOT NULL
-            THROW 50001, N'An instance with this ID already exists.', 1;
+        -- Instance IDs can be overwritten only if the orchestration is in a terminal state
+        IF @existingStatus IN ('Pending', 'Running')
+        BEGIN
+            DECLARE @msg nvarchar(4000) = FORMATMESSAGE('Cannot create instance with ID ''%s'' because a pending or running instance with ID already exists.', @InstanceId);
+            THROW 50001, @msg, 1;
+        END
+        ELSE IF @existingStatus IS NOT NULL
+        BEGIN
+            -- Purge the existing instance data so that it can be overwritten
+            DECLARE @instancesToPurge InstanceIDs
+            INSERT INTO @instancesToPurge VALUES (@InstanceID)
+            EXEC dt.PurgeInstanceStateByID @instancesToPurge
+        END
+
+        COMMIT TRANSACTION
     END
 
     IF @ExecutionID IS NULL

@@ -433,6 +433,11 @@ namespace DurableTask.SqlServer
             {
                 return await WithRetry(() => executor(command), context, traceHelper, instanceId);
             }
+            catch (SqlException e) when (e.Number >= 50000)
+            {
+                // Replace app-generated SQL exceptions with vanilla exceptions
+                throw new InvalidOperationException(e.Message, e);
+            }
             finally
             {
                 context.LatencyStopwatch.Stop();

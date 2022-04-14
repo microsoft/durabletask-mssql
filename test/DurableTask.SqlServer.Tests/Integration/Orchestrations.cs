@@ -478,8 +478,8 @@ namespace DurableTask.SqlServer.Tests.Integration
                 "ParentOrchestration",
                 implementation: async (ctx, input) =>
                 {
-                    var result1 = await ctx.CreateSubOrchestrationInstance<string>(subOrchestrationName, version1, null);
-                    var result2 = await ctx.CreateSubOrchestrationInstance<string>(subOrchestrationName, version2, null);
+                    string result1 = await ctx.CreateSubOrchestrationInstance<string>(subOrchestrationName, version1, null);
+                    string result2 = await ctx.CreateSubOrchestrationInstance<string>(subOrchestrationName, version2, null);
                     return result1 + result2;
                 });
             await parentInstance.WaitForCompletion(waitTimeout, expectedOutput: version1 + version2);
@@ -497,17 +497,68 @@ namespace DurableTask.SqlServer.Tests.Integration
                 activityName, version1, TestService.MakeActivity<string, string>((ctx, input) => version1));
             this.testService.RegisterInlineActivity(
                 activityName, version2, TestService.MakeActivity<string, string>((ctx, input) => version2));
-            
-            var instance = await this.testService.RunOrchestration<string, string>(
+
+            TestInstance<string> instance = await this.testService.RunOrchestration<string, string>(
                 null,
                 "OrchestrationWithVersionedActivities",
                 implementation: async (ctx, input) =>
                 {
-                    var result1 = await ctx.ScheduleTask<string>(activityName, version1, input);
-                    var result2 = await ctx.ScheduleTask<string>(activityName, version2, input);
+                    string result1 = await ctx.ScheduleTask<string>(activityName, version1, input);
+                    string result2 = await ctx.ScheduleTask<string>(activityName, version2, input);
                     return result1 + result2;
                 });
             await instance.WaitForCompletion(waitTimeout, expectedOutput: version1 + version2);
+        }
+
+        [Fact]
+        public async Task RecreateCompletedInstance()
+        {
+            string input1 = $"Hello {Guid.NewGuid():N}";
+            string input2 = $"Hello {Guid.NewGuid():N}";
+            string orchestrationName = "EmptyOrchestration";
+            string instanceId = "SINGLETON_" + Guid.NewGuid().ToString("N");
+
+            // Does nothing except return the original input
+            TestInstance<string> instance = await this.testService.RunOrchestration(
+                input1,
+                orchestrationName,
+                version: null,
+                instanceId,
+                implementation: (ctx, input) => Task.FromResult(input));
+            OrchestrationState state1 = await instance.WaitForCompletion(expectedOutput: input1);
+
+            // Run the same instance again with the same instance ID
+            await instance.RestartAsync(input2);
+            OrchestrationState state2 = await instance.WaitForCompletion(expectedOutput: input2);
+
+            // Confirm that the two states are sufficiently different
+            Assert.NotEqual(state1.OrchestrationInstance.ExecutionId, state2.OrchestrationInstance.ExecutionId);
+            Assert.NotEqual(state1.Input, state2.Input);
+            Assert.NotEqual(state1.CreatedTime, state2.CreatedTime);
+            Assert.NotEqual(state1.CompletedTime, state2.CompletedTime);
+        }
+
+        [Fact]
+        public async Task RecreateRunningInstance()
+        {
+            string input = $"Hello {Guid.NewGuid():N}";
+            string orchestrationName = "EmptyOrchestration";
+            string instanceId = "SINGLETON_" + Guid.NewGuid().ToString("N");
+            TimeSpan delay = TimeSpan.FromSeconds(30);
+
+            // Start an orchestration and wait for it to block
+            TestInstance<string> instance = await this.testService.RunOrchestration(
+                input,
+                orchestrationName,
+                version: null,
+                instanceId,
+                implementation: (ctx, input) => ctx.CreateTimer(ctx.CurrentUtcDateTime.Add(delay), input));
+            await instance.WaitForStart();
+
+            // Run the same instance again with the same instance ID
+            InvalidOperationException exception = Assert.Throws<InvalidOperationException>(
+                () => instance.RestartAsync(input).GetAwaiter().GetResult());
+            Assert.Contains(instanceId, exception.Message);
         }
     }
 }

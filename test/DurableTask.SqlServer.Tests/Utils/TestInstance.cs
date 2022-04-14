@@ -15,17 +15,24 @@ namespace DurableTask.SqlServer.Tests.Utils
     {
         readonly TaskHubClient client;
         readonly OrchestrationInstance instance;
-        readonly DateTime startTime;
-        readonly T input;
+        readonly string name;
+        readonly string version;
+        
+        DateTime startTime;
+        T input;
 
         public TestInstance(
             TaskHubClient client,
             OrchestrationInstance instance,
+            string name,
+            string version,
             DateTime startTime,
             T input)
         {
             this.client = client;
             this.instance = instance;
+            this.name = name;
+            this.version = version;
             this.startTime = startTime;
             this.input = input;
         }
@@ -131,6 +138,19 @@ namespace DurableTask.SqlServer.Tests.Utils
         internal Task TerminateAsync(string reason)
         {
             return this.client.TerminateInstanceAsync(this.instance, reason);
+        }
+
+        internal async Task RestartAsync(T newInput)
+        {
+            OrchestrationInstance newInstance = await this.client.CreateOrchestrationInstanceAsync(
+                this.name,
+                this.version,
+                this.InstanceId,
+                newInput);
+
+            this.input = newInput;
+            this.startTime = DateTime.UtcNow;
+            this.instance.ExecutionId = newInstance.ExecutionId;
         }
 
         static void AdjustTimeout(ref TimeSpan timeout)
