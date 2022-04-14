@@ -36,6 +36,7 @@ namespace DurableTask.SqlServer.Tests.Utils
                 SharedTestHelpers.GetDefaultConnectionString())
             {
                 LoggerFactory = this.loggerFactory,
+                CreateDatabaseIfNotExists = true,
             };
         }
 
@@ -98,7 +99,7 @@ namespace DurableTask.SqlServer.Tests.Utils
             return this.RunOrchestration(input, orchestrationName, string.Empty, implementation, onEvent, activities);
         }
 
-        public async Task<TestInstance<TInput>> RunOrchestration<TOutput, TInput>(
+        public Task<TestInstance<TInput>> RunOrchestration<TOutput, TInput>(
             TInput input,
             string orchestrationName,
             string version,
@@ -106,9 +107,28 @@ namespace DurableTask.SqlServer.Tests.Utils
             Action<OrchestrationContext, string, string> onEvent = null,
             params (string name, TaskActivity activity)[] activities)
         {
-            var instances = await this.RunOrchestrations(
+            return this.RunOrchestration(
+                input,
+                orchestrationName,
+                version,
+                instanceId: Guid.NewGuid().ToString("N"),
+                implementation,
+                onEvent,
+                activities);
+        }
+
+        public async Task<TestInstance<TInput>> RunOrchestration<TOutput, TInput>(
+            TInput input,
+            string orchestrationName,
+            string version,
+            string instanceId,
+            Func<OrchestrationContext, TInput, Task<TOutput>> implementation,
+            Action<OrchestrationContext, string, string> onEvent = null,
+            params (string name, TaskActivity activity)[] activities)
+        {
+            IReadOnlyList<TestInstance<TInput>> instances = await this.RunOrchestrations(
                 count: 1,
-                instanceIdGenerator: i => Guid.NewGuid().ToString("N"),
+                instanceIdGenerator: i => instanceId ?? Guid.NewGuid().ToString("N"),
                 inputGenerator: i => input,
                 orchestrationName: orchestrationName,
                 version: version,
@@ -116,7 +136,7 @@ namespace DurableTask.SqlServer.Tests.Utils
                 onEvent,
                 activities);
 
-            return instances.First();
+            return instances[0];
         }
 
         public async Task<IReadOnlyList<TestInstance<TInput>>> RunOrchestrations<TOutput, TInput>(
@@ -149,7 +169,13 @@ namespace DurableTask.SqlServer.Tests.Utils
                     instanceId,
                     input);
 
-                return new TestInstance<TInput>(this.client, instance, utcNow, input);
+                return new TestInstance<TInput>(
+                    this.client,
+                    instance,
+                    orchestrationName,
+                    version,
+                    utcNow,
+                    input);
             });
 
             TestInstance<TInput>[] instances = await Task.WhenAll(tasks);

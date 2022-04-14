@@ -194,7 +194,7 @@ namespace DurableTask.SqlServer
                     {
                         // This is an existing instance
                         orchestrationName = runtimeState.Name;
-                        instance = runtimeState.OrchestrationInstance;
+                        instance = runtimeState.OrchestrationInstance!;
                     }
                     else if (messages[0].Event is ExecutionStartedEvent startedEvent)
                     {
@@ -262,7 +262,7 @@ namespace DurableTask.SqlServer
             using SqlConnection connection = await this.GetAndOpenConnectionAsync();
             using SqlCommand command = this.GetSprocCommand(connection, "dt._CheckpointOrchestration");
 
-            OrchestrationInstance instance = newRuntimeState.OrchestrationInstance;
+            OrchestrationInstance instance = newRuntimeState.OrchestrationInstance!;
             IList<HistoryEvent> newEvents = newRuntimeState.NewEvents;
             IList<HistoryEvent> allEvents = newRuntimeState.Events;
             int nextSequenceNumber = allEvents.Count - newEvents.Count;
@@ -417,7 +417,15 @@ namespace DurableTask.SqlServer
             command.Parameters.Add("@InputText", SqlDbType.VarChar).Value = startEvent.Input;
             command.Parameters.Add("@StartTime", SqlDbType.DateTime2).Value = startEvent.ScheduledStartTime;
 
-            await SqlUtils.ExecuteNonQueryAsync(command, this.traceHelper, instance.InstanceId);
+            try
+            {
+                await SqlUtils.ExecuteNonQueryAsync(command, this.traceHelper, instance.InstanceId);
+            }
+            catch (SqlException e) when (e.Number == 50001 /* Instance ID for pending/running instance already exists */)
+            {
+                // Try to avoid leaking SQL exception for issues like this
+                throw new InvalidOperationException(e.Message, e);
+            }
         }
 
         public override async Task SendTaskOrchestrationMessageAsync(TaskMessage message)

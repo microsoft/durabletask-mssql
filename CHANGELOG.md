@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.0.0
+
+### Updates
+
+* Support for restarting orchestrations ([#75](https://github.com/microsoft/durabletask-mssql/pull/75))
+* Populate ParentInstance in GetOrchestrationStateAsync ([#74](https://github.com/microsoft/durabletask-mssql/pull/74)) - contributed by [@hsnsalhi](https://github.com/hsnsalhi)
+* Fix datediff overflow issue ([#70](https://github.com/microsoft/durabletask-mssql/pull/75))
+
+### Breaking changes
+
+* Replaced `SqlException` with `InvalidOperationException` for new instance creation
+
 ## v0.11.1-beta
 
 ### Updates

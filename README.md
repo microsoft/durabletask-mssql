@@ -42,6 +42,10 @@ This project welcomes contributions and suggestions. Most contributions require 
 
 When you submit a pull request, a CLA-bot will automatically determine whether you need to provide a CLA and decorate the PR appropriately (e.g., label, comment). Simply follow the instructions provided by the bot. You will only need to do this once across all repositories using our CLA.
 
+## Running Tests
+
+Tests will attempt to connect to an instance of SQL Server installed on the local machine. When running on Windows, you'll need to ensure that [SQL Server Mixed Mode Authentication](https://docs.microsoft.com/ensql/database-engine/configure-windows/change-server-authentication-mode) is enabled.
+
 ## Code of Conduct
 
  This project has adopted the [Microsoft Open Source Code of conduct](https://opensource.microsoft.com/codeofconduct/).
