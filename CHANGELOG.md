@@ -10,7 +10,7 @@
 
 ### Breaking changes
 
-* Replaced `SqlException` with `InvalidOperationException` in public APIs
+* Replaced `SqlException` with `InvalidOperationException` for new instance creation
 
 ## v0.11.1-beta
 
