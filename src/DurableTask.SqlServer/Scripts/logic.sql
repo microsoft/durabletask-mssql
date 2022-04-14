@@ -987,6 +987,7 @@ BEGIN
         I.[LastUpdatedTime],
         I.[CompletedTime],
         I.[RuntimeStatus],
+        I.[ParentInstanceID],
         (SELECT TOP 1 [Text] FROM Payloads P WHERE
             P.[TaskHub] = @TaskHub AND
             P.[InstanceID] = I.[InstanceID] AND
@@ -1030,6 +1031,7 @@ BEGIN
         I.[LastUpdatedTime],
         I.[CompletedTime],
         I.[RuntimeStatus],
+        I.[ParentInstanceID],
         (SELECT TOP 1 [Text] FROM Payloads P WHERE
             P.[TaskHub] = @TaskHub AND
             P.[InstanceID] = I.[InstanceID] AND

@@ -184,6 +184,18 @@ namespace DurableTask.SqlServer
 
         public static OrchestrationState GetOrchestrationState(this DbDataReader reader)
         {
+            ParentInstance? parentInstance = null;
+            string? parentInstanceId = GetParentInstanceId(reader);
+            if (parentInstanceId != null)
+            {
+                parentInstance = new ParentInstance
+                {
+                    OrchestrationInstance = new OrchestrationInstance
+                    {
+                        InstanceId = parentInstanceId
+                    }
+                };
+            }
             return new OrchestrationState
             {
                 CompletedTime = reader.GetUtcDateTimeOrNull(reader.GetOrdinal("CompletedTime")) ?? default,
@@ -202,6 +214,7 @@ namespace DurableTask.SqlServer
                     GetStringOrNull(reader, reader.GetOrdinal("RuntimeStatus"))),
                 Output = GetStringOrNull(reader, reader.GetOrdinal("OutputText")),
                 Status = GetStringOrNull(reader, reader.GetOrdinal("CustomStatusText")),
+                ParentInstance = parentInstance
             };
         }
 
