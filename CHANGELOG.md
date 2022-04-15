@@ -1,12 +1,13 @@
 # Changelog
 
-## v1.0.0
+## v1.0.0-rc
 
 ### Updates
 
 * Support for restarting orchestrations ([#75](https://github.com/microsoft/durabletask-mssql/pull/75))
 * Populate ParentInstance in GetOrchestrationStateAsync ([#74](https://github.com/microsoft/durabletask-mssql/pull/74)) - contributed by [@hsnsalhi](https://github.com/hsnsalhi)
 * Fix datediff overflow issue ([#70](https://github.com/microsoft/durabletask-mssql/pull/75))
+* Added SBOM manifest generation for official nuget packages
 
 ### Breaking changes
 

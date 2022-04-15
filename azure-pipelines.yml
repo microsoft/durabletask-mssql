@@ -1,8 +1,11 @@
 trigger: none
 pr: none
 
+# Use an internally approved MS host for building, signing, and SBOM generation
 pool:
-  vmImage: 'windows-latest'
+  name: '1ES-Hosted-DurableTaskFramework'
+  demands:
+    - ImageOverride -equals MMS2022TLS
 
 steps:
 - task: UseDotNet@2
@@ -69,6 +72,12 @@ steps:
               "ToolVersion": "1.0"
           }
       ]
+
+# SBOM generator task for additional supply chain protection
+- task: AzureArtifacts.manifest-generator-task.manifest-generator-task.ManifestGeneratorTask@0
+  displayName: 'SBOM Manifest Generator'
+  inputs:
+    BuildDropPath: '$(System.DefaultWorkingDirectory)'
 
 # Packaging needs to be a separate step from build.
 # This will automatically pick up the signed DLLs.
