@@ -15,10 +15,12 @@
 
   <!-- Version settings: https://andrewlock.net/version-vs-versionsuffix-vs-packageversion-what-do-they-all-mean/ -->
   <PropertyGroup>
-    <MajorVersion>0</MajorVersion>
-    <VersionPrefix>$(MajorVersion).11.1</VersionPrefix>
-    <VersionSuffix>beta</VersionSuffix>
-    <AssemblyVersion>$(MajorVersion).0.0.0</AssemblyVersion>
+    <MajorVersion>1</MajorVersion>
+    <MinorVersion>0</MinorVersion>
+    <PatchVersion>0</PatchVersion>
+    <VersionPrefix>$(MajorVersion).$(MinorVersion).$(PatchVersion)</VersionPrefix>
+    <VersionSuffix>rc</VersionSuffix>
+    <AssemblyVersion>$(MajorVersion).$(MinorVersion).0.0</AssemblyVersion>
     <BuildSuffix Condition="'$(GITHUB_RUN_NUMBER)' != ''">.$(GITHUB_RUN_NUMBER)</BuildSuffix>
     <FileVersion>$(VersionPrefix)$(BuildSuffix)</FileVersion>
   </PropertyGroup>
@@ -41,5 +43,13 @@
   <ItemGroup>
     <Content Include="../../docs/media/logo.png" Pack="true" PackagePath="/" />
   </ItemGroup>
-  
+
+  <!-- Embed the SBOM manifest, which is generated as part of the "official" build -->
+  <ItemGroup Condition="'$(Configuration)'=='Release'">
+    <Content Include="..\..\_manifest\**">
+      <Pack>true</Pack>
+      <PackagePath>content/SBOM</PackagePath>
+    </Content>
+  </ItemGroup>
+
 </Project>
