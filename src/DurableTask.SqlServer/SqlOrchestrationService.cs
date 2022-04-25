@@ -603,6 +603,39 @@ namespace DurableTask.SqlServer
             await SqlUtils.ExecuteNonQueryAsync(command, this.traceHelper);
         }
 
+        public override async Task<PurgeResult> PurgeInstanceStateAsync(string instanceId)
+        {
+            int purgedInstanceCount = await this.PurgeOrchestrationHistoryAsync(new[] { instanceId });
+            return new PurgeResult(purgedInstanceCount);
+        }
+
+        public override async Task<PurgeResult> PurgeInstanceStateAsync(PurgeInstanceFilter purgeInstanceFilter)
+        {
+            var purgeQuery = new SqlOrchestrationQuery
+            {
+                PageSize = 1000,
+                CreatedTimeFrom = purgeInstanceFilter.CreatedTimeFrom,
+                FetchInput = false,
+                FetchOutput = false,
+            };
+            
+            if (purgeInstanceFilter.CreatedTimeTo != null)
+            {
+                purgeQuery.CreatedTimeTo = purgeInstanceFilter.CreatedTimeTo.Value;
+            }
+
+            if (purgeInstanceFilter.RuntimeStatus?.Any() == true)
+            {
+                purgeQuery.StatusFilter = new HashSet<OrchestrationStatus>(purgeInstanceFilter.RuntimeStatus);
+            }
+            
+            IReadOnlyCollection<OrchestrationState> results = await this.GetManyOrchestrationsAsync(purgeQuery, CancellationToken.None);
+                                                                                                  
+            IEnumerable<string> instanceIds = results.Select(r => r.OrchestrationInstance.InstanceId);
+            int purgedInstanceCount = await this.PurgeOrchestrationHistoryAsync(instanceIds);
+            return new PurgeResult(purgedInstanceCount);
+        }
+
         /// <summary>
         /// Queries the database for all orchestration instances that match a given filter.
         /// </summary>
