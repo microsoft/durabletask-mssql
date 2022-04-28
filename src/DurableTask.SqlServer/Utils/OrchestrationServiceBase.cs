@@ -10,7 +10,10 @@ namespace DurableTask.SqlServer.Utils
     using System.Threading.Tasks;
     using DurableTask.Core;
 
-    public abstract class OrchestrationServiceBase : IOrchestrationService, IOrchestrationServiceClient
+    public abstract class OrchestrationServiceBase :
+        IOrchestrationService,
+        IOrchestrationServiceClient,
+        IOrchestrationServicePurgeClient
     {
         CancellationTokenSource? shutdownTokenSource;
 
@@ -150,5 +153,9 @@ namespace DurableTask.SqlServer.Utils
         public abstract Task PurgeOrchestrationHistoryAsync(
             DateTime thresholdDateTimeUtc,
             OrchestrationStateTimeRangeFilterType timeRangeFilterType);
+
+        public abstract Task<PurgeResult> PurgeInstanceStateAsync(string instanceId);
+
+        public abstract Task<PurgeResult> PurgeInstanceStateAsync(PurgeInstanceFilter purgeInstanceFilter);
     }
 }

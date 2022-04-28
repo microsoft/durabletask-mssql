@@ -188,29 +188,9 @@ namespace DurableTask.SqlServer.AzureFunctions
         /// <returns>Returns the number of purged instances.</returns>
         public override async Task<int> PurgeHistoryByFilters(DateTime createdTimeFrom, DateTime? createdTimeTo, IEnumerable<OrchestrationStatus> runtimeStatus)
         {
-            var purgeQuery = new SqlOrchestrationQuery
-            {
-                PageSize = 1000,
-                CreatedTimeFrom = createdTimeFrom,
-                FetchInput = false,
-                FetchOutput = false,
-            };
-
-            if (createdTimeTo != null)
-            {
-                purgeQuery.CreatedTimeTo = createdTimeTo.Value;
-            }
-
-            if (runtimeStatus?.Any() == true)
-            {
-                purgeQuery.StatusFilter = new HashSet<OrchestrationStatus>(runtimeStatus);
-            }
-
-            IReadOnlyCollection<OrchestrationState> results = await this.service.GetManyOrchestrationsAsync(purgeQuery, CancellationToken.None);
-
-            IEnumerable<string> instanceIds = results.Select(r => r.OrchestrationInstance.InstanceId);
-            int deletedInstances = await this.service.PurgeOrchestrationHistoryAsync(instanceIds);
-            return deletedInstances;
+            var purgeFilter = new PurgeInstanceFilter(createdTimeFrom, createdTimeTo, runtimeStatus);
+            var purgeResult = await this.service.PurgeInstanceStateAsync(purgeFilter);
+            return purgeResult.DeletedInstanceCount;
         }
 
         public override bool TryGetScaleMonitor(
