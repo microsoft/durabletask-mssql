@@ -8,7 +8,9 @@
 
 ### Updates
 
-None
+* Removed unnecessary .NET Standard 2.1 target ([#82](https://github.com/microsoft/durabletask-mssql/pull/82))
+* Fixed problem terminating orchestration with running activity ([#83](https://github.com/microsoft/durabletask-mssql/pull/83))
+* Fixed payload data leak for completed activities (same PR as above)
 
 ### Breaking changes
 

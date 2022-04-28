@@ -1168,9 +1168,9 @@ BEGIN
 
     /* Ensure the instance exists and is running before attempting to handle task results.
        We need to do this first and hold the lock to avoid race conditions and deadlocks with other operations. */
-    DECLARE @ExistingInstanceID varchar(100)
+    DECLARE @existingInstanceID varchar(100)
 
-    SELECT @ExistingInstanceID = R.[InstanceID]
+    SELECT @existingInstanceID = R.[InstanceID]
     FROM Instances I WITH (HOLDLOCK)
         INNER JOIN @Results R ON 
             I.[TaskHub] = @TaskHub AND
@@ -1178,40 +1178,44 @@ BEGIN
             I.[ExecutionID] = R.[ExecutionID] AND
             I.[RuntimeStatus] IN ('Running', 'Suspended')
     
-    IF @ExistingInstanceID IS NULL
-        THROW 50003, N'The target instance is not running. It may have already completed (in which case this execution can be considered a duplicate) or been terminated. Any results of this task activity execution will be discarded.', 1;
+    -- If we find the instance, save the result to the [NewEvents] table.
+    IF @existingInstanceID IS NOT NULL
+    BEGIN
+        -- Insert new event data payloads into the Payloads table in batches.
+        -- PayloadID values are provided by the caller only if a payload exists.
+        INSERT INTO Payloads ([TaskHub], [InstanceID], [PayloadID], [Text], [Reason])
+            SELECT @TaskHub, [InstanceID], [PayloadID], [PayloadText], [Reason]
+            FROM @Results
+            WHERE [PayloadID] IS NOT NULL
 
-    -- Insert new event data payloads into the Payloads table in batches.
-    -- PayloadID values are provided by the caller only if a payload exists.
-    INSERT INTO Payloads ([TaskHub], [InstanceID], [PayloadID], [Text], [Reason])
-        SELECT @TaskHub, [InstanceID], [PayloadID], [PayloadText], [Reason]
-        FROM @Results
-        WHERE [PayloadID] IS NOT NULL
+        INSERT INTO NewEvents (
+            [TaskHub],
+            [InstanceID],
+            [ExecutionID],
+            [Name],
+            [EventType],
+            [TaskID],
+            [VisibleTime],
+            [PayloadID]
+        ) 
+        SELECT
+            @TaskHub,
+            R.[InstanceID],
+            R.[ExecutionID],
+            R.[Name],
+            R.[EventType],
+            R.[TaskID],
+            R.[VisibleTime],
+            R.[PayloadID]
+        FROM @Results R
+    END
 
-    INSERT INTO NewEvents (
-        [TaskHub],
-        [InstanceID],
-        [ExecutionID],
-        [Name],
-        [EventType],
-        [TaskID],
-        [VisibleTime],
-        [PayloadID]
-    ) 
-    SELECT
-        @TaskHub,
-        R.[InstanceID],
-        R.[ExecutionID],
-        R.[Name],
-        R.[EventType],
-        R.[TaskID],
-        R.[VisibleTime],
-        R.[PayloadID]
-    FROM @Results R
+    DECLARE @payloadsToDelete TABLE ([PayloadID] uniqueidentifier NULL)
 
     -- We return the list of deleted messages so that the caller can issue a 
     -- warning about missing messages
     DELETE N
+    OUTPUT DELETED.[PayloadID] INTO @payloadsToDelete
     OUTPUT DELETED.[SequenceNumber]
     FROM NewTasks N WITH (FORCESEEK(PK_NewTasks(TaskHub, SequenceNumber)))
         INNER JOIN @CompletedTasks C ON
@@ -1223,6 +1227,14 @@ BEGIN
     -- case we don't want any of the side-effects to persist.
     IF @@ROWCOUNT <> (SELECT COUNT(*) FROM @CompletedTasks)
         THROW 50002, N'Failed to delete the completed task events(s). They may have been deleted by another worker, in which case the current execution is likely a duplicate. Any results or pending side-effects of this task activity execution will be discarded.', 1;
+
+    -- Remove the payload (if any) associated with the deleted activity task
+    DELETE FROM Payloads
+    FROM Payloads P WITH (FORCESEEK(PK_Payloads(TaskHub, InstanceID)))
+        INNER JOIN @payloadsToDelete D ON
+            P.[TaskHub] = @TaskHub AND
+            P.[InstanceID] = @existingInstanceID AND
+            P.[PayloadID] = D.[PayloadID]
 
     COMMIT TRANSACTION
 END
