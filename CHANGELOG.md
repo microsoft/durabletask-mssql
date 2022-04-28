@@ -1,5 +1,19 @@
 # Changelog
 
+## v1.0.0
+
+### New
+
+* Support for purging data with filters ([#80](https://github.com/microsoft/durabletask-mssql/pull/80)) - contributed by [@usemam](https://github.com/usemam)
+
+### Updates
+
+None
+
+### Breaking changes
+
+None
+
 ## v1.0.0-rc
 
 ### Updates
