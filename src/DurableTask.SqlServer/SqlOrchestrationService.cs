@@ -639,6 +639,11 @@ namespace DurableTask.SqlServer
 
         public override async Task<OrchestrationQueryResult> GetOrchestrationWithQueryAsync(OrchestrationQuery query, CancellationToken cancellationToken)
         {
+            if (query.TaskHubNames?.Any() == true)
+            {
+                throw new NotSupportedException("Querying orchestrations by task hub name is not supported.");
+            }
+
             var sqlOrchestrationQuery = new SqlOrchestrationQuery
             {
                 CreatedTimeFrom = query.CreatedTimeFrom.GetValueOrDefault(),
@@ -654,11 +659,6 @@ namespace DurableTask.SqlServer
                 sqlOrchestrationQuery.StatusFilter = new HashSet<OrchestrationStatus>(query.RuntimeStatus);
             }
 
-            if (query.TaskHubNames?.Any() == true)
-            {
-                sqlOrchestrationQuery.TaskHubFilter = new HashSet<string>(query.TaskHubNames);
-            }
-            
             // The continuation token is just a page number.
             if (string.IsNullOrWhiteSpace(query.ContinuationToken))
             {
@@ -715,12 +715,6 @@ namespace DurableTask.SqlServer
             {
                 string filter = string.Join(",", query.StatusFilter);
                 command.Parameters.Add("@RuntimeStatusFilter", SqlDbType.VarChar, size: 200).Value = filter;
-            }
-
-            if (query.TaskHubFilter?.Count > 0)
-            {
-                string filter = string.Join(",", query.TaskHubFilter);
-                command.Parameters.Add("@TaskHubFilter", SqlDbType.VarChar, size: 250).Value = filter;
             }
 
             using DbDataReader reader = await SqlUtils.ExecuteReaderAsync(

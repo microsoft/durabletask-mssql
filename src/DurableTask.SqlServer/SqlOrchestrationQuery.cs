@@ -48,12 +48,6 @@ namespace DurableTask.SqlServer
         /// Gets or sets a set of orchestration status values to filter orchestrations by.
         /// </summary>
         public ISet<OrchestrationStatus>? StatusFilter { get; set; }
-        
-        /// <summary>
-        /// Gets or sets a set of task hub names to filter orchestrations by.
-        /// If not provided, orchestrations are filtered by current task hub name.
-        /// </summary>
-        public ISet<string>? TaskHubFilter { get; set; }
 
         /// <summary>
         /// Gets or sets an instance ID prefix to use for filtering orchestration instances.
