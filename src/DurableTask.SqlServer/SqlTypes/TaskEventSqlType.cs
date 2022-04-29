@@ -53,11 +53,12 @@ namespace DurableTask.SqlServer.SqlTypes
         public static SqlParameter AddTaskEventsParameter(
             this SqlParameterCollection commandParameters,
             string paramName,
-            IList<TaskMessage> outboundMessages)
+            IList<TaskMessage> outboundMessages,
+            EventPayloadMap eventPayloadMap)
         {
             SqlParameter param = commandParameters.Add(paramName, SqlDbType.Structured);
             param.TypeName = SqlTypeName;
-            param.Value = ToTaskMessagesParameter(outboundMessages);
+            param.Value = ToTaskMessagesParameter(outboundMessages, eventPayloadMap);
             return param;
         }
 
@@ -73,7 +74,8 @@ namespace DurableTask.SqlServer.SqlTypes
         }
 
         static IEnumerable<SqlDataRecord>? ToTaskMessagesParameter(
-            this IEnumerable<TaskMessage> messages)
+            this IEnumerable<TaskMessage> messages,
+            EventPayloadMap? eventPayloadMap)
         {
             if (!messages.Any())
             {
@@ -88,7 +90,7 @@ namespace DurableTask.SqlServer.SqlTypes
                 var record = new SqlDataRecord(TaskEventSchema);
                 foreach (TaskMessage msg in messages)
                 {
-                    yield return PopulateTaskMessageRecord(msg, record);
+                    yield return PopulateTaskMessageRecord(msg, record, eventPayloadMap);
                 }
             }
         }
@@ -96,10 +98,13 @@ namespace DurableTask.SqlServer.SqlTypes
         static IEnumerable<SqlDataRecord> ToTaskMessageParameter(TaskMessage msg)
         {
             var record = new SqlDataRecord(TaskEventSchema);
-            yield return PopulateTaskMessageRecord(msg, record);
+            yield return PopulateTaskMessageRecord(msg, record, eventPayloadMap: null);
         }
 
-        static SqlDataRecord PopulateTaskMessageRecord(TaskMessage msg, SqlDataRecord record)
+        static SqlDataRecord PopulateTaskMessageRecord(
+            TaskMessage msg,
+            SqlDataRecord record,
+            EventPayloadMap? eventPayloadMap)
         {
             record.SetSqlString(ColumnOrdinals.InstanceID, msg.OrchestrationInstance.InstanceId);
             record.SetSqlString(ColumnOrdinals.ExecutionID, msg.OrchestrationInstance.ExecutionId);
@@ -113,10 +118,20 @@ namespace DurableTask.SqlServer.SqlTypes
             SqlString payloadText = SqlUtils.GetPayloadText(msg.Event);
             record.SetSqlString(ColumnOrdinals.PayloadText, payloadText);
 
-            // If the message contains a payload, then we generate a random payload ID for it.
-            record.SetSqlGuid(
-                ColumnOrdinals.PayloadId,
-                payloadText.IsNull && reasonText.IsNull ? SqlGuid.Null : new SqlGuid(Guid.NewGuid()));
+            SqlGuid sqlPayloadId = SqlGuid.Null;
+            if (eventPayloadMap != null && eventPayloadMap.TryGetPayloadId(msg.Event, out Guid payloadId))
+            {
+                // There is already a payload ID associated with this event
+                sqlPayloadId = payloadId;
+            }
+            else if (!payloadText.IsNull || !reasonText.IsNull)
+            {
+                // This is a new event and needs a new payload ID
+                // CONSIDER: Make this GUID a semi-human-readable deterministic value
+                sqlPayloadId = Guid.NewGuid();
+            }
+
+            record.SetSqlGuid(ColumnOrdinals.PayloadId, sqlPayloadId);
 
             // Optionally, the LockedBy and LockExpiration fields can be specified
             // to pre-lock task work items for this particular node.

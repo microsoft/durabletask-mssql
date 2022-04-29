@@ -5,12 +5,14 @@
 ### New
 
 * Support for purging data with filters ([#80](https://github.com/microsoft/durabletask-mssql/pull/80)) - contributed by [@usemam](https://github.com/usemam)
+* Support for new multi-instance query interface ([#88](https://github.com/microsoft/durabletask-mssql/pull/80)) - contributed by [@usemam](https://github.com/usemam)
 
 ### Updates
 
 * Removed unnecessary .NET Standard 2.1 target ([#82](https://github.com/microsoft/durabletask-mssql/pull/82))
 * Fixed problem terminating orchestration with running activity ([#83](https://github.com/microsoft/durabletask-mssql/pull/83))
 * Fixed payload data leak for completed activities (same PR as above)
+* Activity payload IDs are now consistently saved to the history table ([#90](https://github.com/microsoft/durabletask-mssql/issues/90))
 
 ### Breaking changes
 

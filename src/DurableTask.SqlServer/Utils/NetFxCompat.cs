@@ -1,15 +1,10 @@
-﻿#if NETSTANDARD2_0 // These .NET Standard 2.1 methods are not available in .NET Standard 2.0
+﻿#if NETSTANDARD2_0 // These methods are not available in .NET Standard 2.0
 namespace DurableTask.SqlServer
 {
-    using System;
     using System.Collections.Generic;
-    using System.Data;
     using System.Data.Common;
     using System.Linq;
-    using System.Threading;
     using System.Threading.Tasks;
-    using System.Text;
-    using Microsoft.Data.SqlClient;
 
     public static class NetFxCompat
     {
