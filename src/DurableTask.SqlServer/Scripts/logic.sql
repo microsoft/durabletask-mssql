@@ -1030,7 +1030,8 @@ CREATE OR ALTER PROCEDURE dt._QueryManyOrchestrations
     @CreatedTimeFrom datetime2 = NULL,
     @CreatedTimeTo datetime2 = NULL,
     @RuntimeStatusFilter varchar(200) = NULL,
-    @InstanceIDPrefix varchar(100) = NULL
+    @InstanceIDPrefix varchar(100) = NULL,
+    @TaskHubFilter varchar(250) = NULL
 AS
 BEGIN
     DECLARE @TaskHub varchar(50) = dt.CurrentTaskHub()
@@ -1060,7 +1061,8 @@ BEGIN
     FROM
         Instances I
     WHERE
-        I.[TaskHub] = @TaskHub AND
+        (@TaskHubFilter IS NULL AND I.[TaskHub] = @TaskHub OR 
+            I.[TaskHub] IN (SELECT [value] FROM string_split(@TaskHubFilter, ','))) AND
         (@CreatedTimeFrom IS NULL OR I.[CreatedTime] >= @CreatedTimeFrom) AND
         (@CreatedTimeTo IS NULL OR I.[CreatedTime] <= @CreatedTimeTo) AND
         (@RuntimeStatusFilter IS NULL OR I.[RuntimeStatus] IN (SELECT [value] FROM string_split(@RuntimeStatusFilter, ','))) AND

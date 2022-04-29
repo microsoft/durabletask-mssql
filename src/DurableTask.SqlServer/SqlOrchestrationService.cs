@@ -15,6 +15,7 @@ namespace DurableTask.SqlServer
     using DurableTask.Core;
     using DurableTask.Core.Common;
     using DurableTask.Core.History;
+    using DurableTask.Core.Query;
     using DurableTask.SqlServer.SqlTypes;
     using DurableTask.SqlServer.Utils;
     using Microsoft.Data.SqlClient;
@@ -636,6 +637,48 @@ namespace DurableTask.SqlServer
             return new PurgeResult(purgedInstanceCount);
         }
 
+        public override async Task<OrchestrationQueryResult> GetOrchestrationWithQueryAsync(OrchestrationQuery query, CancellationToken cancellationToken)
+        {
+            var sqlOrchestrationQuery = new SqlOrchestrationQuery
+            {
+                CreatedTimeFrom = query.CreatedTimeFrom.GetValueOrDefault(),
+                CreatedTimeTo = query.CreatedTimeTo.GetValueOrDefault(),
+                FetchInput = query.FetchInputsAndOutputs,
+                FetchOutput = query.FetchInputsAndOutputs,
+                InstanceIdPrefix = query.InstanceIdPrefix,
+                PageSize = query.PageSize
+            };
+
+            if (query.RuntimeStatus?.Any() == true)
+            {
+                sqlOrchestrationQuery.StatusFilter = new HashSet<OrchestrationStatus>(query.RuntimeStatus);
+            }
+
+            if (query.TaskHubNames?.Any() == true)
+            {
+                sqlOrchestrationQuery.TaskHubFilter = new HashSet<string>(query.TaskHubNames);
+            }
+            
+            // The continuation token is just a page number.
+            if (string.IsNullOrWhiteSpace(query.ContinuationToken))
+            {
+                sqlOrchestrationQuery.PageNumber = 0;
+            }
+            else if (int.TryParse(query.ContinuationToken, out int pageNumber))
+            {
+                sqlOrchestrationQuery.PageNumber = pageNumber;
+            }
+            else
+            {
+                throw new ArgumentException($"The continuation token '{query.ContinuationToken}' is invalid.", nameof(query));
+            }
+
+            IReadOnlyCollection<OrchestrationState> results = await this.GetManyOrchestrationsAsync(sqlOrchestrationQuery, cancellationToken);
+            string? continuationToken = 
+                results.Count == sqlOrchestrationQuery.PageSize ? (sqlOrchestrationQuery.PageNumber + 1).ToString() : null;
+            return new OrchestrationQueryResult(results, continuationToken);
+        }
+
         /// <summary>
         /// Queries the database for all orchestration instances that match a given filter.
         /// </summary>
@@ -672,6 +715,12 @@ namespace DurableTask.SqlServer
             {
                 string filter = string.Join(",", query.StatusFilter);
                 command.Parameters.Add("@RuntimeStatusFilter", SqlDbType.VarChar, size: 200).Value = filter;
+            }
+
+            if (query.TaskHubFilter?.Count > 0)
+            {
+                string filter = string.Join(",", query.TaskHubFilter);
+                command.Parameters.Add("@TaskHubFilter", SqlDbType.VarChar, size: 250).Value = filter;
             }
 
             using DbDataReader reader = await SqlUtils.ExecuteReaderAsync(
