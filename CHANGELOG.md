@@ -12,7 +12,7 @@
 * Removed unnecessary .NET Standard 2.1 target ([#82](https://github.com/microsoft/durabletask-mssql/pull/82))
 * Fixed problem terminating orchestration with running activity ([#83](https://github.com/microsoft/durabletask-mssql/pull/83))
 * Fixed payload data leak for completed activities (same PR as above)
-* Activity payload IDs are now consistently saved to the history table ([#89](https://github.com/microsoft/durabletask-mssql/issues/89))
+* Activity payload IDs are now consistently saved to the history table ([#90](https://github.com/microsoft/durabletask-mssql/issues/90))
 
 ### Breaking changes
 
