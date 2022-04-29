@@ -15,6 +15,7 @@ namespace DurableTask.SqlServer
     using DurableTask.Core;
     using DurableTask.Core.Common;
     using DurableTask.Core.History;
+    using DurableTask.Core.Query;
     using DurableTask.SqlServer.SqlTypes;
     using DurableTask.SqlServer.Utils;
     using Microsoft.Data.SqlClient;
@@ -634,6 +635,48 @@ namespace DurableTask.SqlServer
             IEnumerable<string> instanceIds = results.Select(r => r.OrchestrationInstance.InstanceId);
             int purgedInstanceCount = await this.PurgeOrchestrationHistoryAsync(instanceIds);
             return new PurgeResult(purgedInstanceCount);
+        }
+
+        public override async Task<OrchestrationQueryResult> GetOrchestrationWithQueryAsync(OrchestrationQuery query, CancellationToken cancellationToken)
+        {
+            if (query.TaskHubNames?.Any() == true)
+            {
+                throw new NotSupportedException("Querying orchestrations by task hub name is not supported.");
+            }
+
+            var sqlOrchestrationQuery = new SqlOrchestrationQuery
+            {
+                CreatedTimeFrom = query.CreatedTimeFrom.GetValueOrDefault(),
+                CreatedTimeTo = query.CreatedTimeTo.GetValueOrDefault(),
+                FetchInput = query.FetchInputsAndOutputs,
+                FetchOutput = query.FetchInputsAndOutputs,
+                InstanceIdPrefix = query.InstanceIdPrefix,
+                PageSize = query.PageSize
+            };
+
+            if (query.RuntimeStatus?.Any() == true)
+            {
+                sqlOrchestrationQuery.StatusFilter = new HashSet<OrchestrationStatus>(query.RuntimeStatus);
+            }
+
+            // The continuation token is just a page number.
+            if (string.IsNullOrWhiteSpace(query.ContinuationToken))
+            {
+                sqlOrchestrationQuery.PageNumber = 0;
+            }
+            else if (int.TryParse(query.ContinuationToken, out int pageNumber))
+            {
+                sqlOrchestrationQuery.PageNumber = pageNumber;
+            }
+            else
+            {
+                throw new ArgumentException($"The continuation token '{query.ContinuationToken}' is invalid.", nameof(query));
+            }
+
+            IReadOnlyCollection<OrchestrationState> results = await this.GetManyOrchestrationsAsync(sqlOrchestrationQuery, cancellationToken);
+            string? continuationToken = 
+                results.Count == sqlOrchestrationQuery.PageSize ? (sqlOrchestrationQuery.PageNumber + 1).ToString() : null;
+            return new OrchestrationQueryResult(results, continuationToken);
         }
 
         /// <summary>
