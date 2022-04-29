@@ -146,7 +146,7 @@ namespace DurableTask.SqlServer
                     // Result #1: The list of control queue messages
                     int longestWaitTime = 0;
                     var messages = new List<TaskMessage>(capacity: batchSize);
-                    var eventPayloadMappings = new Dictionary<HistoryEvent, Guid>(capacity: batchSize);
+                    var eventPayloadMappings = new EventPayloadMap(capacity: batchSize);
                     while (await reader.ReadAsync(cancellationToken))
                     {
                         TaskMessage message = reader.GetTaskMessage();
@@ -216,13 +216,12 @@ namespace DurableTask.SqlServer
                         instance = new OrchestrationInstance();
                     }
 
-                    return new ExtendedOrchestrationWorkItem(orchestrationName, instance)
+                    return new ExtendedOrchestrationWorkItem(orchestrationName, instance, eventPayloadMappings)
                     {
                         InstanceId = messages[0].OrchestrationInstance.InstanceId,
                         LockedUntilUtc = lockExpiration,
                         NewMessages = messages,
                         OrchestrationRuntimeState = runtimeState,
-                        EventPayloadMappings = eventPayloadMappings,
                     };
                 }
             } while (stopwatch.Elapsed < receiveTimeout);
@@ -272,19 +271,29 @@ namespace DurableTask.SqlServer
             command.Parameters.Add("@RuntimeStatus", SqlDbType.VarChar, size: 30).Value = orchestrationState.OrchestrationStatus.ToString();
             command.Parameters.Add("@CustomStatusPayload", SqlDbType.VarChar).Value = orchestrationState.Status ?? SqlString.Null;
 
+            currentWorkItem.EventPayloadMappings.Add(outboundMessages);
+            currentWorkItem.EventPayloadMappings.Add(orchestratorMessages);
+
             command.Parameters.AddMessageIdParameter("@DeletedEvents", workItem.NewMessages);
+
+            command.Parameters.AddOrchestrationEventsParameter(
+                "@NewOrchestrationEvents",
+                orchestratorMessages,
+                timerMessages,
+                continuedAsNewMessage,
+                currentWorkItem.EventPayloadMappings);
+
+            command.Parameters.AddTaskEventsParameter(
+                "@NewTaskEvents",
+                outboundMessages,
+                currentWorkItem.EventPayloadMappings);
+
             command.Parameters.AddHistoryEventsParameter(
                 "@NewHistoryEvents",
                 newEvents,
                 instance,
                 nextSequenceNumber,
                 currentWorkItem.EventPayloadMappings);
-            command.Parameters.AddOrchestrationEventsParameter(
-                "@NewOrchestrationEvents",
-                orchestratorMessages,
-                timerMessages,
-                continuedAsNewMessage);
-            command.Parameters.AddTaskEventsParameter("@NewTaskEvents", outboundMessages);
 
             try
             {
@@ -728,34 +737,21 @@ namespace DurableTask.SqlServer
 
         class ExtendedOrchestrationWorkItem : TaskOrchestrationWorkItem
         {
-            Dictionary<HistoryEvent, Guid>? eventPayloadMappings;
-
-            public ExtendedOrchestrationWorkItem(string name, OrchestrationInstance instance)
+            public ExtendedOrchestrationWorkItem(
+                string name,
+                OrchestrationInstance instance,
+                EventPayloadMap eventPayloadMap)
             {
                 this.Name = name;
                 this.Instance = instance;
+                this.EventPayloadMappings = eventPayloadMap;
             }
 
             public string Name { get; }
 
             public OrchestrationInstance Instance { get; }
 
-            public Dictionary<HistoryEvent, Guid> EventPayloadMappings
-            { 
-                get
-                {
-                    if (this.eventPayloadMappings == null)
-                    {
-                        this.eventPayloadMappings = new Dictionary<HistoryEvent, Guid>();
-                    }
-
-                    return this.eventPayloadMappings;
-                }
-                set
-                {
-                    this.eventPayloadMappings = value;
-                }
-            }
+            public EventPayloadMap EventPayloadMappings { get; }
         }
 
         class ExtendedActivityWorkItem : TaskActivityWorkItem

@@ -57,7 +57,8 @@ namespace DurableTask.SqlServer.SqlTypes
             string paramName,
             IList<TaskMessage> orchestratorMessages,
             IList<TaskMessage> timerMessages,
-            TaskMessage continuedAsNewMessage)
+            TaskMessage continuedAsNewMessage,
+            EventPayloadMap eventPayloadMap)
         {
             SqlParameter param = commandParameters.Add(paramName, SqlDbType.Structured);
             param.TypeName = SqlTypeName;
@@ -68,7 +69,7 @@ namespace DurableTask.SqlServer.SqlTypes
                 messages = messages.Append(continuedAsNewMessage);
             }
 
-            param.Value = ToOrchestrationMessageParameter(messages);
+            param.Value = ToOrchestrationMessageParameter(messages, eventPayloadMap);
             return param;
         }
 
@@ -84,7 +85,8 @@ namespace DurableTask.SqlServer.SqlTypes
         }
 
         static IEnumerable<SqlDataRecord>? ToOrchestrationMessageParameter(
-            this IEnumerable<TaskMessage> messages)
+            this IEnumerable<TaskMessage> messages,
+            EventPayloadMap eventPayloadMap)
         {
             if (!messages.Any())
             {
@@ -101,7 +103,7 @@ namespace DurableTask.SqlServer.SqlTypes
                 var record = new SqlDataRecord(OrchestrationEventSchema);
                 foreach (TaskMessage msg in messages)
                 {
-                    yield return PopulateOrchestrationMessage(msg, record);
+                    yield return PopulateOrchestrationMessage(msg, record, eventPayloadMap);
                 }
             }
         }
@@ -109,10 +111,10 @@ namespace DurableTask.SqlServer.SqlTypes
         static IEnumerable<SqlDataRecord> ToOrchestrationMessageParameter(TaskMessage msg)
         {
             var record = new SqlDataRecord(OrchestrationEventSchema);
-            yield return PopulateOrchestrationMessage(msg, record);
+            yield return PopulateOrchestrationMessage(msg, record, eventPayloadMap: null);
         }
 
-        static SqlDataRecord PopulateOrchestrationMessage(TaskMessage msg, SqlDataRecord record)
+        static SqlDataRecord PopulateOrchestrationMessage(TaskMessage msg, SqlDataRecord record, EventPayloadMap? eventPayloadMap)
         {
             string instanceId = msg.OrchestrationInstance.InstanceId;
 
@@ -125,16 +127,25 @@ namespace DurableTask.SqlServer.SqlTypes
             record.SetSqlInt32(ColumnOrdinals.TaskID, SqlUtils.GetTaskId(msg.Event));
             record.SetDateTime(ColumnOrdinals.VisibleTime, SqlUtils.GetVisibleTime(msg.Event));
 
-            SqlString reason = SqlUtils.GetReason(msg.Event);
-            record.SetSqlString(ColumnOrdinals.Reason, reason);
+            SqlString reasonText = SqlUtils.GetReason(msg.Event);
+            record.SetSqlString(ColumnOrdinals.Reason, reasonText);
             SqlString payloadText = SqlUtils.GetPayloadText(msg.Event);
             record.SetSqlString(ColumnOrdinals.PayloadText, payloadText);
 
-            // If the message contains a payload (including Reason data), then we generate a random payload ID for it.
-            // We could have done this in the stored procedure directly, but doing in in C# is quite a bit simpler.
-            record.SetSqlGuid(
-                ColumnOrdinals.PayloadId,
-                payloadText.IsNull && reason.IsNull ? SqlGuid.Null : new SqlGuid(Guid.NewGuid()));
+            SqlGuid sqlPayloadId = SqlGuid.Null;
+            if (eventPayloadMap != null && eventPayloadMap.TryGetPayloadId(msg.Event, out Guid payloadId))
+            {
+                // There is already a payload ID associated with this event
+                sqlPayloadId = payloadId;
+            }
+            else if (!payloadText.IsNull || !reasonText.IsNull)
+            {
+                // This is a new event and needs a new payload ID
+                // CONSIDER: Make this GUID a semi-human-readable deterministic value
+                sqlPayloadId = Guid.NewGuid();
+            }
+
+            record.SetSqlGuid(ColumnOrdinals.PayloadId, sqlPayloadId);
 
             record.SetSqlString(ColumnOrdinals.ParentInstanceID, SqlUtils.GetParentInstanceId(msg.Event));
             record.SetSqlString(ColumnOrdinals.Version, SqlUtils.GetVersion(msg.Event));

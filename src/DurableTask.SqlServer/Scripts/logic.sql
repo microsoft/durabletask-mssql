@@ -1228,14 +1228,6 @@ BEGIN
     IF @@ROWCOUNT <> (SELECT COUNT(*) FROM @CompletedTasks)
         THROW 50002, N'Failed to delete the completed task events(s). They may have been deleted by another worker, in which case the current execution is likely a duplicate. Any results or pending side-effects of this task activity execution will be discarded.', 1;
 
-    -- Remove the payload (if any) associated with the deleted activity task
-    DELETE FROM Payloads
-    FROM Payloads P WITH (FORCESEEK(PK_Payloads(TaskHub, InstanceID)))
-        INNER JOIN @payloadsToDelete D ON
-            P.[TaskHub] = @TaskHub AND
-            P.[InstanceID] = @existingInstanceID AND
-            P.[PayloadID] = D.[PayloadID]
-
     COMMIT TRANSACTION
 END
 GO

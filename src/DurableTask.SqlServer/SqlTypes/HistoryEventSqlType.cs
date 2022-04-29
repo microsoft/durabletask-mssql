@@ -60,11 +60,11 @@ namespace DurableTask.SqlServer.SqlTypes
             IEnumerable<HistoryEvent> newEventCollection,
             OrchestrationInstance instance,
             int nextSequenceNumber,
-            Dictionary<HistoryEvent, Guid> payloadIds)
+            EventPayloadMap eventPayloadMap)
         {
             SqlParameter param = commandParameters.Add(paramName, SqlDbType.Structured);
             param.TypeName = "dt.HistoryEvents";
-            param.Value = ToHistoryEventsParameter(newEventCollection, instance, nextSequenceNumber, payloadIds);
+            param.Value = ToHistoryEventsParameter(newEventCollection, instance, nextSequenceNumber, eventPayloadMap);
             return param;
         }
 
@@ -72,7 +72,7 @@ namespace DurableTask.SqlServer.SqlTypes
             IEnumerable<HistoryEvent> historyEvents,
             OrchestrationInstance instance,
             int nextSequenceNumber,
-            Dictionary<HistoryEvent, Guid> payloadIds)
+            EventPayloadMap eventPayloadMap)
         {
             var record = new SqlDataRecord(HistoryEventSchema);
             foreach (HistoryEvent e in historyEvents)
@@ -88,7 +88,7 @@ namespace DurableTask.SqlServer.SqlTypes
                 record.SetBoolean(ColumnOrdinals.IsPlayed, e.IsPlayed);
                 record.SetDateTime(ColumnOrdinals.VisibleTime, SqlUtils.GetVisibleTime(e));
 
-                if (payloadIds.TryGetValue(e, out Guid existingPayloadId))
+                if (eventPayloadMap.TryGetPayloadId(e, out Guid existingPayloadId))
                 {
                     // We already have a payload saved in the DB for this event. Send only the payload ID.
                     record.SetSqlString(ColumnOrdinals.Reason, SqlString.Null);
@@ -97,7 +97,7 @@ namespace DurableTask.SqlServer.SqlTypes
                 }
                 else
                 {
-                    // We don't yet have a payload saved in the DB. Send the payload and a new payload ID, if applicable.
+                    // This path is expected for ExecutionCompleted, possibly others?
                     SqlString reason = SqlUtils.GetReason(e);
                     record.SetSqlString(ColumnOrdinals.Reason, reason);
                     SqlString payload = SqlUtils.GetPayloadText(e);

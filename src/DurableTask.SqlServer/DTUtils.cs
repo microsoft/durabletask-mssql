@@ -132,6 +132,11 @@ namespace DurableTask.SqlServer
             return payloadText != null;
         }
 
+        public static bool HasPayload(HistoryEvent e)
+        {
+            return TryGetPayloadText(e, out string? text) && !string.IsNullOrEmpty(text);
+        }
+
         public static string? GetName(HistoryEvent historyEvent)
         {
             return historyEvent.EventType switch
