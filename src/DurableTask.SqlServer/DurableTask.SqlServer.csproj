@@ -25,7 +25,6 @@
     <PackageReference Include="Microsoft.Data.SqlClient" Version="3.0.0" />
     <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="3.1.*" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="3.1.*" />
-    <PackageReference Include="Microsoft.SqlServer.SqlManagementObjects" Version="161.46041.41" />
     <PackageReference Include="SemanticVersion" Version="2.1.0" />
     <PackageReference Include="System.Threading.Channels" Version="4.7.1" />
   </ItemGroup>
