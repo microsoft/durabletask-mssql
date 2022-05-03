@@ -14,7 +14,6 @@ namespace DurableTask.SqlServer
     using System.Text.RegularExpressions;
     using System.Threading.Tasks;
     using Microsoft.Data.SqlClient;
-    using Microsoft.SqlServer.Management.Common;
     using SemVersion;
 
     class SqlDbManager
@@ -219,7 +218,6 @@ namespace DurableTask.SqlServer
 
         async Task ExecuteSqlScriptAsync(string scriptName, DatabaseLock dbLock)
         {
-            // We don't actually use the lock here, but want to make sure the caller is holding it.
             if (dbLock == null)
             {
                 throw new ArgumentNullException(nameof(dbLock));
@@ -230,17 +228,22 @@ namespace DurableTask.SqlServer
                 throw new ArgumentException("This database lock has already been released!", nameof(dbLock));
             }
 
-            string schemaCommands = await GetScriptTextAsync(scriptName);
+            string scriptText = await GetScriptTextAsync(scriptName);
 
-            // Reference: https://stackoverflow.com/questions/650098/how-to-execute-an-sql-script-file-using-c-sharp
-            using SqlConnection scriptRunnerConnection = this.settings.CreateConnection();
-            var serverConnection = new ServerConnection(scriptRunnerConnection);
+            // Split script into distinct executeable commands
+            IEnumerable<string> scriptCommands = Regex.Split(scriptText, @"^\s*GO\s*$", RegexOptions.Multiline | RegexOptions.IgnoreCase)
+                .Where(x => x.Trim().Length > 0);
 
             Stopwatch latencyStopwatch = Stopwatch.StartNew();
             try
             {
-                // NOTE: Async execution is not supported by this library
-                serverConnection.ExecuteNonQuery(schemaCommands);
+                foreach (string commandText in scriptCommands)
+                {
+                    using SqlCommand command = dbLock.CreateCommand();
+                    command.CommandText = commandText;
+
+                    await command.ExecuteNonQueryAsync();
+                }
             }
             finally
             {
