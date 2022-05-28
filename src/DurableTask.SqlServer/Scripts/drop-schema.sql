@@ -19,6 +19,7 @@ DROP PROCEDURE IF EXISTS dt.SetGlobalSetting
 DROP PROCEDURE IF EXISTS dt.TerminateInstance
 DROP PROCEDURE IF EXISTS dt.PurgeInstanceStateByID
 DROP PROCEDURE IF EXISTS dt.PurgeInstanceStateByTime
+DROP PROCEDURE IF EXISTS dt.RewindInstance
 
 -- Private sprocs
 DROP PROCEDURE IF EXISTS dt._AddOrchestrationEvents
@@ -31,6 +32,7 @@ DROP PROCEDURE IF EXISTS dt._QueryManyOrchestrations
 DROP PROCEDURE IF EXISTS dt._RenewOrchestrationLocks
 DROP PROCEDURE IF EXISTS dt._RenewTaskLocks
 DROP PROCEDURE IF EXISTS dt._UpdateVersion
+DROP PROCEDURE IF EXISTS dt._RewindInstance
 
 -- Tables
 DROP TABLE IF EXISTS dt.Versions
