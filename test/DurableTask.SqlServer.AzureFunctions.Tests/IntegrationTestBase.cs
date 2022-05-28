@@ -138,6 +138,17 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
             return status;
         }
 
+        protected async Task<DurableOrchestrationStatus> RewindOrchestrationAsync(string instanceId)
+        {
+            IDurableClient client = await this.GetDurableClientAsync();
+            await client.RewindAsync(instanceId, "rewind");
+
+            TimeSpan timeout = Debugger.IsAttached ? TimeSpan.FromMinutes(5) : TimeSpan.FromSeconds(10);
+            DurableOrchestrationStatus status = await client.WaitForCompletionAsync(instanceId, timeout);
+            Assert.NotNull(status);
+            return status;
+        }
+
         protected async Task<IDurableClient> GetDurableClientAsync()
         {
             var clientRef = new IDurableClient[1];
