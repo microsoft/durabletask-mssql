@@ -483,8 +483,6 @@ CREATE OR ALTER PROCEDURE dt.RewindInstance
     @Reason varchar(max) = NULL
 AS
 BEGIN
-    DECLARE @TaskHub varchar(50) = dt.CurrentTaskHub()
-
     BEGIN TRANSACTION
 
     EXEC dt._RewindInstance @InstanceID, @Reason
