@@ -817,6 +817,22 @@ namespace DurableTask.SqlServer
         }
 
         /// <summary>
+        /// Rewinds a failed orchestration to the point right before it failed.
+        /// </summary>
+        /// <param name="instanceId">Instance ID of the orchestration to rewind.</param>
+        /// <param name="reason">A reason for rewinding the orchestration.</param>
+        public async Task RewindTaskOrchestrationAsync(string instanceId, string reason)
+        {
+            using SqlConnection connection = await this.GetAndOpenConnectionAsync();
+            using SqlCommand command = this.GetSprocCommand(connection, "dt._RewindInstance");
+
+            command.Parameters.Add("@InstanceID", SqlDbType.VarChar, size: 100).Value = instanceId;
+            command.Parameters.Add("@Reason", SqlDbType.VarChar).Value = reason;
+
+            await SqlUtils.ExecuteNonQueryAsync(command, this.traceHelper);
+        }
+
+        /// <summary>
         /// Gets a value that represents the recommended instance count for handling the current event and work-item backlogs.
         /// </summary>
         /// <remarks>

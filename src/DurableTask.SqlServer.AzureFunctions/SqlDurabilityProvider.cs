@@ -193,6 +193,11 @@ namespace DurableTask.SqlServer.AzureFunctions
             return purgeResult.DeletedInstanceCount;
         }
 
+        public override async Task RewindAsync(string instanceId, string reason)
+        {
+            await this.service.RewindTaskOrchestrationAsync(instanceId, reason);
+        }
+
         public override bool TryGetScaleMonitor(
             string functionId,
             string functionName,

@@ -32,6 +32,8 @@ DROP PROCEDURE IF EXISTS dt._QueryManyOrchestrations
 DROP PROCEDURE IF EXISTS dt._RenewOrchestrationLocks
 DROP PROCEDURE IF EXISTS dt._RenewTaskLocks
 DROP PROCEDURE IF EXISTS dt._UpdateVersion
+DROP PROCEDURE IF EXISTS dt._RewindInstance
+DROP PROCEDURE IF EXISTS dt._RewindInstanceRecursive
 
 -- Tables
 DROP TABLE IF EXISTS dt.Versions
