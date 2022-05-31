@@ -1,5 +1,19 @@
 # Changelog
 
+## v1.0.0
+
+### New
+
+* Support for orchestration rewind ([#96](https://github.com/microsoft/durabletask-mssql/pull/96)) - contributed by [@Greybird](https://github.com/Greybird)
+
+### Updates
+
+None
+
+### Breaking changes
+
+None
+
 ## v1.0.0-rc2
 
 ### New
