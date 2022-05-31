@@ -279,6 +279,7 @@ namespace DurableTask.SqlServer.Tests.Integration
                 "dt._AddOrchestrationEvents",
                 "dt._CheckpointOrchestration",
                 "dt._CompleteTasks",
+                "dt._DiscardEventsAndUnlockInstance",
                 "dt._GetVersions",
                 "dt._LockNextOrchestration",
                 "dt._LockNextTask",

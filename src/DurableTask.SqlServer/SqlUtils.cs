@@ -209,9 +209,7 @@ namespace DurableTask.SqlServer
                     InstanceId = GetInstanceId(reader),
                     ExecutionId = GetExecutionId(reader),
                 },
-                OrchestrationStatus = (OrchestrationStatus)Enum.Parse(
-                    typeof(OrchestrationStatus),
-                    GetStringOrNull(reader, reader.GetOrdinal("RuntimeStatus"))),
+                OrchestrationStatus = GetRuntimeStatus(reader),
                 Output = GetStringOrNull(reader, reader.GetOrdinal("OutputText")),
                 Status = GetStringOrNull(reader, reader.GetOrdinal("CustomStatusText")),
                 ParentInstance = parentInstance
@@ -276,6 +274,12 @@ namespace DurableTask.SqlServer
             return reader.IsDBNull(ordinal) ? null : reader.GetString(ordinal);
         }
 
+        public static OrchestrationStatus GetRuntimeStatus(DbDataReader reader)
+        {
+            int ordinal = reader.GetOrdinal("RuntimeStatus");
+            return (OrchestrationStatus)Enum.Parse(typeof(OrchestrationStatus), GetStringOrNull(reader, ordinal));
+        }
+
         public static Guid? GetPayloadId(this DbDataReader reader)
         {
             int ordinal = reader.GetOrdinal("PayloadID");
@@ -327,7 +331,7 @@ namespace DurableTask.SqlServer
             return reader.IsDBNull(ordinal) ? null : reader.GetString(ordinal);
         }
 
-        static string GetInstanceId(DbDataReader reader)
+        internal static string GetInstanceId(DbDataReader reader)
         {
             int ordinal = reader.GetOrdinal("InstanceID");
             return reader.GetString(ordinal);

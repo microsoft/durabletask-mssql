@@ -258,7 +258,12 @@ namespace DurableTask.SqlServer.Tests.Utils
             }
         }
 
-        static Task ExecuteCommandAsync(string commandText) => SharedTestHelpers.ExecuteSqlAsync(commandText);
+        public async Task<string> GetTaskHubNameAsync()
+        {
+            return (string)await SharedTestHelpers.ExecuteSqlAsync(
+                "SELECT dt.CurrentTaskHub()",
+                this.testCredential.ConnectionString);
+        }
 
         class ActivityShim<TInput, TOutput> : TaskActivity<TInput, TOutput>
         {
@@ -293,7 +298,7 @@ namespace DurableTask.SqlServer.Tests.Utils
                 => this.Implementation(context, input);
 
             public override void RaiseEvent(OrchestrationContext context, string name, string input)
-                => this.OnEventRaised(context, name, input);
+                => this.OnEventRaised?.Invoke(context, name, input);
         }
 
         class TestObjectCreator<T> : ObjectCreator<T>

@@ -16,6 +16,7 @@ END
 -- Functions 
 GRANT EXECUTE ON OBJECT::dt.GetScaleMetric TO dt_runtime
 GRANT EXECUTE ON OBJECT::dt.GetScaleRecommendation TO dt_runtime
+GRANT EXECUTE ON OBJECT::dt.CurrentTaskHub TO dt_runtime
 
 -- Public sprocs
 GRANT EXECUTE ON OBJECT::dt.CreateInstance TO dt_runtime
@@ -30,6 +31,7 @@ GRANT EXECUTE ON OBJECT::dt.PurgeInstanceStateByTime TO dt_runtime
 GRANT EXECUTE ON OBJECT::dt._AddOrchestrationEvents TO dt_runtime
 GRANT EXECUTE ON OBJECT::dt._CheckpointOrchestration TO dt_runtime
 GRANT EXECUTE ON OBJECT::dt._CompleteTasks TO dt_runtime
+GRANT EXECUTE ON OBJECT::dt._DiscardEventsAndUnlockInstance TO dt_runtime
 GRANT EXECUTE ON OBJECT::dt._GetVersions TO dt_runtime
 GRANT EXECUTE ON OBJECT::dt._LockNextOrchestration TO dt_runtime
 GRANT EXECUTE ON OBJECT::dt._LockNextTask TO dt_runtime

@@ -514,6 +514,7 @@ BEGIN
     DECLARE @instanceID varchar(100)
     DECLARE @parentInstanceID varchar(100)
     DECLARE @version varchar(100)
+    DECLARE @runtimeStatus varchar(30)
     DECLARE @TaskHub varchar(50) = dt.CurrentTaskHub()
 
     BEGIN TRANSACTION
@@ -532,6 +533,7 @@ BEGIN
 	    [LockExpiration] = @LockExpiration,
         @instanceID = I.[InstanceID],
         @parentInstanceID = I.[ParentInstanceID],
+        @runtimeStatus = I.[RuntimeStatus],
         @version = I.[Version]
     FROM 
         dt.Instances I WITH (READPAST) INNER JOIN NewEvents E WITH (READPAST) ON
@@ -539,7 +541,7 @@ BEGIN
             E.[InstanceID] = I.[InstanceID]
     WHERE
         I.TaskHub = @TaskHub AND
-        I.[RuntimeStatus] IN ('Pending', 'Running') AND
+        I.[RuntimeStatus] NOT IN ('Suspended') AND
 	    (I.[LockExpiration] IS NULL OR I.[LockExpiration] < @now) AND
         (E.[VisibleTime] IS NULL OR E.[VisibleTime] < @now)
 
@@ -580,7 +582,10 @@ BEGIN
         RETURN
     END
 
-    -- Result #2: The full event history for the locked instance
+    -- Result #2: Basic information about this instance, including its runtime status
+    SELECT @instanceID AS [InstanceID], @runtimeStatus AS [RuntimeStatus]
+
+    -- Result #3: The full event history for the locked instance
     -- NOTE: This must be kept consistent with the dt.HistoryEvents custom data type
     SELECT
         H.[InstanceID],
@@ -897,6 +902,30 @@ BEGIN
     FROM @NewTaskEvents
 
     COMMIT TRANSACTION
+END
+GO
+
+
+CREATE OR ALTER PROCEDURE dt._DiscardEventsAndUnlockInstance
+    @InstanceID varchar(100),
+    @DeletedEvents MessageIDs READONLY
+AS
+BEGIN
+    DECLARE @taskHub varchar(50) = dt.CurrentTaskHub()
+
+    -- We return the list of deleted messages so that the caller can issue a 
+    -- warning about missing messages
+    DELETE E
+    OUTPUT DELETED.InstanceID, DELETED.SequenceNumber
+    FROM dt.NewEvents E WITH (FORCESEEK(PK_NewEvents(TaskHub, InstanceID, SequenceNumber)))
+        INNER JOIN @DeletedEvents D ON 
+            D.InstanceID = E.InstanceID AND
+            D.SequenceNumber = E.SequenceNumber AND
+            E.TaskHub = @taskHub
+
+    -- Release the lock on this instance
+    UPDATE Instances SET [LastUpdatedTime] = SYSUTCDATETIME(), [LockExpiration] = NULL
+    WHERE [TaskHub] = @taskHub and [InstanceID] = @InstanceID
 END
 GO
 

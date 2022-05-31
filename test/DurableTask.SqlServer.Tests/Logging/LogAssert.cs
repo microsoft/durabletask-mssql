@@ -115,6 +115,11 @@ namespace DurableTask.SqlServer.Tests.Logging
                     Assert.True(fields.ContainsKey("Name"));
                     Assert.True(fields.ContainsKey("LatencyMs"));
                     break;
+                case EventIds.ProcessingFailure:
+                    Assert.True(fields.ContainsKey("InstanceId"));
+                    Assert.True(fields.ContainsKey("ExecutionId"));
+                    Assert.True(fields.ContainsKey("Details"));
+                    break;
                 case EventIds.CheckpointStarting:
                     Assert.True(fields.ContainsKey("Name"));
                     Assert.True(fields.ContainsKey("InstanceId"));
@@ -143,6 +148,16 @@ namespace DurableTask.SqlServer.Tests.Logging
                 case EventIds.CreatedDatabase:
                     Assert.True(fields.ContainsKey("DatabaseName"));
                     break;
+                case EventIds.DiscardingEvent:
+                    Assert.True(fields.ContainsKey("InstanceId"));
+                    Assert.True(fields.ContainsKey("EventType"));
+                    Assert.True(fields.ContainsKey("TaskEventId"));
+                    Assert.True(fields.ContainsKey("Details"));
+                    break;
+                case EventIds.GenericInfo:
+                    Assert.True(fields.ContainsKey("InstanceId"));
+                    Assert.True(fields.ContainsKey("Details"));
+                    break;
                 default:
                     throw new ArgumentException($"Log event {log.EventId} is not known. Does it need to be added to the log validator?", nameof(log));
             }
@@ -150,13 +165,21 @@ namespace DurableTask.SqlServer.Tests.Logging
 
         public static T FieldEquals<T>(LogEntry logEntry, string fieldName, T expectedValue)
         {
+            T convertedValue = GetFieldValue<T>(logEntry, fieldName);
+            Assert.Equal(expectedValue, convertedValue);
+            return convertedValue;
+        }
+
+        public static T GetFieldValue<T>(LogEntry logEntry, string fieldName)
+        {
             var structuredEvent = logEntry.State as IReadOnlyDictionary<string, object>;
             Assert.NotNull(structuredEvent);
 
-            IReadOnlyDictionary<string, object> eventData = Assert.IsAssignableFrom<IReadOnlyDictionary<string, object>>(logEntry.State);
+            IReadOnlyDictionary<string, object> eventData = 
+                Assert.IsAssignableFrom<IReadOnlyDictionary<string, object>>(logEntry.State);
+
             object fieldValue = Assert.Contains(fieldName, eventData);
             T convertedValue = Assert.IsType<T>(fieldValue);
-            Assert.Equal(expectedValue, convertedValue);
             return convertedValue;
         }
     }

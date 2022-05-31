@@ -129,6 +129,22 @@ namespace DurableTask.SqlServer
             this.WriteLog(logEvent);
         }
 
+        public void DiscardingEvent(string instanceId, string eventType, int taskEventId, string details)
+        {
+            var logEvent = new LogEvents.DiscardingEventEvent(
+                instanceId,
+                eventType,
+                taskEventId,
+                details);
+            this.WriteLog(logEvent);
+        }
+
+        public void GenericInfoEvent(string details, string? instanceId)
+        {
+            var logEvent = new LogEvents.GenericInfo(details, instanceId);
+            this.WriteLog(logEvent);
+        }
+
         void WriteLog(ILogEvent logEvent)
         {
             // LogDurableEvent is an extension method defined in DurableTask.Core
