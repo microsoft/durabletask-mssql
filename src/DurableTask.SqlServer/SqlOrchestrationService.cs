@@ -743,9 +743,9 @@ namespace DurableTask.SqlServer
         }
 
         /// <summary>
-        /// Rewinds an orchestration
+        /// Rewinds a failed orchestration to the point right before it failed.
         /// </summary>
-        /// <param name="instanceId">Instance id of the orchestration</param>
+        /// <param name="instanceId">Instance ID of the orchestration to rewind.</param>
         /// <param name="reason">A reason for rewinding the orchestration.</param>
         public async Task RewindTaskOrchestrationAsync(string instanceId, string reason)
         {

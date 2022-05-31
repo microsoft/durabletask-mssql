@@ -1299,23 +1299,31 @@ BEGIN
         [TaskID] int NULL,
         [DataPayloadID] uniqueidentifier NULL)
     
-    -- List all events related to failures (ie TaskScheduled/TaskFailed and SubOrchestrationInstanceStarted/SubOrchestrationInstanceFailed couples)
+    -- Save all events related to failures (ie TaskScheduled/TaskFailed and SubOrchestrationInstanceStarted/SubOrchestrationInstanceFailed couples)
     INSERT INTO @eventsInFailure
     SELECT h.[SequenceNumber], h.[EventType], h.[TaskID], h.[DataPayloadID]
     FROM History h
-    WHERE h.[TaskHub] = @TaskHub AND h.[InstanceID] = @InstanceID
-      AND (h.[EventType] IN ('TaskFailed', 'SubOrchestrationInstanceFailed')
-           OR (h.[EventType] IN ('TaskScheduled', 'SubOrchestrationInstanceStarted') AND EXISTS (SELECT 1
-                                                           FROM History f
-                                                           WHERE f.[TaskHub] = @TaskHub AND f.[InstanceID] = @InstanceID  AND f.[TaskID] = h.[TaskID] AND f.[EventType] = CASE WHEN h.[EventType] = 'TaskScheduled' THEN 'TaskFailed' ELSE 'SubOrchestrationInstanceFailed' END)))
+    WHERE h.[TaskHub] = @TaskHub
+      AND h.[InstanceID] = @InstanceID
+      AND (h.[EventType] IN ('TaskFailed', 'SubOrchestrationInstanceFailed') OR (h.[EventType] IN ('TaskScheduled', 'SubOrchestrationInstanceStarted') AND EXISTS (
+        SELECT 1
+        FROM History f
+        WHERE f.[TaskHub] = @TaskHub 
+          AND f.[InstanceID] = @InstanceID
+          AND f.[TaskID] = h.[TaskID]
+          AND f.[EventType] = CASE WHEN h.[EventType] = 'TaskScheduled' THEN 'TaskFailed' ELSE 'SubOrchestrationInstanceFailed' END)))
 
     -- Mark all events related to failure as rewound
+    -- This first batch is for all events that have corresponding records in the Payloads table already
     UPDATE Payloads
     SET [Reason] = CONCAT('Rewound: ', ef.[EventType])
     FROM Payloads p
     JOIN @eventsInFailure ef ON p.[PayloadID] = ef.[DataPayloadID]
-    WHERE [TaskHub] = @TaskHub AND [InstanceID] = @InstanceID AND [SequenceNumber] IN (SELECT [SequenceNumber] FROM @eventsInFailure WHERE [DataPayloadID] IS NOT NULL AND [EventType] IN ('TaskScheduled', 'SubOrchestrationInstanceCreated'))
+    WHERE [TaskHub] = @TaskHub
+      AND [InstanceID] = @InstanceID
+      AND [SequenceNumber] IN (SELECT [SequenceNumber] FROM @eventsInFailure WHERE [DataPayloadID] IS NOT NULL AND [EventType] IN ('TaskScheduled', 'SubOrchestrationInstanceCreated'))
 
+    -- Next, insert new rows into the Payloads table for the rewound events that DON'T already have Payloads
     DECLARE @sequenceNumber bigint
     DECLARE @eventType varchar(40)
     DECLARE @payloadId uniqueidentifier
@@ -1380,7 +1388,7 @@ BEGIN
         [PayloadID],
         [Text]
     )
-    VALUES (@TaskHub, @InstanceID, @payloadId, @reason)
+    VALUES (@TaskHub, @InstanceID, @payloadId, @Reason)
     INSERT INTO NewEvents (
         [TaskHub],
         [InstanceID],
