@@ -5,6 +5,7 @@ namespace DurableTask.SqlServer.Tests.Logging
 {
     using System.Collections.Generic;
     using System.Linq;
+    using DurableTask.SqlServer.Logging;
     using Xunit;
 
     static class LogAssertExtensions
@@ -29,9 +30,18 @@ namespace DurableTask.SqlServer.Tests.Logging
             int i = 0;
             foreach (LogEntry actual in logs)
             {
+                if (actual.EventId == EventIds.GenericInfo)
+                {
+                    // Ignore generic info events, which can be non-deterministic
+                    continue;
+                }
+
                 if (asserts.Length > i)
                 {
                     LogAssert expected = asserts[i++];
+
+                    // GenericInfo logs are not supported for validation
+                    Assert.NotEqual(EventIds.GenericInfo, expected.EventId);
 
                     Assert.Equal(expected.EventName, actual.EventId.Name);
                     Assert.Equal(expected.EventId, actual.EventId.Id);

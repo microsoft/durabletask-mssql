@@ -113,6 +113,7 @@ namespace DurableTask.SqlServer
             TimeSpan receiveTimeout,
             CancellationToken cancellationToken)
         {
+            bool isWaiting = false;
             Stopwatch stopwatch = Stopwatch.StartNew();
             do
             {
@@ -166,14 +167,87 @@ namespace DurableTask.SqlServer
 
                     if (messages.Count == 0)
                     {
+                        if (!isWaiting)
+                        {
+                            this.traceHelper.GenericInfoEvent(
+                                "No events were found. Waiting for new events to appear.",
+                                instanceId: null);
+                            isWaiting = true;
+                        }
+
                         // TODO: Make this dynamic based on the number of readers
                         await this.orchestrationBackoffHelper.WaitAsync(cancellationToken);
                         continue;
                     }
 
                     this.orchestrationBackoffHelper.Reset();
+                    isWaiting = false;
 
-                    // Result #2: The full event history for the locked instance
+                    // Result #2: The runtime status of the orchestration instance
+                    if (await reader.NextResultAsync(cancellationToken))
+                    {
+                        bool instanceExists = await reader.ReadAsync(cancellationToken);
+                        string instanceId;
+                        OrchestrationStatus? currentStatus;
+
+                        bool isRunning = false;
+                        if (instanceExists)
+                        {
+                            instanceId = SqlUtils.GetInstanceId(reader);
+                            currentStatus = SqlUtils.GetRuntimeStatus(reader);
+                            isRunning =
+                                currentStatus == OrchestrationStatus.Running ||
+                                currentStatus == OrchestrationStatus.Pending;
+                        }
+                        else
+                        {
+                            instanceId = messages.Select(msg => msg.OrchestrationInstance.InstanceId).First();
+                            currentStatus = null;
+                        }
+
+                        // If the instance is in a terminal state, log and discard the new events.
+                        // NOTE: In the future, we may want to allow processing of some events if, for example, they may
+                        //       change the state of a completed instance. For example, a rewind command.
+                        if (!isRunning)
+                        {
+                            string warningMessage = instanceExists ?
+                                $"Target is in the {currentStatus} state." :
+                                $"Target doesn't exist (either never existed or continued-as-new).";
+
+                            messages.ForEach(msg => this.traceHelper.DiscardingEvent(
+                                msg.OrchestrationInstance.InstanceId,
+                                msg.Event.EventType.ToString(),
+                                DTUtils.GetTaskEventId(msg.Event),
+                                warningMessage));
+
+                            // Close the already opened reader so that we can execute a new command
+                            reader.Close();
+
+                            // Delete the events and release the orchestration instance lock
+                            using SqlCommand discardCommand = this.GetSprocCommand(
+                                connection,
+                                "dt._DiscardEventsAndUnlockInstance");
+                            discardCommand.Parameters.Add("@InstanceID", SqlDbType.VarChar, 100).Value = instanceId;
+                            discardCommand.Parameters.AddMessageIdParameter("@DeletedEvents", messages);
+                            try
+                            {
+                                await SqlUtils.ExecuteNonQueryAsync(
+                                    discardCommand,
+                                    this.traceHelper,
+                                    instanceId,
+                                    cancellationToken);
+                            }
+                            catch (Exception e)
+                            {
+                                this.traceHelper.ProcessingError(e, new OrchestrationInstance { InstanceId = instanceId });
+                                throw;
+                            }
+
+                            continue;
+                        }
+                    }
+
+                    // Result #3: The full event history for the locked instance
                     IList<HistoryEvent> history;
                     if (await reader.NextResultAsync(cancellationToken))
                     {

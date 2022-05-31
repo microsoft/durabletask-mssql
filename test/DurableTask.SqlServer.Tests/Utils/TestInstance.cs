@@ -11,7 +11,7 @@ namespace DurableTask.SqlServer.Tests.Utils
     using Newtonsoft.Json.Linq;
     using Xunit;
 
-    class TestInstance<T>
+    class TestInstance<TInput>
     {
         readonly TaskHubClient client;
         readonly OrchestrationInstance instance;
@@ -19,7 +19,7 @@ namespace DurableTask.SqlServer.Tests.Utils
         readonly string version;
         
         DateTime startTime;
-        T input;
+        TInput input;
 
         public TestInstance(
             TaskHubClient client,
@@ -27,7 +27,7 @@ namespace DurableTask.SqlServer.Tests.Utils
             string name,
             string version,
             DateTime startTime,
-            T input)
+            TInput input)
         {
             this.client = client;
             this.instance = instance;
@@ -127,7 +127,10 @@ namespace DurableTask.SqlServer.Tests.Utils
 
         internal Task<OrchestrationState> GetStateAsync()
         {
-            return this.client.GetOrchestrationStateAsync(this.instance);
+            return this.client.GetOrchestrationStateAsync(new OrchestrationInstance
+            {
+                InstanceId = this.instance.InstanceId,
+            });
         }
 
         internal Task RaiseEventAsync(string name, object value)
@@ -140,7 +143,7 @@ namespace DurableTask.SqlServer.Tests.Utils
             return this.client.TerminateInstanceAsync(this.instance, reason);
         }
 
-        internal async Task RestartAsync(T newInput)
+        internal async Task RestartAsync(TInput newInput)
         {
             OrchestrationInstance newInstance = await this.client.CreateOrchestrationInstanceAsync(
                 this.name,

@@ -22,5 +22,7 @@ namespace DurableTask.SqlServer.Logging
         public const int PurgedInstances = 310;
         public const int CommandCompleted = 311;
         public const int CreatedDatabase = 312;
+        public const int DiscardingEvent = 313;
+        public const int GenericInfo = 314;
     }
 }

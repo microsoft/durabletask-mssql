@@ -24,6 +24,7 @@ DROP PROCEDURE IF EXISTS dt.PurgeInstanceStateByTime
 DROP PROCEDURE IF EXISTS dt._AddOrchestrationEvents
 DROP PROCEDURE IF EXISTS dt._CheckpointOrchestration
 DROP PROCEDURE IF EXISTS dt._CompleteTasks
+DROP PROCEDURE IF EXISTS dt._DiscardEventsAndUnlockInstance
 DROP PROCEDURE IF EXISTS dt._GetVersions
 DROP PROCEDURE IF EXISTS dt._LockNextOrchestration
 DROP PROCEDURE IF EXISTS dt._LockNextTask

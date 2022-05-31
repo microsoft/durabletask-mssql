@@ -234,7 +234,7 @@ namespace DurableTask.SqlServer.Logging
         }
 
         [Event(EventIds.CommandCompleted, Level = EventLevel.Verbose)]
-        public void CommandCompleted(
+        internal void CommandCompleted(
             string? InstanceId,
             string CommandText,
             long LatencyMs,
@@ -263,6 +263,38 @@ namespace DurableTask.SqlServer.Logging
             this.WriteEvent(
                 EventIds.CreatedDatabase,
                 DatabaseName,
+                AppName,
+                ExtensionVersion);
+        }
+
+        [Event(EventIds.DiscardingEvent, Level = EventLevel.Warning, Version = 1)]
+        internal void DiscardingEvent(
+            string InstanceId,
+            string EventType,
+            int TaskEventId,
+            string Details,
+            string AppName,
+            string ExtensionVersion)
+        {
+            // TODO: Use WriteEventCore for better performance
+            this.WriteEvent(
+                EventIds.DiscardingEvent,
+                InstanceId,
+                EventType,
+                TaskEventId,
+                Details,
+                AppName,
+                ExtensionVersion);
+        }
+
+        [Event(EventIds.GenericInfo, Level = EventLevel.Informational, Version = 1)]
+        internal void GenericInfo(string Details, string InstanceId, string AppName, string ExtensionVersion)
+        {
+            // TODO: Use WriteEventCore for better performance
+            this.WriteEvent(
+                EventIds.GenericInfo,
+                InstanceId,
+                Details,
                 AppName,
                 ExtensionVersion);
         }

@@ -50,30 +50,34 @@ namespace DurableTask.SqlServer.Tests.Utils
             return builder.ToString();
         }
 
-        public static async Task ExecuteSqlAsync(string commandText)
+        public static async Task<object> ExecuteSqlAsync(string commandText, string connectionString = null)
         {
+            Exception lastException = null;
             for (int retry = 0; retry < 3; retry++)
             {
                 try
                 {
-                    string connectionString = GetDefaultConnectionString();
+                    connectionString ??= GetDefaultConnectionString();
                     await using SqlConnection connection = new SqlConnection(connectionString);
                     await using SqlCommand command = connection.CreateCommand();
                     await command.Connection.OpenAsync();
 
                     command.CommandText = commandText;
-                    await command.ExecuteNonQueryAsync();
-                    break;
+                    return await command.ExecuteScalarAsync();
                 }
                 catch (SqlException e) when (e.Number == 15434)
                 {
                     // 15434 : Could not drop login 'XXX' as the user is currently logged in.
+                    lastException = e;
                 }
                 catch (SqlException e) when (e.Number == 6106)
                 {
                     // 6106 : Process ID 'XXX' is not an active process ID
+                    lastException = e;
                 }
             }
+
+            throw lastException;
         }
 
         public static async Task InitializeDatabaseAsync()

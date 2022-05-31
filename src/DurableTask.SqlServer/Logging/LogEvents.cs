@@ -481,5 +481,78 @@ namespace DurableTask.SqlServer.Logging
                     DTUtils.AppName,
                     DTUtils.ExtensionVersionString);
         }
+
+        internal class DiscardingEventEvent : StructuredLogEvent, IEventSourceEvent
+        {
+            public DiscardingEventEvent(string instanceId, string eventType, int taskEventId, string details)
+            {
+                this.InstanceId = instanceId;
+                this.EventType = eventType;
+                this.TaskEventId = taskEventId;
+                this.Details = details;
+            }
+
+            [StructuredLogField]
+            public string InstanceId { get; }
+
+            [StructuredLogField]
+            public string EventType { get; }
+
+            [StructuredLogField]
+            public int TaskEventId { get; }
+
+            [StructuredLogField]
+            public string Details { get; }
+
+            public override EventId EventId => new EventId(
+                EventIds.DiscardingEvent,
+                nameof(EventIds.DiscardingEvent));
+
+            public override LogLevel Level => LogLevel.Warning;
+
+            protected override string CreateLogMessage() =>
+                $"{this.InstanceId}: Discarding {GetEventDescription(this.EventType, this.TaskEventId)}: {this.Details}";
+
+            void IEventSourceEvent.WriteEventSource() =>
+                DefaultEventSource.Log.DiscardingEvent(
+                    this.InstanceId,
+                    this.EventType,
+                    this.TaskEventId,
+                    this.Details,
+                    DTUtils.AppName,
+                    DTUtils.ExtensionVersionString);
+        }
+
+        internal class GenericInfo : StructuredLogEvent, IEventSourceEvent
+        {
+            public GenericInfo(string details, string? instanceId)
+            {
+                this.Details = details;
+                this.InstanceId = instanceId;
+            }
+
+            [StructuredLogField]
+            public string Details { get; }
+
+            [StructuredLogField]
+            public string? InstanceId { get; }
+
+            public override EventId EventId => new EventId(
+                EventIds.GenericInfo,
+                nameof(EventIds.GenericInfo));
+
+            public override LogLevel Level => LogLevel.Information;
+
+            protected override string CreateLogMessage() => string.IsNullOrEmpty(this.InstanceId) ?
+                this.Details :
+                $"{this.InstanceId}: {this.Details}";
+
+            void IEventSourceEvent.WriteEventSource() =>
+                DefaultEventSource.Log.GenericInfo(
+                    this.Details,
+                    this.InstanceId ?? string.Empty,
+                    DTUtils.AppName,
+                    DTUtils.ExtensionVersionString);
+        }
     }
 }
