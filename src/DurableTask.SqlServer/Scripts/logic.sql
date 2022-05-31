@@ -478,19 +478,6 @@ BEGIN
 END
 GO
 
-CREATE OR ALTER PROCEDURE dt.RewindInstance
-    @InstanceID varchar(100),
-    @Reason varchar(max) = NULL
-AS
-BEGIN
-    BEGIN TRANSACTION
-
-    EXEC dt._RewindInstance @InstanceID, @Reason
-
-    COMMIT TRANSACTION
-END
-GO
-
 CREATE OR ALTER PROCEDURE dt.SetGlobalSetting
     @Name varchar(300),
     @Value sql_variant
@@ -1271,6 +1258,20 @@ CREATE OR ALTER PROCEDURE dt._RewindInstance
     @Reason varchar(max) = NULL
 AS
 BEGIN
+    BEGIN TRANSACTION
+
+    EXEC dt._RewindInstanceRecursive @InstanceID, @Reason
+
+    COMMIT TRANSACTION
+END
+GO
+
+
+CREATE OR ALTER PROCEDURE dt._RewindInstanceRecursive
+    @InstanceID varchar(100),
+    @Reason varchar(max) = NULL
+AS
+BEGIN
     DECLARE @TaskHub varchar(50) = dt.CurrentTaskHub()
 
     -- *** IMPORTANT ***
@@ -1364,7 +1365,8 @@ BEGIN
     FETCH NEXT FROM subOrchestrationCursor INTO @subOrchestrationInstanceID
 
     WHILE @@FETCH_STATUS = 0 BEGIN
-        EXECUTE dt._RewindInstance @subOrchestrationInstanceID, @Reason
+        -- Call rewind recursively on the failing suborchestrations
+        EXECUTE dt._RewindInstanceRecursive @subOrchestrationInstanceID, @Reason
         FETCH NEXT FROM subOrchestrationCursor INTO @subOrchestrationInstanceID
     END
     CLOSE subOrchestrationCursor

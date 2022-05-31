@@ -750,7 +750,7 @@ namespace DurableTask.SqlServer
         public async Task RewindTaskOrchestrationAsync(string instanceId, string reason)
         {
             using SqlConnection connection = await this.GetAndOpenConnectionAsync();
-            using SqlCommand command = this.GetSprocCommand(connection, "dt.RewindInstance");
+            using SqlCommand command = this.GetSprocCommand(connection, "dt._RewindInstance");
 
             command.Parameters.Add("@InstanceID", SqlDbType.VarChar, size: 100).Value = instanceId;
             command.Parameters.Add("@Reason", SqlDbType.VarChar).Value = reason;

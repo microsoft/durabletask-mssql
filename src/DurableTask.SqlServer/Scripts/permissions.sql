@@ -25,7 +25,6 @@ GRANT EXECUTE ON OBJECT::dt.RaiseEvent TO dt_runtime
 GRANT EXECUTE ON OBJECT::dt.TerminateInstance TO dt_runtime
 GRANT EXECUTE ON OBJECT::dt.PurgeInstanceStateByID TO dt_runtime
 GRANT EXECUTE ON OBJECT::dt.PurgeInstanceStateByTime TO dt_runtime
-GRANT EXECUTE ON OBJECT::dt.RewindInstance TO dt_runtime
 
 -- Internal sprocs
 GRANT EXECUTE ON OBJECT::dt._AddOrchestrationEvents TO dt_runtime
@@ -39,6 +38,7 @@ GRANT EXECUTE ON OBJECT::dt._RenewOrchestrationLocks TO dt_runtime
 GRANT EXECUTE ON OBJECT::dt._RenewTaskLocks TO dt_runtime
 GRANT EXECUTE ON OBJECT::dt._UpdateVersion TO dt_runtime
 GRANT EXECUTE ON OBJECT::dt._RewindInstance TO dt_runtime
+GRANT EXECUTE ON OBJECT::dt._RewindInstanceRecursive TO dt_runtime
 
 -- Types
 GRANT EXECUTE ON TYPE::dt.HistoryEvents TO dt_runtime
