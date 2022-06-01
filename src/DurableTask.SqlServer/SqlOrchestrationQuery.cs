@@ -53,5 +53,10 @@ namespace DurableTask.SqlServer
         /// Gets or sets an instance ID prefix to use for filtering orchestration instances.
         /// </summary>
         public string? InstanceIdPrefix { get; set; }
+
+        /// <summary>
+        /// Determines whether the query will retrieve only parent instances.
+        /// </summary>
+        public bool FetchParentInstancesOnly { get; set; } = false;
     }
 }

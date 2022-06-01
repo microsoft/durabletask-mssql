@@ -1059,7 +1059,8 @@ CREATE OR ALTER PROCEDURE dt._QueryManyOrchestrations
     @CreatedTimeFrom datetime2 = NULL,
     @CreatedTimeTo datetime2 = NULL,
     @RuntimeStatusFilter varchar(200) = NULL,
-    @InstanceIDPrefix varchar(100) = NULL
+    @InstanceIDPrefix varchar(100) = NULL,
+	@FetchParentInstancesOnly bit = 0
 AS
 BEGIN
     DECLARE @TaskHub varchar(50) = dt.CurrentTaskHub()
@@ -1093,7 +1094,8 @@ BEGIN
         (@CreatedTimeFrom IS NULL OR I.[CreatedTime] >= @CreatedTimeFrom) AND
         (@CreatedTimeTo IS NULL OR I.[CreatedTime] <= @CreatedTimeTo) AND
         (@RuntimeStatusFilter IS NULL OR I.[RuntimeStatus] IN (SELECT [value] FROM string_split(@RuntimeStatusFilter, ','))) AND
-        (@InstanceIDPrefix IS NULL OR I.[InstanceID] LIKE @InstanceIDPrefix + '%')
+        (@InstanceIDPrefix IS NULL OR I.[InstanceID] LIKE @InstanceIDPrefix + '%') AND
+		(@FetchParentInstancesOnly = 0 OR I.ParentInstanceID IS NULL)
     ORDER BY
         I.[CreatedTime] OFFSET (@PageNumber * @PageSize) ROWS FETCH NEXT @PageSize ROWS ONLY
 END
