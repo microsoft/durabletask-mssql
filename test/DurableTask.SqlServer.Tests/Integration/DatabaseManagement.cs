@@ -287,6 +287,8 @@ namespace DurableTask.SqlServer.Tests.Integration
                 "dt._RenewOrchestrationLocks",
                 "dt._RenewTaskLocks",
                 "dt._UpdateVersion",
+                "dt._RewindInstance",
+                "dt._RewindInstanceRecursive",
             };
 
             var expectedViewNames = new HashSet<string>(StringComparer.Ordinal)

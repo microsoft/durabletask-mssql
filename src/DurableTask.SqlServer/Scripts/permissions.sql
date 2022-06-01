@@ -39,6 +39,8 @@ GRANT EXECUTE ON OBJECT::dt._QueryManyOrchestrations TO dt_runtime
 GRANT EXECUTE ON OBJECT::dt._RenewOrchestrationLocks TO dt_runtime
 GRANT EXECUTE ON OBJECT::dt._RenewTaskLocks TO dt_runtime
 GRANT EXECUTE ON OBJECT::dt._UpdateVersion TO dt_runtime
+GRANT EXECUTE ON OBJECT::dt._RewindInstance TO dt_runtime
+GRANT EXECUTE ON OBJECT::dt._RewindInstanceRecursive TO dt_runtime
 
 -- Types
 GRANT EXECUTE ON TYPE::dt.HistoryEvents TO dt_runtime

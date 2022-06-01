@@ -352,6 +352,32 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
             Assert.Equal("done", status.Output);
         }
 
+        [Fact]
+        public async Task CanRewindOrchestration()
+        {
+            Functions.ThrowExceptionInCanFail = true;
+            DurableOrchestrationStatus status = await this.RunOrchestrationAsync(nameof(Functions.RewindOrchestration));
+            Assert.Equal(OrchestrationRuntimeStatus.Failed, status.RuntimeStatus);
+            
+            Functions.ThrowExceptionInCanFail = false;
+            status = await this.RewindOrchestrationAsync(status.InstanceId);
+            Assert.Equal(OrchestrationRuntimeStatus.Completed, status.RuntimeStatus);
+            Assert.Equal("activity", status.Output);
+        }
+
+        [Fact]
+        public async Task CanRewindSubOrchestration()
+        {
+            Functions.ThrowExceptionInCanFail = true;
+            DurableOrchestrationStatus status = await this.RunOrchestrationAsync(nameof(Functions.RewindSubOrchestration));
+            Assert.Equal(OrchestrationRuntimeStatus.Failed, status.RuntimeStatus);
+            
+            Functions.ThrowExceptionInCanFail = false;
+            status = await this.RewindOrchestrationAsync(status.InstanceId);
+            Assert.Equal(OrchestrationRuntimeStatus.Completed, status.RuntimeStatus);
+            Assert.Equal("0,1,2,activity", status.Output);
+        }
+
         static class Functions
         {
             [FunctionName(nameof(Sequence))]
@@ -472,6 +498,39 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
             {
                 await ctx.CallSubOrchestratorAsync(nameof(NoOp), "NoOpInstanceId", null);
                 return "done";
+            }
+
+            [FunctionName(nameof(RewindOrchestration))]
+            public static async Task<string> RewindOrchestration([OrchestrationTrigger] IDurableOrchestrationContext ctx)
+            {
+                return await ctx.CallActivityAsync<string>(nameof(CanFail), "activity");
+            }
+
+            [FunctionName(nameof(RewindSubOrchestration))]
+            public static async Task<string> RewindSubOrchestration([OrchestrationTrigger] IDurableOrchestrationContext ctx)
+            {
+                var tasks = new List<Task<string>>();
+                for (int i = 0; i < 3; i++)
+                {
+                    tasks.Add(ctx.CallActivityAsync<string>(nameof(CanFail), i.ToString()));
+                }
+                tasks.Add(ctx.CallSubOrchestratorAsync<string>(nameof(RewindOrchestration), "RewindOrchestrationId", "suborchestration"));
+
+                var results = await Task.WhenAll(tasks);
+                return string.Join(',', results);
+            }
+
+            public static bool ThrowExceptionInCanFail { get; set; }
+
+            [FunctionName(nameof(CanFail))]
+            public static string CanFail([ActivityTrigger] IDurableActivityContext context)
+            {
+                if (ThrowExceptionInCanFail)
+                {
+                    throw new Exception("exception");
+                }
+
+                return context.GetInput<string>();
             }
         }
     }

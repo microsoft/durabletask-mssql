@@ -478,7 +478,6 @@ BEGIN
 END
 GO
 
-
 CREATE OR ALTER PROCEDURE dt.SetGlobalSetting
     @Name varchar(300),
     @Value sql_variant
@@ -1279,5 +1278,163 @@ BEGIN
     -- Duplicates are ignored (per the schema definition of dt.Versions)
     INSERT INTO Versions (SemanticVersion)
     VALUES (@SemanticVersion)
+END
+GO
+
+
+CREATE OR ALTER PROCEDURE dt._RewindInstance
+    @InstanceID varchar(100),
+    @Reason varchar(max) = NULL
+AS
+BEGIN
+    BEGIN TRANSACTION
+
+    EXEC dt._RewindInstanceRecursive @InstanceID, @Reason
+
+    COMMIT TRANSACTION
+END
+GO
+
+
+CREATE OR ALTER PROCEDURE dt._RewindInstanceRecursive
+    @InstanceID varchar(100),
+    @Reason varchar(max) = NULL
+AS
+BEGIN
+    DECLARE @TaskHub varchar(50) = dt.CurrentTaskHub()
+
+    -- *** IMPORTANT ***
+    -- To prevent deadlocks, it is important to maintain consistent table access
+    -- order across all stored procedures that execute within a transaction.
+    -- Table order for this sproc: Instances --> (History --> Payloads --> History), NewEvents)  
+
+    DECLARE @existingStatus varchar(30)
+    DECLARE @executionID varchar(50)
+    
+    SELECT TOP 1 @existingStatus = existing.[RuntimeStatus], @executionID = existing.[ExecutionID]
+    FROM Instances existing WITH (HOLDLOCK)
+    WHERE [TaskHub] = @TaskHub AND [InstanceID] = @InstanceID
+
+    -- Instance IDs can be overwritten only if the orchestration is in a terminal state
+    IF @existingStatus NOT IN ('Failed')
+    BEGIN
+        DECLARE @msg nvarchar(4000) = FORMATMESSAGE('Cannot rewing instance with ID ''%s'' because it is not in a ''Failed'' state, but in ''%s'' state.', @InstanceID, @existingStatus);
+        THROW 50001, @msg, 1;
+    END
+    
+    DECLARE @eventsInFailure TABLE (
+        [SequenceNumber] bigint NULL,
+        [EventType] varchar(40) NULL,
+        [TaskID] int NULL,
+        [DataPayloadID] uniqueidentifier NULL)
+    
+    -- Save all events related to failures (ie TaskScheduled/TaskFailed and SubOrchestrationInstanceStarted/SubOrchestrationInstanceFailed couples)
+    INSERT INTO @eventsInFailure
+    SELECT h.[SequenceNumber], h.[EventType], h.[TaskID], h.[DataPayloadID]
+    FROM History h
+    WHERE h.[TaskHub] = @TaskHub
+      AND h.[InstanceID] = @InstanceID
+      AND (h.[EventType] IN ('TaskFailed', 'SubOrchestrationInstanceFailed') OR (h.[EventType] IN ('TaskScheduled', 'SubOrchestrationInstanceStarted') AND EXISTS (
+        SELECT 1
+        FROM History f
+        WHERE f.[TaskHub] = @TaskHub 
+          AND f.[InstanceID] = @InstanceID
+          AND f.[TaskID] = h.[TaskID]
+          AND f.[EventType] = CASE WHEN h.[EventType] = 'TaskScheduled' THEN 'TaskFailed' ELSE 'SubOrchestrationInstanceFailed' END)))
+
+    -- Mark all events related to failure as rewound
+    -- This first batch is for all events that have corresponding records in the Payloads table already
+    UPDATE Payloads
+    SET [Reason] = CONCAT('Rewound: ', ef.[EventType])
+    FROM Payloads p
+    JOIN @eventsInFailure ef ON p.[PayloadID] = ef.[DataPayloadID]
+    WHERE [TaskHub] = @TaskHub
+      AND [InstanceID] = @InstanceID
+      AND [SequenceNumber] IN (SELECT [SequenceNumber] FROM @eventsInFailure WHERE [DataPayloadID] IS NOT NULL AND [EventType] IN ('TaskScheduled', 'SubOrchestrationInstanceCreated'))
+
+    -- Next, insert new rows into the Payloads table for the rewound events that DON'T already have Payloads
+    DECLARE @sequenceNumber bigint
+    DECLARE @eventType varchar(40)
+    DECLARE @payloadId uniqueidentifier
+    DECLARE sequenceNumberCursor CURSOR LOCAL FOR
+        SELECT [SequenceNumber], [EventType]
+        FROM @eventsInFailure
+        WHERE [DataPayloadID] IS NULL
+
+    OPEN sequenceNumberCursor 
+    FETCH NEXT FROM sequenceNumberCursor INTO @sequenceNumber, @eventType
+
+    WHILE @@FETCH_STATUS = 0 BEGIN
+        SET @payloadId = NEWID()
+        INSERT INTO Payloads (
+            [TaskHub],
+            [InstanceID],
+            [PayloadID],
+            [Reason]
+        )
+        VALUES (@TaskHub, @InstanceID, @payloadId, CONCAT('Rewound: ', @eventType))
+        FETCH NEXT FROM sequenceNumberCursor INTO @sequenceNumber, @eventType
+    END
+    CLOSE sequenceNumberCursor
+    DEALLOCATE sequenceNumberCursor
+
+    -- Transform all events related to failure to GenericEvents, except for SubOrchestrationInstanceStarted that can be kept
+    UPDATE History
+    SET [EventType] = 'GenericEvent'
+    WHERE [TaskHub] = @TaskHub AND [InstanceID] = @InstanceID
+      AND ([SequenceNumber] IN (SELECT [SequenceNumber]
+                                FROM @eventsInFailure WHERE [EventType] <> 'SubOrchestrationInstanceStarted')
+           OR [RuntimeStatus] = 'Failed')
+
+    -- Enumerate instances of sub orchestrations related to SubOrchestrationInstanceFailed events and rewing them recursively
+    DECLARE @subOrchestrationInstanceID varchar(100)
+    DECLARE subOrchestrationCursor CURSOR LOCAL FOR
+        SELECT i.[InstanceID]
+        FROM dt.Instances i
+          JOIN dt.History h ON i.[TaskHub] = h.[TaskHub] AND i.[InstanceID] = h.[InstanceID]
+          JOIN @eventsInFailure e ON e.[TaskID] = h.[TaskID]
+        WHERE i.[ParentInstanceID] = @InstanceID 
+          AND h.[EventType] = 'ExecutionStarted'
+          AND e.[EventType] = 'SubOrchestrationInstanceFailed'
+
+
+    OPEN subOrchestrationCursor 
+    FETCH NEXT FROM subOrchestrationCursor INTO @subOrchestrationInstanceID
+
+    WHILE @@FETCH_STATUS = 0 BEGIN
+        -- Call rewind recursively on the failing suborchestrations
+        EXECUTE dt._RewindInstanceRecursive @subOrchestrationInstanceID, @Reason
+        FETCH NEXT FROM subOrchestrationCursor INTO @subOrchestrationInstanceID
+    END
+    CLOSE subOrchestrationCursor
+    DEALLOCATE subOrchestrationCursor
+
+    -- Insert a line in NewEvents to ensure orchestration will start
+    SET @payloadId = NEWID()
+    INSERT INTO Payloads (
+        [TaskHub],
+        [InstanceID],
+        [PayloadID],
+        [Text]
+    )
+    VALUES (@TaskHub, @InstanceID, @payloadId, @Reason)
+    INSERT INTO NewEvents (
+        [TaskHub],
+        [InstanceID],
+        [ExecutionID],
+        [EventType],
+        [PayloadID]
+    ) 
+    VALUES(
+        @TaskHub,
+        @InstanceID,
+        @executionID,
+        'GenericEvent',
+        @payloadId)
+
+    -- Set orchestration status to Pending
+    UPDATE Instances
+    SET [RuntimeStatus] = 'Pending', [LastUpdatedTime] = SYSUTCDATETIME()
+    WHERE [TaskHub] = @TaskHub AND [InstanceID] = @InstanceID
 END
 GO
