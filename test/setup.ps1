@@ -1,3 +1,6 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
 param(
     [string]$pw="$env:SA_PASSWORD",
     [string]$sqlpid="Express",

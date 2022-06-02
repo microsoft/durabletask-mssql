@@ -1,5 +1,5 @@
-﻿-- Copyright (c) .NET Foundation. All rights reserved.
--- Licensed under the MIT License. See LICENSE in the project root for license information.
+﻿-- Copyright (c) Microsoft Corporation.
+-- Licensed under the MIT License.
 
 -- Security 
 IF DATABASE_PRINCIPAL_ID('dt_runtime') IS NULL
