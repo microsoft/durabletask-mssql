@@ -8,7 +8,8 @@
 
 ### Updates
 
-None
+* Updated [Microsoft.Azure.WebJobs.Extensions.DurableTask](https://www.nuget.org/packages/Microsoft.Azure.WebJobs.Extensions.DurableTask) dependency to v2.7.*
+* Fixed inaccurate license headers
 
 ### Breaking changes
 
