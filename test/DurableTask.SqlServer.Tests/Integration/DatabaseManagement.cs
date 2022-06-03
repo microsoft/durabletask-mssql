@@ -41,7 +41,7 @@ namespace DurableTask.SqlServer.Tests.Integration
             var expectedScriptFiles = new HashSet<string>
             {
                 "drop-schema.sql",
-                "schema-0.2.0.sql",
+                "schema-1.0.0.sql",
                 "logic.sql",
                 "permissions.sql",
             };
@@ -92,7 +92,7 @@ namespace DurableTask.SqlServer.Tests.Integration
                 .Expect(
                     LogAssert.AcquiredAppLock(),
                     LogAssert.ExecutedSqlScript("drop-schema.sql"),
-                    LogAssert.ExecutedSqlScript("schema-0.2.0.sql"),
+                    LogAssert.ExecutedSqlScript("schema-1.0.0.sql"),
                     LogAssert.ExecutedSqlScript("logic.sql"),
                     LogAssert.ExecutedSqlScript("permissions.sql"),
                     LogAssert.SprocCompleted("dt._UpdateVersion"))
@@ -155,7 +155,7 @@ namespace DurableTask.SqlServer.Tests.Integration
                 .Expect(
                     LogAssert.AcquiredAppLock(),
                     LogAssert.SprocCompleted("dt._GetVersions"),
-                    LogAssert.ExecutedSqlScript("schema-0.2.0.sql"),
+                    LogAssert.ExecutedSqlScript("schema-1.0.0.sql"),
                     LogAssert.ExecutedSqlScript("logic.sql"),
                     LogAssert.ExecutedSqlScript("permissions.sql"),
                     LogAssert.SprocCompleted("dt._UpdateVersion"))
@@ -211,7 +211,7 @@ namespace DurableTask.SqlServer.Tests.Integration
                     // 1st
                     LogAssert.AcquiredAppLock(statusCode: 0),
                     LogAssert.SprocCompleted("dt._GetVersions"),
-                    LogAssert.ExecutedSqlScript("schema-0.2.0.sql"),
+                    LogAssert.ExecutedSqlScript("schema-1.0.0.sql"),
                     LogAssert.ExecutedSqlScript("logic.sql"),
                     LogAssert.ExecutedSqlScript("permissions.sql"),
                     LogAssert.SprocCompleted("dt._UpdateVersion"),
