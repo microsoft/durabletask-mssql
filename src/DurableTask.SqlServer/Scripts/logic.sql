@@ -660,6 +660,8 @@ BEGIN
         DELETE FROM Payloads
         WHERE [TaskHub] = @TaskHub AND [InstanceID] = @InstanceID
 
+        -- The existing payload got purged in the previous statement 
+        SET @ExistingCustomStatusPayload = NULL
         SET @IsContinueAsNew = 1
     END
 
@@ -695,7 +697,7 @@ BEGIN
     SET @IsCompleted = (CASE WHEN @RuntimeStatus IN ('Completed', 'Failed', 'Terminated') THEN 1 ELSE 0 END)
 
     -- The output payload will only exist when the orchestration has completed.
-    -- Fetch it's payload ID now so that we can update it in the Instances table further down.
+    -- Fetch its payload ID now so that we can update it in the Instances table further down.
     DECLARE @OutputPayloadID uniqueidentifier
     IF @IsCompleted = 1
     BEGIN
