@@ -8,7 +8,10 @@
 
 ### Updates
 
+* Updated package version to v1.0.0
+* Renamed schema-0.2.0.sql to schema-1.0.0.sql
 * Updated [Microsoft.Azure.WebJobs.Extensions.DurableTask](https://www.nuget.org/packages/Microsoft.Azure.WebJobs.Extensions.DurableTask) dependency to v2.7.*
+* Fixed data leak in ContinueAsNew path ([#102](https://github.com/microsoft/durabletask-mssql/pull/102))
 * Fixed inaccurate license headers
 
 ### Breaking changes
