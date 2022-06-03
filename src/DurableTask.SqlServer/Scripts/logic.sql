@@ -650,26 +650,18 @@ BEGIN
         P.[PayloadID] = I.[CustomStatusPayloadID]
     WHERE I.[TaskHub] = @TaskHub AND I.[InstanceID] = @InstanceID
 
-    -- ContinueAsNew case: delete all existing state
+    -- ContinueAsNew case: delete all existing runtime state (history and payloads)
     DECLARE @IsContinueAsNew BIT = 0
     IF @ExistingExecutionID IS NOT NULL AND @ExistingExecutionID <> @ExecutionID
     BEGIN
-        DECLARE @DeletedPayloadIDs TABLE (PayloadID uniqueidentifier, InstanceID varchar(100))
-
         DELETE FROM History
-        OUTPUT deleted.[DataPayloadID], deleted.[InstanceID] INTO @DeletedPayloadIDs
-        WHERE [TaskHub] = @TaskHub AND InstanceID = @InstanceID
+        WHERE [TaskHub] = @TaskHub AND [InstanceID] = @InstanceID
 
         DELETE FROM Payloads
-        FROM Payloads P WITH (FORCESEEK(PK_Payloads(TaskHub, InstanceID))) INNER JOIN @DeletedPayloadIDs D ON
-            P.[TaskHub] = @TaskHub AND
-            P.[InstanceID] = D.[InstanceID] AND
-            P.[PayloadID] = D.[PayloadID]
-        WHERE
-            P.[TaskHub] = @TaskHub AND
-            P.[InstanceID] = @InstanceID AND
-            P.[PayloadID] NOT IN (@CustomStatusPayloadID, @InputPayloadID)
+        WHERE [TaskHub] = @TaskHub AND [InstanceID] = @InstanceID
 
+        -- The existing payload got purged in the previous statement 
+        SET @ExistingCustomStatusPayload = NULL
         SET @IsContinueAsNew = 1
     END
 
@@ -705,7 +697,7 @@ BEGIN
     SET @IsCompleted = (CASE WHEN @RuntimeStatus IN ('Completed', 'Failed', 'Terminated') THEN 1 ELSE 0 END)
 
     -- The output payload will only exist when the orchestration has completed.
-    -- Fetch it's payload ID now so that we can update it in the Instances table further down.
+    -- Fetch its payload ID now so that we can update it in the Instances table further down.
     DECLARE @OutputPayloadID uniqueidentifier
     IF @IsCompleted = 1
     BEGIN
