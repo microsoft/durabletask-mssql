@@ -735,7 +735,6 @@ namespace DurableTask.SqlServer
                 FetchOutput = query.FetchInputsAndOutputs,
                 InstanceIdPrefix = query.InstanceIdPrefix,
                 PageSize = query.PageSize,
-                FetchParentInstancesOnly = query.FetchParentInstancesOnly,
             };
 
             if (query.RuntimeStatus?.Any() == true)
