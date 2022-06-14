@@ -57,6 +57,6 @@ namespace DurableTask.SqlServer
         /// <summary>
         /// Determines whether the query will retrieve only parent instances.
         /// </summary>
-        public bool FetchParentInstancesOnly { get; set; } = false;
+        public bool ExcludeSubOrchestrations { get; set; } = false;
     }
 }

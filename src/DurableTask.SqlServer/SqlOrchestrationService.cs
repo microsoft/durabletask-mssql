@@ -793,7 +793,7 @@ namespace DurableTask.SqlServer
             command.Parameters.Add("@CreatedTimeFrom", SqlDbType.DateTime).Value = createdTimeFrom;
             command.Parameters.Add("@CreatedTimeTo", SqlDbType.DateTime).Value = createdTimeTo;
             command.Parameters.Add("@InstanceIDPrefix", SqlDbType.VarChar, size: 100).Value = query.InstanceIdPrefix ?? SqlString.Null;
-            command.Parameters.Add("@FetchParentInstancesOnly", SqlDbType.SmallInt).Value = query.FetchParentInstancesOnly;
+            command.Parameters.Add("@ExcludeSubOrchestrations", SqlDbType.SmallInt).Value = query.ExcludeSubOrchestrations;
 
             if (query.StatusFilter?.Count > 0)
             {

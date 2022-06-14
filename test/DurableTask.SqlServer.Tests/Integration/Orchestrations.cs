@@ -458,7 +458,7 @@ namespace DurableTask.SqlServer.Tests.Integration
                 });
 
             // Act: query orchestration instances to retrieve only parent instances
-            var filter = new SqlOrchestrationQuery { FetchParentInstancesOnly = true };
+            var filter = new SqlOrchestrationQuery { ExcludeSubOrchestrations = true };
             IReadOnlyCollection<OrchestrationState> list = await this.testService.OrchestrationServiceMock.Object.GetManyOrchestrationsAsync(filter, CancellationToken.None);
 
             // Assert: total number of started orchestrations is 2 but we expect to have only one main orchestration
