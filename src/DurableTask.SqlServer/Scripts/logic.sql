@@ -1095,7 +1095,7 @@ BEGIN
         (@CreatedTimeTo IS NULL OR I.[CreatedTime] <= @CreatedTimeTo) AND
         (@RuntimeStatusFilter IS NULL OR I.[RuntimeStatus] IN (SELECT [value] FROM string_split(@RuntimeStatusFilter, ','))) AND
         (@InstanceIDPrefix IS NULL OR I.[InstanceID] LIKE @InstanceIDPrefix + '%') AND
-		(@ExcludeSubOrchestrations = 0 OR I.ParentInstanceID IS NULL)
+        (@ExcludeSubOrchestrations = 0 OR I.ParentInstanceID IS NULL)
     ORDER BY
         I.[CreatedTime] OFFSET (@PageNumber * @PageSize) ROWS FETCH NEXT @PageSize ROWS ONLY
 END
