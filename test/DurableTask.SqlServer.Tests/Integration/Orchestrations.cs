@@ -1,4 +1,4 @@
-﻿// Copyright (c) Microsoft Corporation.
+// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
 namespace DurableTask.SqlServer.Tests.Integration
@@ -428,13 +428,41 @@ namespace DurableTask.SqlServer.Tests.Integration
                     if (input < 3)
                     {
                         int subResult =
-                            await ctx.CreateSubOrchestrationInstance<int>(orchestrationName, string.Empty, $"Sub{input}", input+1);
+                            await ctx.CreateSubOrchestrationInstance<int>(orchestrationName, string.Empty, $"Sub{input}", input + 1);
                         result += subResult;
                     }
                     return result;
                 });
             await testInstance.WaitForCompletion(
                 timeout: TimeSpan.FromSeconds(15), expectedOutput: 15);
+        }
+
+        [Fact]
+        public async Task ListParentOrchestrationsOnly()
+        {
+            // Arrange: start an orchestration instance which starts a sub orchestration instance.
+            string orchestrationName = "SubOrchestrationTest";
+            TestInstance<int> testInstance = await this.testService.RunOrchestration(
+                input: 1,
+                orchestrationName,
+                implementation: async (ctx, input) =>
+                {
+                    int result = 5;
+                    if (input < 3)
+                    {
+                        int subResult =
+                            await ctx.CreateSubOrchestrationInstance<int>(orchestrationName, string.Empty, $"Sub{input}", input + 1);
+                        result += subResult;
+                    }
+                    return result;
+                });
+
+            // Act: query orchestration instances to retrieve only parent instances.
+            var filter = new SqlOrchestrationQuery { ExcludeSubOrchestrations = true };
+            IReadOnlyCollection<OrchestrationState> list = await this.testService.OrchestrationServiceMock.Object.GetManyOrchestrationsAsync(filter, CancellationToken.None);
+
+            // Assert: total number of started orchestrations is 2 but we expect to have only one main orchestration.
+            Assert.Equal(1, list.Count);
         }
 
         [Fact]

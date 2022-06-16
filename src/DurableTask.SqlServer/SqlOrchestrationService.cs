@@ -734,7 +734,7 @@ namespace DurableTask.SqlServer
                 FetchInput = query.FetchInputsAndOutputs,
                 FetchOutput = query.FetchInputsAndOutputs,
                 InstanceIdPrefix = query.InstanceIdPrefix,
-                PageSize = query.PageSize
+                PageSize = query.PageSize,
             };
 
             if (query.RuntimeStatus?.Any() == true)
@@ -793,6 +793,7 @@ namespace DurableTask.SqlServer
             command.Parameters.Add("@CreatedTimeFrom", SqlDbType.DateTime2).Value = createdTimeFrom;
             command.Parameters.Add("@CreatedTimeTo", SqlDbType.DateTime2).Value = createdTimeTo;
             command.Parameters.Add("@InstanceIDPrefix", SqlDbType.VarChar, size: 100).Value = query.InstanceIdPrefix ?? SqlString.Null;
+            command.Parameters.Add("@ExcludeSubOrchestrations", SqlDbType.SmallInt).Value = query.ExcludeSubOrchestrations;
 
             if (query.StatusFilter?.Count > 0)
             {
