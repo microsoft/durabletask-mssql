@@ -1,5 +1,5 @@
-﻿// Copyright (c) .NET Foundation. All rights reserved.
-// Licensed under the MIT License. See LICENSE in the project root for license information.
+﻿// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
 
 namespace DurableTask.SqlServer.AzureFunctions.Tests
 {
@@ -134,6 +134,19 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
 
             TimeSpan timeout = Debugger.IsAttached ? TimeSpan.FromMinutes(5) : TimeSpan.FromSeconds(10);
             DurableOrchestrationStatus status = await client.WaitForStartAsync(instanceId, timeout);
+            Assert.NotNull(status);
+            return status;
+        }
+
+        protected async Task<DurableOrchestrationStatus> RewindOrchestrationAsync(string instanceId)
+        {
+            IDurableClient client = await this.GetDurableClientAsync();
+#pragma warning disable CS0618 // Type or member is obsolete (preview feature)
+            await client.RewindAsync(instanceId, "rewind");
+#pragma warning restore CS0618
+
+            TimeSpan timeout = Debugger.IsAttached ? TimeSpan.FromMinutes(5) : TimeSpan.FromSeconds(10);
+            DurableOrchestrationStatus status = await client.WaitForCompletionAsync(instanceId, timeout);
             Assert.NotNull(status);
             return status;
         }

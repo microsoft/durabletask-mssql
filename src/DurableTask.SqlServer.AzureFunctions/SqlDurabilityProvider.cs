@@ -1,5 +1,5 @@
-﻿// Copyright (c) .NET Foundation. All rights reserved.
-// Licensed under the MIT License. See LICENSE in the project root for license information.
+﻿// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
 
 namespace DurableTask.SqlServer.AzureFunctions
 {
@@ -191,6 +191,11 @@ namespace DurableTask.SqlServer.AzureFunctions
             var purgeFilter = new PurgeInstanceFilter(createdTimeFrom, createdTimeTo, runtimeStatus);
             var purgeResult = await this.service.PurgeInstanceStateAsync(purgeFilter);
             return purgeResult.DeletedInstanceCount;
+        }
+
+        public override async Task RewindAsync(string instanceId, string reason)
+        {
+            await this.service.RewindTaskOrchestrationAsync(instanceId, reason);
         }
 
         public override bool TryGetScaleMonitor(

@@ -1,5 +1,5 @@
-﻿-- Copyright (c) .NET Foundation. All rights reserved.
--- Licensed under the MIT License. See LICENSE in the project root for license information.
+﻿-- Copyright (c) Microsoft Corporation.
+-- Licensed under the MIT License.
 
 -- Functions
 DROP FUNCTION IF EXISTS dt.CurrentTaskHub
@@ -32,6 +32,8 @@ DROP PROCEDURE IF EXISTS dt._QueryManyOrchestrations
 DROP PROCEDURE IF EXISTS dt._RenewOrchestrationLocks
 DROP PROCEDURE IF EXISTS dt._RenewTaskLocks
 DROP PROCEDURE IF EXISTS dt._UpdateVersion
+DROP PROCEDURE IF EXISTS dt._RewindInstance
+DROP PROCEDURE IF EXISTS dt._RewindInstanceRecursive
 
 -- Tables
 DROP TABLE IF EXISTS dt.Versions

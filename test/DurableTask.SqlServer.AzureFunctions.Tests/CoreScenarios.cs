@@ -1,5 +1,5 @@
-// Copyright (c) .NET Foundation. All rights reserved.
-// Licensed under the MIT License. See LICENSE in the project root for license information.
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
 
 namespace DurableTask.SqlServer.AzureFunctions.Tests
 {
@@ -123,7 +123,7 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
         [Fact]
         public async Task MultiInstanceQueries()
         {
-            DateTime startTime = DateTime.UtcNow;
+            DateTime startTime = SharedTestHelpers.GetCurrentDatabaseTimeUtc();
             string prefix = $"{startTime:HHmmss}";
 
             await Enumerable.Range(0, 5).ParallelForEachAsync(5, i =>
@@ -131,16 +131,28 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
                     nameof(Functions.Sequence),
                     instanceId: $"{prefix}.sequence.{i}"));
 
-            // Extra delay to account for test flakiness in the GitHub CI (TODO: Why is this necessary?)
-            await Task.Delay(TimeSpan.FromSeconds(1));
+            // As query is using CreatedTimeFrom, ensure sequencesFinishedTime is more than 100ns
+            // after startTime to cope with sql server datetime2 and c# DateTime precision
+            await Task.Delay(TimeSpan.FromMilliseconds(20));
 
             DateTime sequencesFinishedTime = SharedTestHelpers.GetCurrentDatabaseTimeUtc();
+
+            // As query is using CreatedTimeTo, ensure new orchestrations start more than 100ns
+            // after sequencesFinishedTime to cope with sql server datetime2 and c# DateTime precision
+            await Task.Delay(TimeSpan.FromMilliseconds(20));
 
             await Enumerable.Range(0, 5).ParallelForEachAsync(5, i =>
                 this.StartOrchestrationAsync(
                     nameof(Functions.WaitForEvent),
                     input: i.ToString(),
                     instanceId: $"{prefix}.waiter.{i}"));
+
+            // As query is using CreatedTimeFrom and CreatedTimeTo, ensure afterAllFinishedTime is
+            // more than 100ns after previous orchestrations start to cope with sql server datetime2
+            // and c# DateTime precision
+            await Task.Delay(TimeSpan.FromMilliseconds(20));
+
+            DateTime afterAllFinishedTime = SharedTestHelpers.GetCurrentDatabaseTimeUtc();
 
             IDurableClient client = await this.GetDurableClientAsync();
 
@@ -161,12 +173,12 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
             result = await client.ListInstancesAsync(condition, CancellationToken.None);
             Assert.Equal(5, result.DurableOrchestrationState.Count());
 
-            condition.CreatedTimeTo = DateTime.UtcNow;
+            condition.CreatedTimeTo = afterAllFinishedTime;
             result = await client.ListInstancesAsync(condition, CancellationToken.None);
             Assert.Equal(10, result.DurableOrchestrationState.Count());
 
             // Test CreatedTimeFrom filter
-            condition.CreatedTimeFrom = DateTime.UtcNow;
+            condition.CreatedTimeFrom = afterAllFinishedTime;
             result = await client.ListInstancesAsync(condition, CancellationToken.None);
             Assert.Empty(result.DurableOrchestrationState);
 
@@ -288,16 +300,18 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
             DurableOrchestrationStatus instance1 = await this.RunOrchestrationAsync(nameof(Functions.NoOp));
             DurableOrchestrationStatus instance2 = await this.RunOrchestrationAsync(nameof(Functions.NoOp));
 
-            // Extra delay to account for test flakiness in the GitHub CI (TODO: Why is this necessary?)
-            await Task.Delay(TimeSpan.FromSeconds(1));
+            // As purge is using CreatedTimeFrom, ensure new orchestrations are started more than 100ns
+            // after startTime to cope with sql server datetime2 and c# DateTime precision
+            await Task.Delay(TimeSpan.FromMilliseconds(20));
 
             DateTime midTime = SharedTestHelpers.GetCurrentDatabaseTimeUtc();
 
             DurableOrchestrationStatus instance3 = await this.RunOrchestrationAsync(nameof(Functions.NoOp));
             DurableOrchestrationStatus instance4 = await this.RunOrchestrationAsync(nameof(Functions.NoOp));
 
-            // Extra delay to account for test flakiness in the GitHub CI (TODO: Why is this necessary?)
-            await Task.Delay(TimeSpan.FromSeconds(1));
+            // As purge is using CreatedTimeFrom, ensure endTime is more than 100ns after midTime
+            // to cope with sql server datetime2 and c# DateTime precision
+            await Task.Delay(TimeSpan.FromMilliseconds(20));
 
             DateTime endTime = SharedTestHelpers.GetCurrentDatabaseTimeUtc();
 
@@ -335,6 +349,32 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
             DurableOrchestrationStatus status = await this.RunOrchestrationAsync(nameof(Functions.SubOrchestrationTest));
             Assert.Equal(OrchestrationRuntimeStatus.Completed, status.RuntimeStatus);
             Assert.Equal("done", status.Output);
+        }
+
+        [Fact]
+        public async Task CanRewindOrchestration()
+        {
+            Functions.ThrowExceptionInCanFail = true;
+            DurableOrchestrationStatus status = await this.RunOrchestrationAsync(nameof(Functions.RewindOrchestration));
+            Assert.Equal(OrchestrationRuntimeStatus.Failed, status.RuntimeStatus);
+            
+            Functions.ThrowExceptionInCanFail = false;
+            status = await this.RewindOrchestrationAsync(status.InstanceId);
+            Assert.Equal(OrchestrationRuntimeStatus.Completed, status.RuntimeStatus);
+            Assert.Equal("activity", status.Output);
+        }
+
+        [Fact]
+        public async Task CanRewindSubOrchestration()
+        {
+            Functions.ThrowExceptionInCanFail = true;
+            DurableOrchestrationStatus status = await this.RunOrchestrationAsync(nameof(Functions.RewindSubOrchestration));
+            Assert.Equal(OrchestrationRuntimeStatus.Failed, status.RuntimeStatus);
+            
+            Functions.ThrowExceptionInCanFail = false;
+            status = await this.RewindOrchestrationAsync(status.InstanceId);
+            Assert.Equal(OrchestrationRuntimeStatus.Completed, status.RuntimeStatus);
+            Assert.Equal("0,1,2,activity", status.Output);
         }
 
         static class Functions
@@ -457,6 +497,39 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
             {
                 await ctx.CallSubOrchestratorAsync(nameof(NoOp), "NoOpInstanceId", null);
                 return "done";
+            }
+
+            [FunctionName(nameof(RewindOrchestration))]
+            public static async Task<string> RewindOrchestration([OrchestrationTrigger] IDurableOrchestrationContext ctx)
+            {
+                return await ctx.CallActivityAsync<string>(nameof(CanFail), "activity");
+            }
+
+            [FunctionName(nameof(RewindSubOrchestration))]
+            public static async Task<string> RewindSubOrchestration([OrchestrationTrigger] IDurableOrchestrationContext ctx)
+            {
+                var tasks = new List<Task<string>>();
+                for (int i = 0; i < 3; i++)
+                {
+                    tasks.Add(ctx.CallActivityAsync<string>(nameof(CanFail), i.ToString()));
+                }
+                tasks.Add(ctx.CallSubOrchestratorAsync<string>(nameof(RewindOrchestration), "RewindOrchestrationId", "suborchestration"));
+
+                var results = await Task.WhenAll(tasks);
+                return string.Join(',', results);
+            }
+
+            public static bool ThrowExceptionInCanFail { get; set; }
+
+            [FunctionName(nameof(CanFail))]
+            public static string CanFail([ActivityTrigger] IDurableActivityContext context)
+            {
+                if (ThrowExceptionInCanFail)
+                {
+                    throw new Exception("exception");
+                }
+
+                return context.GetInput<string>();
             }
         }
     }

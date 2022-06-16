@@ -1,5 +1,5 @@
-﻿// Copyright (c) .NET Foundation. All rights reserved.
-// Licensed under the MIT License. See LICENSE in the project root for license information.
+﻿// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
 
 namespace DurableTask.SqlServer
 {
@@ -469,19 +469,11 @@ namespace DurableTask.SqlServer
             }
         }
 
-        public static SqlDateTime ToSqlUtcDateTime(this DateTime dateTime, SqlDateTime defaultValue)
+        public static DateTime ToSqlUtcDateTime(this DateTime dateTime, DateTime defaultValue)
         {
             if (dateTime == default)
             {
                 return defaultValue;
-            }
-            else if (dateTime > SqlDateTime.MaxValue)
-            {
-                return SqlDateTime.MaxValue;
-            }
-            else if (dateTime < SqlDateTime.MinValue)
-            {
-                return SqlDateTime.MinValue;
             }
             else if (dateTime.Kind == DateTimeKind.Utc)
             {

@@ -1,5 +1,5 @@
-﻿// Copyright (c) .NET Foundation. All rights reserved.
-// Licensed under the MIT License. See LICENSE in the project root for license information.
+﻿// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
 
 namespace DurableTask.SqlServer
 {
@@ -780,8 +780,8 @@ namespace DurableTask.SqlServer
                 throw new ArgumentOutOfRangeException(nameof(query), $"{nameof(query.PageNumber)} must be between 0 and {short.MaxValue} (inclusive).");
             }
 
-            SqlDateTime createdTimeFrom = query.CreatedTimeFrom.ToSqlUtcDateTime(SqlDateTime.MinValue);
-            SqlDateTime createdTimeTo = query.CreatedTimeTo.ToSqlUtcDateTime(SqlDateTime.MaxValue);
+            DateTime createdTimeFrom = query.CreatedTimeFrom.ToSqlUtcDateTime(DateTime.MinValue);
+            DateTime createdTimeTo = query.CreatedTimeTo.ToSqlUtcDateTime(DateTime.MaxValue);
 
             using SqlConnection connection = await this.GetAndOpenConnectionAsync(cancellationToken);
             using SqlCommand command = this.GetSprocCommand(connection, "dt._QueryManyOrchestrations");
@@ -790,8 +790,8 @@ namespace DurableTask.SqlServer
             command.Parameters.Add("@PageNumber", SqlDbType.SmallInt).Value = query.PageNumber;
             command.Parameters.Add("@FetchInput", SqlDbType.Bit).Value = query.FetchInput;
             command.Parameters.Add("@FetchOutput", SqlDbType.Bit).Value = query.FetchOutput;
-            command.Parameters.Add("@CreatedTimeFrom", SqlDbType.DateTime).Value = createdTimeFrom;
-            command.Parameters.Add("@CreatedTimeTo", SqlDbType.DateTime).Value = createdTimeTo;
+            command.Parameters.Add("@CreatedTimeFrom", SqlDbType.DateTime2).Value = createdTimeFrom;
+            command.Parameters.Add("@CreatedTimeTo", SqlDbType.DateTime2).Value = createdTimeTo;
             command.Parameters.Add("@InstanceIDPrefix", SqlDbType.VarChar, size: 100).Value = query.InstanceIdPrefix ?? SqlString.Null;
             command.Parameters.Add("@ExcludeSubOrchestrations", SqlDbType.SmallInt).Value = query.ExcludeSubOrchestrations;
 
@@ -815,6 +815,22 @@ namespace DurableTask.SqlServer
             }
 
             return results;
+        }
+
+        /// <summary>
+        /// Rewinds a failed orchestration to the point right before it failed.
+        /// </summary>
+        /// <param name="instanceId">Instance ID of the orchestration to rewind.</param>
+        /// <param name="reason">A reason for rewinding the orchestration.</param>
+        public async Task RewindTaskOrchestrationAsync(string instanceId, string reason)
+        {
+            using SqlConnection connection = await this.GetAndOpenConnectionAsync();
+            using SqlCommand command = this.GetSprocCommand(connection, "dt._RewindInstance");
+
+            command.Parameters.Add("@InstanceID", SqlDbType.VarChar, size: 100).Value = instanceId;
+            command.Parameters.Add("@Reason", SqlDbType.VarChar).Value = reason;
+
+            await SqlUtils.ExecuteNonQueryAsync(command, this.traceHelper);
         }
 
         /// <summary>
