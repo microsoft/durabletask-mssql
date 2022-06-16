@@ -1,4 +1,4 @@
-﻿// Copyright (c) .NET Foundation. All rights reserved.
+// Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the MIT License. See LICENSE in the project root for license information.
 
 namespace DurableTask.SqlServer.Tests.Integration
@@ -440,7 +440,7 @@ namespace DurableTask.SqlServer.Tests.Integration
         [Fact]
         public async Task ListParentOrchestrationsOnly()
         {
-            // Arrange: start an orchestration instance which starts a sub orchestration instance
+            // Arrange: start an orchestration instance which starts a sub orchestration instance.
             string orchestrationName = "SubOrchestrationTest";
             TestInstance<int> testInstance = await this.testService.RunOrchestration(
                 input: 1,
@@ -457,11 +457,11 @@ namespace DurableTask.SqlServer.Tests.Integration
                     return result;
                 });
 
-            // Act: query orchestration instances to retrieve only parent instances
+            // Act: query orchestration instances to retrieve only parent instances.
             var filter = new SqlOrchestrationQuery { ExcludeSubOrchestrations = true };
             IReadOnlyCollection<OrchestrationState> list = await this.testService.OrchestrationServiceMock.Object.GetManyOrchestrationsAsync(filter, CancellationToken.None);
 
-            // Assert: total number of started orchestrations is 2 but we expect to have only one main orchestration
+            // Assert: total number of started orchestrations is 2 but we expect to have only one main orchestration.
             Assert.Equal(1, list.Count);
         }
 
