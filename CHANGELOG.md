@@ -13,10 +13,12 @@
 * Updated [Microsoft.Azure.WebJobs.Extensions.DurableTask](https://www.nuget.org/packages/Microsoft.Azure.WebJobs.Extensions.DurableTask) dependency to v2.7.*
 * Fixed data leak in ContinueAsNew path ([#102](https://github.com/microsoft/durabletask-mssql/pull/102))
 * Fixed inaccurate license headers
+* Added new *LongHaul* stress test to the performance testing project
+* Added PowerShell script for automated performance testing in Azure
 
 ### Breaking changes
 
-None
+* Removed explicit dependencies on `Microsoft.Extensions.Caching.Memory` and `Microsoft.Extensions.Logging.Abstractions`
 
 ## v1.0.0-rc2
 
