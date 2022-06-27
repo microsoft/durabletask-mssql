@@ -6,6 +6,7 @@ namespace DurableTask.SqlServer.AzureFunctions
     using System;
     using Microsoft.Azure.WebJobs.Extensions.DurableTask;
     using Microsoft.Data.SqlClient;
+    using Microsoft.Extensions.Configuration;
     using Microsoft.Extensions.Logging;
     using Microsoft.Extensions.Logging.Abstractions;
     using Newtonsoft.Json;
@@ -31,15 +32,15 @@ namespace DurableTask.SqlServer.AzureFunctions
         
         internal SqlOrchestrationServiceSettings GetOrchestrationServiceSettings(
             DurableTaskOptions extensionOptions,
-            IConnectionStringResolver connectionStringResolver)
+            IConnectionInfoResolver connectionStringResolver)
         {
             if (connectionStringResolver == null)
             {
                 throw new ArgumentNullException(nameof(connectionStringResolver));
             }
 
-            string? connectionString = connectionStringResolver.Resolve(this.ConnectionStringName);
-            if (string.IsNullOrEmpty(connectionString))
+            IConfigurationSection connectionStringSection = connectionStringResolver.Resolve(this.ConnectionStringName);
+            if (connectionStringSection == null || string.IsNullOrEmpty(connectionStringSection.Value))
             {
                 throw new InvalidOperationException(
                     $"No SQL connection string configuration was found for the app setting or environment variable named '{this.ConnectionStringName}'.");
@@ -48,14 +49,14 @@ namespace DurableTask.SqlServer.AzureFunctions
             // Validate the connection string
             try
             {
-                new SqlConnectionStringBuilder(connectionString);
+                new SqlConnectionStringBuilder(connectionStringSection.Value);
             }
             catch (ArgumentException e)
             {
                 throw new ArgumentException("The provided connection string is invalid.", e);
             }
 
-            var settings = new SqlOrchestrationServiceSettings(connectionString, this.TaskHubName)
+            var settings = new SqlOrchestrationServiceSettings(connectionStringSection.Value, this.TaskHubName)
             {
                 CreateDatabaseIfNotExists = this.CreateDatabaseIfNotExists,
                 LoggerFactory = this.LoggerFactory,
