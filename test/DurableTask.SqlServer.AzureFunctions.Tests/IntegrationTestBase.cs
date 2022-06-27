@@ -196,20 +196,31 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
         class TestSettingsResolver : INameResolver, IConnectionInfoResolver
         {
             readonly Dictionary<string, string> testSettings;
-            readonly IConfigurationRoot config;
+            IConfigurationRoot? config;
 
             public TestSettingsResolver()
             {
                 this.testSettings = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-                this.config = new ConfigurationBuilder()
+            }
+
+            public void AddSetting(string name, string value)
+            {
+                if (this.config != null)
+                {
+                    throw new InvalidOperationException("The configuration has already been loaded!");
+                }
+
+                this.testSettings.Add(name, value);
+            }
+
+            IConfigurationSection IConnectionInfoResolver.Resolve(string name)
+            {
+                this.config ??= new ConfigurationBuilder()
                     .AddInMemoryCollection(this.testSettings)
                     .AddEnvironmentVariables()
                     .Build();
+                return this.config.GetSection(name);
             }
-
-            public void AddSetting(string name, string value) => this.testSettings.Add(name, value);
-
-            IConfigurationSection IConnectionInfoResolver.Resolve(string name) => this.config.GetSection(name);
 
             string? INameResolver.Resolve(string name)
             {
