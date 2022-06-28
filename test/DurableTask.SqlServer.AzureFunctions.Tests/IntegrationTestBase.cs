@@ -12,6 +12,7 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
     using DurableTask.SqlServer.Tests.Utils;
     using Microsoft.Azure.WebJobs;
     using Microsoft.Azure.WebJobs.Extensions.DurableTask;
+    using Microsoft.Extensions.Configuration;
     using Microsoft.Extensions.DependencyInjection;
     using Microsoft.Extensions.Hosting;
     using Microsoft.Extensions.Logging;
@@ -55,7 +56,7 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
                     services =>
                     {
                         services.AddSingleton<INameResolver>(this.settingsResolver);
-                        services.AddSingleton<IConnectionStringResolver>(this.settingsResolver);
+                        services.AddSingleton<IConnectionInfoResolver>(this.settingsResolver);
                         services.AddSingleton<ITypeLocator>(this.typeLocator);
                         services.AddDurableTaskSqlProvider();
                     })
@@ -192,18 +193,36 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
             IReadOnlyList<Type> ITypeLocator.GetTypes() => this.functionTypes.AsReadOnly();
         }
 
-        class TestSettingsResolver : INameResolver, IConnectionStringResolver
+        class TestSettingsResolver : INameResolver, IConnectionInfoResolver
         {
-            readonly Dictionary<string, string> testSettings =
-                new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            readonly Dictionary<string, string> testSettings;
+            IConfigurationRoot? config;
 
-            public void AddSetting(string name, string value) => this.testSettings.Add(name, value);
+            public TestSettingsResolver()
+            {
+                this.testSettings = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            }
 
-            string? INameResolver.Resolve(string name) => this.Resolve(name);
+            public void AddSetting(string name, string value)
+            {
+                if (this.config != null)
+                {
+                    throw new InvalidOperationException("The configuration has already been loaded!");
+                }
 
-            string? IConnectionStringResolver.Resolve(string connectionStringName) => this.Resolve(connectionStringName);
+                this.testSettings.Add(name, value);
+            }
 
-            string? Resolve(string name)
+            IConfigurationSection IConnectionInfoResolver.Resolve(string name)
+            {
+                this.config ??= new ConfigurationBuilder()
+                    .AddInMemoryCollection(this.testSettings)
+                    .AddEnvironmentVariables()
+                    .Build();
+                return this.config.GetSection(name);
+            }
+
+            string? INameResolver.Resolve(string name)
             {
                 if (string.IsNullOrEmpty(name))
                 {

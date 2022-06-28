@@ -4,7 +4,7 @@ The Microsoft SQL Provider for the Durable Task Framework (DTFx) and Durable Fun
 
 ## Terminology
 
-Throughout this article, we'll use the term _worker_ to refer to a single replica of the DTFx backend. If you are building an app using DTFx directly, then _worker_ refers to an instance of the `TaskHubWorker` class. If you are building an app on the Azure Functions hosted service, then a _worker_ refers to a single instance of a function app. In the context of Kubernetes, a _worker_ typically corresponds to a deployment replica.
+Throughout this article, we'll use the term *worker* to refer to a single replica of the DTFx backend. If you are building an app using DTFx directly, then *worker* refers to an instance of the `TaskHubWorker` class. If you are building an app on the Azure Functions hosted service, then a _worker_ refers to a single instance of a function app. In the context of Kubernetes, a *worker* typically corresponds to a deployment replica.
 
 ## Load balancing
 
@@ -12,7 +12,7 @@ The Durable SQL provider distributes orchestration and activity executions evenl
 
 ![Scale-out](media/arch-diagram.png)
 
-Each worker replica is identical and capable of running _any_ orchestrator or activity task that it can fetch from the database. Assigning specific orchestrations or activities to specific workers is not supported. There's no hard limit to the number of workers that can be added to a task hub. The maximum number of workers is limited only by the amount of concurrent load that the SQL database can handle. If any worker fails or becomes unavailable, work will be automatically redistributed across the existing set of active workers within a few minutes.
+Each worker replica is identical and capable of running *any* orchestrator or activity task that it can fetch from the database. Assigning specific orchestrations or activities to specific workers is not supported. There's no hard limit to the number of workers that can be added to a task hub. The maximum number of workers is limited only by the amount of concurrent load that the SQL database can handle. If any worker fails or becomes unavailable, work will be automatically redistributed across the existing set of active workers within a few minutes.
 
 ?> If you're familiar with the Azure Storage backend for DTFx and Durable Functions, one key difference with SQL provider is that orchestration executions can theoretically scale-out to any number of workers. There is no concept of partitions or leases.
 
@@ -122,17 +122,17 @@ The scale-up or scale-out strategy you pick will depend on the nature of your wo
 
 The maximum throughput of a Durable app is primarily determined by the power of the SQL database. "Maximum throughput" refers to the number of orchestrations that can be completed per second.
 
-The following table shows the maximum throughput when running 5,000 orchestrations, each with 5 sequential "hello, world" activities that take a small input and return a small output. The testbed consists of four 2-core Azure Dv2-series VMs running in the [Azure Functions Elastic Premium](https://docs.microsoft.com/azure/azure-functions/functions-premium-plan) hosting plan. The SQL database was a hosted Gen5 Azure SQL Database with a different number of cores for each test. The test app used version [v0.11.1-beta](https://github.com/microsoft/durabletask-mssql/releases/tag/v0.11.1-beta) of the SQL storage provider.
+The following table shows the maximum throughput when running 5,000 orchestrations, each with 5 sequential "hello, world" activities that take a small input and return a small output. The testbed consists of four 2-core Azure Dv2-series VMs running in the [Azure Functions Elastic Premium](https://docs.microsoft.com/azure/azure-functions/functions-premium-plan) hosting plan. The SQL database was a hosted Gen5 Azure SQL Database with a different number of cores for each test. The test app used version [v1.0.0](https://github.com/microsoft/durabletask-mssql/releases/tag/v1.0.0) of the SQL storage provider.
 
 | SQL vCores | Throughput | Max DB Utilization
 | -  | - | - |
-|  2 |  ~5 orchestrations/sec | 99% CPU, 13% I/O |
-|  4 |  ~9 orchestrations/sec | 84% CPU, 11% I/O |
-|  8 | ~13 orchestrations/sec | 57% CPU, 11% I/O |
-| 16 | ~16 orchestrations/sec | 36% CPU, 6% I/O  |
+|  2 |  ~21 orchestrations/sec | 99% CPU, 45% I/O |
+|  4 |  ~33 orchestrations/sec | 88% CPU, 23% I/O |
+|  8 |  ~45 orchestrations/sec | 64% CPU,  7% I/O |
+| 16 |  ~60 orchestrations/sec | 40% CPU,  6% I/O |
 
-!> In this test, adding more workers made no difference in throughput. This is almost certainly because the orchestrations and activities required very minimal compute power, making the database the primary scale bottleneck. In some cases, reducing the number of workers was shown to *increase* throughput, presumably because of lower database contention.
+!> In this test, adding more workers made only a small difference in throughput. This is very likely because the orchestrations and activities required very minimal compute power, making the database the primary scale bottleneck.
 
 !> These results are specific to this particular test, and different orchestration implementations may result in different throughput numbers. Your results may vary.
 
-The Azure SQL Database Serverless tier mentioned earlier was also tested and demonstrated just over 16 orchestrations per second. Since the Serverless tier performed just as well or better than the provisioned capacity options, and because of the cost benefits of the Serverless tier, the Serverless SQL Database tier is recommended if you're hosting in Azure. If you're not using Azure or don't have the option of using the Serverless tier, then using a database server with **6-8 CPU cores** is recommended for high throughput workloads. Any more than this provides diminishing returns.
+The Azure SQL Database Serverless tier mentioned earlier performed just as well as the provisioned capacity options, and because of the cost benefits of the Serverless tier, the Serverless SQL Database tier is recommended if you're hosting in Azure. No tests have been run with more than 16 SQL vCores.

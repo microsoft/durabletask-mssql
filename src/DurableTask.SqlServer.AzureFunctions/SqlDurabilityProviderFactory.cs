@@ -21,7 +21,7 @@ namespace DurableTask.SqlServer.AzureFunctions
 
         readonly DurableTaskOptions extensionOptions;
         readonly ILoggerFactory loggerFactory;
-        readonly IConnectionStringResolver connectionStringResolver;
+        readonly IConnectionInfoResolver connectionInfoResolver;
 
         SqlDurabilityOptions? defaultOptions;
         SqlOrchestrationServiceSettings? orchestrationServiceSettings;
@@ -36,15 +36,15 @@ namespace DurableTask.SqlServer.AzureFunctions
         /// </remarks>
         /// <param name="extensionOptions">Durable task extension configuration options.</param>
         /// <param name="loggerFactory">Logger factory registered with the Azure Functions runtime.</param>
-        /// <param name="connectionStringResolver">Resolver service for fetching Durable Task connection string information.</param>
+        /// <param name="connectionInfoResolver">Resolver service for fetching Durable Task connection string information.</param>
         public SqlDurabilityProviderFactory(
             IOptions<DurableTaskOptions> extensionOptions,
             ILoggerFactory loggerFactory,
-            IConnectionStringResolver connectionStringResolver)
+            IConnectionInfoResolver connectionInfoResolver)
         {
             this.extensionOptions = extensionOptions?.Value ?? throw new ArgumentNullException(nameof(extensionOptions));
             this.loggerFactory = loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));
-            this.connectionStringResolver = connectionStringResolver ?? throw new ArgumentNullException(nameof(connectionStringResolver));
+            this.connectionInfoResolver = connectionInfoResolver ?? throw new ArgumentNullException(nameof(connectionInfoResolver));
         }
 
         // Called by the Durable trigger binding infrastructure
@@ -85,7 +85,7 @@ namespace DurableTask.SqlServer.AzureFunctions
                 IOrchestrationServiceClient serviceClient = 
                     new SqlOrchestrationService(clientOptions.GetOrchestrationServiceSettings(
                         this.extensionOptions,
-                        this.connectionStringResolver));
+                        this.connectionInfoResolver));
                 clientProvider = new SqlDurabilityProvider(
                     this.GetOrchestrationService(),
                     clientOptions,
@@ -156,7 +156,7 @@ namespace DurableTask.SqlServer.AzureFunctions
                 SqlDurabilityOptions options = this.GetDefaultSqlOptions();
                 this.orchestrationServiceSettings = options.GetOrchestrationServiceSettings(
                     this.extensionOptions,
-                    this.connectionStringResolver);
+                    this.connectionInfoResolver);
             }
 
             return this.orchestrationServiceSettings;

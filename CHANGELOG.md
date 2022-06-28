@@ -5,6 +5,8 @@
 ### New
 
 * Support for orchestration rewind ([#96](https://github.com/microsoft/durabletask-mssql/pull/96)) - contributed by [@Greybird](https://github.com/Greybird)
+* Added PowerShell script for automated performance testing in Azure
+* Added new *LongHaul* stress test to the performance testing project
 
 ### Updates
 
@@ -16,7 +18,7 @@
 
 ### Breaking changes
 
-None
+* Removed explicit dependencies on `Microsoft.Extensions.Caching.Memory` and `Microsoft.Extensions.Logging.Abstractions`
 
 ## v1.0.0-rc2
 
