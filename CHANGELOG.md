@@ -15,6 +15,7 @@
 * Updated [Microsoft.Azure.WebJobs.Extensions.DurableTask](https://www.nuget.org/packages/Microsoft.Azure.WebJobs.Extensions.DurableTask) dependency to v2.7.*
 * Fixed data leak in ContinueAsNew path ([#102](https://github.com/microsoft/durabletask-mssql/pull/102))
 * Fixed inaccurate license headers
+* Fixed "V2 Functions host fails to load when referencing SQL package" ([#107](https://github.com/microsoft/durabletask-mssql/issues/107))
 
 ### Breaking changes
 
