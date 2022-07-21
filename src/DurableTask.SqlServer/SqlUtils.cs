@@ -369,7 +369,8 @@ namespace DurableTask.SqlServer
         public static SqlParameter AddInstanceIDsParameter(
             this SqlParameterCollection commandParameters,
             string paramName,
-            IEnumerable<string> instanceIds)
+            IEnumerable<string> instanceIds,
+            string schemaName)
         {
             static IEnumerable<SqlDataRecord> GetInstanceIdRecords(IEnumerable<string> instanceIds)
             {
@@ -382,7 +383,7 @@ namespace DurableTask.SqlServer
             }
 
             SqlParameter param = commandParameters.Add(paramName, SqlDbType.Structured);
-            param.TypeName = "dt.InstanceIDs";
+            param.TypeName = $"{schemaName}.InstanceIDs";
             param.Value = instanceIds.Any() ? GetInstanceIdRecords(instanceIds) : null;
             return param;
         }

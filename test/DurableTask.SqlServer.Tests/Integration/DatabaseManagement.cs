@@ -1,6 +1,7 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+#nullable enable
 namespace DurableTask.SqlServer.Tests.Integration
 {
     using System;
@@ -127,7 +128,61 @@ namespace DurableTask.SqlServer.Tests.Integration
             // We know that all objects were successfully removed if the "dt" no longer exists.
             Assert.DoesNotContain("dt", testDb.GetSchemas());
         }
+        
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public async Task CanCreateAndDropSchemaWithCustomSchemaName(bool isDatabaseMissing)
+        {
+            using TestDatabase testDb = this.CreateTestDb(!isDatabaseMissing);
+            string schemaName = "testSchemaName";
+            IOrchestrationService service = this.CreateServiceWithTestDb(testDb,schemaName);
 
+            await service.CreateAsync(recreateInstanceStore: true);
+            
+            LogAssert.NoWarningsOrErrors(this.logProvider);
+            LogAssert
+                .For(this.logProvider)
+                .Expect(
+                    LogAssert.CheckedDatabase())
+                .ExpectIf(
+                    isDatabaseMissing,
+                    LogAssert.CommandCompleted($"CREATE DATABASE [{testDb.Name}]"),
+                    LogAssert.CreatedDatabase(testDb.Name))
+                .Expect(
+                    LogAssert.AcquiredAppLock(),
+                    LogAssert.ExecutedSqlScript("drop-schema.sql"),
+                    LogAssert.ExecutedSqlScript("schema-1.0.0.sql"),
+                    LogAssert.ExecutedSqlScript("logic.sql"),
+                    LogAssert.ExecutedSqlScript("permissions.sql"),
+                    LogAssert.SprocCompleted($"{schemaName}._UpdateVersion"))
+                .EndOfLog();
+            
+            ValidateDatabaseSchema(testDb, schemaName);
+            
+            this.logProvider.Clear();
+            await service.CreateIfNotExistsAsync();
+            ValidateDatabaseSchema(testDb, schemaName);
+            
+            LogAssert.NoWarningsOrErrors(this.logProvider);
+            LogAssert.Sequence(
+                this.logProvider,
+                LogAssert.CheckedDatabase(),
+                LogAssert.AcquiredAppLock(),
+                LogAssert.SprocCompleted($"{schemaName}._GetVersions"));
+            
+            this.logProvider.Clear();
+            await service.DeleteAsync();
+            LogAssert.NoWarningsOrErrors(this.logProvider);
+            LogAssert.Sequence(
+                this.logProvider,
+                LogAssert.AcquiredAppLock(),
+                LogAssert.ExecutedSqlScript("drop-schema.sql"));
+            
+            Assert.DoesNotContain($"{schemaName}", testDb.GetSchemas());
+            Assert.DoesNotContain("dt", testDb.GetSchemas());
+
+        }
         /// <summary>
         /// Verifies that the CreateIfNotExistsAsync API can correctly initialize the
         /// DB schema. The previous test covered CreateAsync from scratch. This one covers
@@ -238,9 +293,9 @@ namespace DurableTask.SqlServer.Tests.Integration
             return testDb;
         }
 
-        IOrchestrationService CreateServiceWithTestDb(TestDatabase testDb)
+        IOrchestrationService CreateServiceWithTestDb(TestDatabase testDb, string? schemaName = null)
         {
-            var options = new SqlOrchestrationServiceSettings(testDb.ConnectionString)
+            var options = new SqlOrchestrationServiceSettings(testDb.ConnectionString, null, schemaName)
             {
                 CreateDatabaseIfNotExists = true,
                 LoggerFactory = LoggerFactory.Create(builder =>
@@ -253,59 +308,59 @@ namespace DurableTask.SqlServer.Tests.Integration
             return new SqlOrchestrationService(options);
         }
 
-        static void ValidateDatabaseSchema(TestDatabase database)
+        static void ValidateDatabaseSchema(TestDatabase database, string schemaName = "dt")
         {
             var expectedTableNames = new HashSet<string>(StringComparer.Ordinal)
             {
-                "dt.NewEvents",
-                "dt.NewTasks",
-                "dt.GlobalSettings",
-                "dt.History",
-                "dt.Instances",
-                "dt.Payloads",
-                "dt.Versions",
+                $"{schemaName}.NewEvents",
+                $"{schemaName}.NewTasks",
+                $"{schemaName}.GlobalSettings",
+                $"{schemaName}.History",
+                $"{schemaName}.Instances",
+                $"{schemaName}.Payloads",
+                $"{schemaName}.Versions",
             };
 
             var expectedSprocNames = new HashSet<string>(StringComparer.Ordinal)
             {
-                "dt.CreateInstance",
-                "dt.GetInstanceHistory",
-                "dt.QuerySingleOrchestration",
-                "dt.RaiseEvent",
-                "dt.SetGlobalSetting",
-                "dt.TerminateInstance",
-                "dt.PurgeInstanceStateByID",
-                "dt.PurgeInstanceStateByTime",
-                "dt._AddOrchestrationEvents",
-                "dt._CheckpointOrchestration",
-                "dt._CompleteTasks",
-                "dt._DiscardEventsAndUnlockInstance",
-                "dt._GetVersions",
-                "dt._LockNextOrchestration",
-                "dt._LockNextTask",
-                "dt._QueryManyOrchestrations",
-                "dt._RenewOrchestrationLocks",
-                "dt._RenewTaskLocks",
-                "dt._UpdateVersion",
-                "dt._RewindInstance",
-                "dt._RewindInstanceRecursive",
+                $"{schemaName}.CreateInstance",
+                $"{schemaName}.GetInstanceHistory",
+                $"{schemaName}.QuerySingleOrchestration",
+                $"{schemaName}.RaiseEvent",
+                $"{schemaName}.SetGlobalSetting",
+                $"{schemaName}.TerminateInstance",
+                $"{schemaName}.PurgeInstanceStateByID",
+                $"{schemaName}.PurgeInstanceStateByTime",
+                $"{schemaName}._AddOrchestrationEvents",
+                $"{schemaName}._CheckpointOrchestration",
+                $"{schemaName}._CompleteTasks",
+                $"{schemaName}._DiscardEventsAndUnlockInstance",
+                $"{schemaName}._GetVersions",
+                $"{schemaName}._LockNextOrchestration",
+                $"{schemaName}._LockNextTask",
+                $"{schemaName}._QueryManyOrchestrations",
+                $"{schemaName}._RenewOrchestrationLocks",
+                $"{schemaName}._RenewTaskLocks",
+                $"{schemaName}._UpdateVersion",
+                $"{schemaName}._RewindInstance",
+                $"{schemaName}._RewindInstanceRecursive",
             };
 
             var expectedViewNames = new HashSet<string>(StringComparer.Ordinal)
             {
-                "dt.vHistory",
-                "dt.vInstances",
+                $"{schemaName}.vHistory",
+                $"{schemaName}.vInstances",
             };
 
             var expectedFunctionNames = new HashSet<string>(StringComparer.Ordinal)
             {
-                "dt.CurrentTaskHub",
-                "dt.GetScaleMetric",
-                "dt.GetScaleRecommendation",
+                $"{schemaName}.CurrentTaskHub",
+                $"{schemaName}.GetScaleMetric",
+                $"{schemaName}.GetScaleRecommendation",
             };
 
             // Ensure the schema exists
-            Assert.Contains("dt", database.GetSchemas());
+            Assert.Contains($"{schemaName}", database.GetSchemas());
 
             // Make sure we've accounted for all expected tables
             foreach (string tableName in database.GetTables())
