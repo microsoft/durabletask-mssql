@@ -3,7 +3,6 @@
 
 namespace DurableTask.SqlServer
 {
-    using System;
     using System.Diagnostics;
     using System.Text;
     using DurableTask.Core;

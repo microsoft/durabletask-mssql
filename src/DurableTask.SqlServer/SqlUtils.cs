@@ -357,7 +357,7 @@ namespace DurableTask.SqlServer
 
         static DateTime? GetUtcDateTimeOrNull(this DbDataReader reader, int columnIndex)
         {
-            return reader.IsDBNull(columnIndex) ? (DateTime?)null : GetUtcDateTime(reader, columnIndex);
+            return reader.IsDBNull(columnIndex) ? null : GetUtcDateTime(reader, columnIndex);
         }
 
         static DateTime GetUtcDateTime(DbDataReader reader, int ordinal)
