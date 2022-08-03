@@ -118,7 +118,7 @@ namespace DurableTask.SqlServer
             do
             {
                 using SqlConnection connection = await this.GetAndOpenConnectionAsync(cancellationToken);
-                using SqlCommand command = this.GetSprocCommand(connection, $"{this.settings.SchemaName}._LockNextOrchestration");
+                using SqlCommand command = this.GetSprocCommand(connection, "_LockNextOrchestration".PrependSchema(this.settings.SchemaName));
 
                 int batchSize = this.settings.WorkItemBatchSize;
                 DateTime lockExpiration = DateTime.UtcNow.Add(this.settings.WorkItemLockTimeout);
@@ -226,7 +226,7 @@ namespace DurableTask.SqlServer
                             // Delete the events and release the orchestration instance lock
                             using SqlCommand discardCommand = this.GetSprocCommand(
                                 connection,
-                                $"{this.settings.SchemaName}._DiscardEventsAndUnlockInstance");
+                                "_DiscardEventsAndUnlockInstance".PrependSchema(this.settings.SchemaName));
                             discardCommand.Parameters.Add("@InstanceID", SqlDbType.VarChar, 100).Value = instanceId;
                             discardCommand.Parameters.AddMessageIdParameter("@DeletedEvents", messages, this.settings.SchemaName);
                             try
@@ -307,7 +307,7 @@ namespace DurableTask.SqlServer
         public override async Task RenewTaskOrchestrationWorkItemLockAsync(TaskOrchestrationWorkItem workItem)
         {
             using SqlConnection connection = await this.GetAndOpenConnectionAsync();
-            using SqlCommand command = this.GetSprocCommand(connection, $"{this.settings.SchemaName}._RenewOrchestrationLocks");
+            using SqlCommand command = this.GetSprocCommand(connection, "_RenewOrchestrationLocks".PrependSchema(this.settings.SchemaName));
 
             DateTime lockExpiration = DateTime.UtcNow.Add(this.settings.WorkItemLockTimeout);
 
@@ -334,7 +334,7 @@ namespace DurableTask.SqlServer
             Stopwatch sw = Stopwatch.StartNew();
 
             using SqlConnection connection = await this.GetAndOpenConnectionAsync();
-            using SqlCommand command = this.GetSprocCommand(connection, $"{this.settings.SchemaName}._CheckpointOrchestration");
+            using SqlCommand command = this.GetSprocCommand(connection, "_CheckpointOrchestration".PrependSchema(this.settings.SchemaName));
 
             OrchestrationInstance instance = newRuntimeState.OrchestrationInstance!;
             IList<HistoryEvent> newEvents = newRuntimeState.NewEvents;
@@ -406,7 +406,7 @@ namespace DurableTask.SqlServer
             while (!cancellationToken.IsCancellationRequested)
             {
                 using SqlConnection connection = await this.GetAndOpenConnectionAsync();
-                using SqlCommand command = this.GetSprocCommand(connection, $"{this.settings.SchemaName}._LockNextTask");
+                using SqlCommand command = this.GetSprocCommand(connection, "_LockNextTask".PrependSchema(this.settings.SchemaName));
 
                 DateTime lockExpiration = DateTime.UtcNow.Add(this.settings.WorkItemLockTimeout);
 
@@ -446,7 +446,7 @@ namespace DurableTask.SqlServer
         public override async Task<TaskActivityWorkItem> RenewTaskActivityWorkItemLockAsync(TaskActivityWorkItem workItem)
         {
             using SqlConnection connection = await this.GetAndOpenConnectionAsync();
-            using SqlCommand command = this.GetSprocCommand(connection, $"{this.settings.SchemaName}._RenewTaskLocks");
+            using SqlCommand command = this.GetSprocCommand(connection, "_RenewTaskLocks".PrependSchema(this.settings.SchemaName));
 
             DateTime lockExpiration = DateTime.UtcNow.Add(this.settings.WorkItemLockTimeout);
 
@@ -463,7 +463,7 @@ namespace DurableTask.SqlServer
         public override async Task CompleteTaskActivityWorkItemAsync(TaskActivityWorkItem workItem, TaskMessage responseMessage)
         {
             using SqlConnection connection = await this.GetAndOpenConnectionAsync();
-            using SqlCommand command = this.GetSprocCommand(connection, $"{this.settings.SchemaName}._CompleteTasks");
+            using SqlCommand command = this.GetSprocCommand(connection, "_CompleteTasks".PrependSchema(this.settings.SchemaName));
 
             command.Parameters.AddMessageIdParameter("@CompletedTasks", workItem.TaskMessage, this.settings.SchemaName);
             command.Parameters.AddTaskEventsParameter("@Results", responseMessage, this.settings.SchemaName);
@@ -493,7 +493,7 @@ namespace DurableTask.SqlServer
         public override async Task CreateTaskOrchestrationAsync(TaskMessage creationMessage, OrchestrationStatus[] dedupeStatuses)
         {
             using SqlConnection connection = await this.GetAndOpenConnectionAsync();
-            using SqlCommand command = this.GetSprocCommand(connection, $"{this.settings.SchemaName}.CreateInstance");
+            using SqlCommand command = this.GetSprocCommand(connection, "CreateInstance".PrependSchema(this.settings.SchemaName));
 
             ExecutionStartedEvent startEvent = (ExecutionStartedEvent)creationMessage.Event;
             OrchestrationInstance instance = startEvent.OrchestrationInstance;
@@ -518,7 +518,7 @@ namespace DurableTask.SqlServer
         public override async Task SendTaskOrchestrationMessageAsync(TaskMessage message)
         {
             using SqlConnection connection = await this.GetAndOpenConnectionAsync();
-            using SqlCommand command = this.GetSprocCommand(connection, $"{this.settings.SchemaName}._AddOrchestrationEvents");
+            using SqlCommand command = this.GetSprocCommand(connection, "_AddOrchestrationEvents".PrependSchema(this.settings.SchemaName));
 
             command.Parameters.AddOrchestrationEventsParameter("@NewOrchestrationEvents", message, this.settings.SchemaName);
 
@@ -576,7 +576,7 @@ namespace DurableTask.SqlServer
             CancellationToken cancellationToken)
         {
             using SqlConnection connection = await this.GetAndOpenConnectionAsync(cancellationToken);
-            using SqlCommand command = this.GetSprocCommand(connection, $"{this.settings.SchemaName}.QuerySingleOrchestration");
+            using SqlCommand command = this.GetSprocCommand(connection, "QuerySingleOrchestration".PrependSchema(this.settings.SchemaName));
 
             command.Parameters.Add("@InstanceID", SqlDbType.VarChar, size: 100).Value = instanceId;
             command.Parameters.Add("@ExecutionID", SqlDbType.VarChar, size: 50).Value = executionId;
@@ -599,7 +599,7 @@ namespace DurableTask.SqlServer
         public override async Task<string> GetOrchestrationHistoryAsync(string instanceId, string? executionIdFilter)
         {
             using SqlConnection connection = await this.GetAndOpenConnectionAsync();
-            using SqlCommand command = this.GetSprocCommand(connection, $"{this.settings.SchemaName}.GetInstanceHistory");
+            using SqlCommand command = this.GetSprocCommand(connection, "GetInstanceHistory".PrependSchema(this.settings.SchemaName));
 
             command.Parameters.Add("@InstanceID", SqlDbType.VarChar, size: 100).Value = instanceId;
             command.Parameters.Add("@GetInputsAndOutputs", SqlDbType.Bit).Value = true; // There's no clean way for the caller to specify this currently
@@ -640,7 +640,7 @@ namespace DurableTask.SqlServer
         public override async Task ForceTerminateTaskOrchestrationAsync(string instanceId, string? reason)
         {
             using SqlConnection connection = await this.GetAndOpenConnectionAsync();
-            using SqlCommand command = this.GetSprocCommand(connection, $"{this.settings.SchemaName}.TerminateInstance");
+            using SqlCommand command = this.GetSprocCommand(connection, "TerminateInstance".PrependSchema(this.settings.SchemaName));
 
             command.Parameters.Add("@InstanceID", SqlDbType.VarChar, size: 100).Value = instanceId;
             command.Parameters.Add("@Reason", SqlDbType.VarChar).Value = reason;
@@ -656,7 +656,7 @@ namespace DurableTask.SqlServer
             }
 
             using SqlConnection connection = await this.GetAndOpenConnectionAsync();
-            using SqlCommand command = this.GetSprocCommand(connection, $"{this.settings.SchemaName}.PurgeInstanceStateByID");
+            using SqlCommand command = this.GetSprocCommand(connection, "PurgeInstanceStateByID".PrependSchema(this.settings.SchemaName));
 
             SqlParameter instancesDeletedReturnValue = command.Parameters.Add("@InstancesDeleted", SqlDbType.Int);
             instancesDeletedReturnValue.Direction = ParameterDirection.ReturnValue;
@@ -682,7 +682,7 @@ namespace DurableTask.SqlServer
             OrchestrationStateTimeRangeFilterType timeRangeFilterType)
         {
             using SqlConnection connection = await this.GetAndOpenConnectionAsync();
-            using SqlCommand command = this.GetSprocCommand(connection, $"{this.settings.SchemaName}.PurgeInstanceStateByTime");
+            using SqlCommand command = this.GetSprocCommand(connection, "PurgeInstanceStateByTime".PrependSchema(this.settings.SchemaName));
 
             command.Parameters.Add("@ThresholdTime", SqlDbType.DateTime2).Value = maxThresholdDateTimeUtc;
             command.Parameters.Add("@FilterType", SqlDbType.TinyInt).Value = (int)timeRangeFilterType;
@@ -787,7 +787,7 @@ namespace DurableTask.SqlServer
             DateTime createdTimeTo = query.CreatedTimeTo.ToSqlUtcDateTime(DateTime.MaxValue);
 
             using SqlConnection connection = await this.GetAndOpenConnectionAsync(cancellationToken);
-            using SqlCommand command = this.GetSprocCommand(connection, $"{this.settings.SchemaName}._QueryManyOrchestrations");
+            using SqlCommand command = this.GetSprocCommand(connection, "_QueryManyOrchestrations".PrependSchema(this.settings.SchemaName));
 
             command.Parameters.Add("@PageSize", SqlDbType.SmallInt).Value = query.PageSize;
             command.Parameters.Add("@PageNumber", SqlDbType.SmallInt).Value = query.PageNumber;
@@ -828,7 +828,7 @@ namespace DurableTask.SqlServer
         public async Task RewindTaskOrchestrationAsync(string instanceId, string reason)
         {
             using SqlConnection connection = await this.GetAndOpenConnectionAsync();
-            using SqlCommand command = this.GetSprocCommand(connection, $"{this.settings.SchemaName}._RewindInstance");
+            using SqlCommand command = this.GetSprocCommand(connection, "_RewindInstance".PrependSchema(this.settings.SchemaName));
 
             command.Parameters.Add("@InstanceID", SqlDbType.VarChar, size: 100).Value = instanceId;
             command.Parameters.Add("@Reason", SqlDbType.VarChar).Value = reason;

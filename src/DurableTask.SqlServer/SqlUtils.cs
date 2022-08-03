@@ -27,6 +27,11 @@ namespace DurableTask.SqlServer
             return reader.IsDBNull(columnIndex) ? null : reader.GetString(columnIndex);
         }
 
+        public static string PrependSchema(this string dbObjectName, string schemaName)
+        {
+           return $"{schemaName}.{dbObjectName}";
+        }
+
         public static TaskMessage GetTaskMessage(this DbDataReader reader)
         {
             return new TaskMessage
@@ -383,7 +388,7 @@ namespace DurableTask.SqlServer
             }
 
             SqlParameter param = commandParameters.Add(paramName, SqlDbType.Structured);
-            param.TypeName = $"{schemaName}.InstanceIDs";
+            param.TypeName = "InstanceIDs".PrependSchema(schemaName);
             param.Value = instanceIds.Any() ? GetInstanceIdRecords(instanceIds) : null;
             return param;
         }

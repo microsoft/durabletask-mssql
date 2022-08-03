@@ -60,7 +60,7 @@ namespace DurableTask.SqlServer.SqlTypes
             string schemaName)
         {
             SqlParameter param = commandParameters.Add(paramName, SqlDbType.Structured);
-            param.TypeName = $"{schemaName}.OrchestrationEvents";
+            param.TypeName = "OrchestrationEvents".PrependSchema(schemaName);
 
             IEnumerable<TaskMessage> messages = orchestratorMessages.Union(timerMessages);
             if (continuedAsNewMessage != null)
