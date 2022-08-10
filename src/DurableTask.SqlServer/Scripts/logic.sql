@@ -174,7 +174,7 @@ BEGIN
         -- Instance IDs can be overwritten only if the orchestration is in a terminal state
         IF @existingStatus IN ('Pending', 'Running')
         BEGIN
-            DECLARE @msg nvarchar(4000) = FORMATMESSAGE('Cannot create instance with ID ''%s'' because a pending or running instance with ID already exists.', @InstanceId);
+            DECLARE @msg nvarchar(4000) = FORMATMESSAGE('Cannot create instance with ID ''%s'' because a pending or running instance with ID already exists.', @InstanceID);
             THROW 50001, @msg, 1;
         END
         ELSE IF @existingStatus IS NOT NULL
