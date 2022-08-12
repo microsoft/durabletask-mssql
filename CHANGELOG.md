@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.0.1
+
+### Updates
+
+* Fixed script for case sensitive databases ([#113](https://github.com/microsoft/durabletask-mssql/pull/113)) - contributed by [@matei-dorian](https://github.com/matei-dorian)
+* Updating SqlDurabilityProviderStartup to implement IWebJobsStartup ([#117](https://github.com/microsoft/durabletask-mssql/pull/117))
+* Removed [Microsoft.Azure.Functions.Extensions](https://www.nuget.org/packages/Microsoft.Azure.Functions.Extensions/) package dependency
+
 ## v1.0.0
 
 ### New
