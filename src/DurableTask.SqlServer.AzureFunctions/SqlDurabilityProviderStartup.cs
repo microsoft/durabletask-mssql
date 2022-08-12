@@ -1,7 +1,6 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-// Reference: https://docs.microsoft.com/en-us/azure/azure-functions/functions-dotnet-dependency-injection
 [assembly: Microsoft.Azure.WebJobs.Hosting.WebJobsStartup(
     typeof(DurableTask.SqlServer.AzureFunctions.SqlDurabilityProviderStartup))]
 
