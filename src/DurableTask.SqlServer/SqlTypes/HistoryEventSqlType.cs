@@ -64,7 +64,7 @@ namespace DurableTask.SqlServer.SqlTypes
             string schemaName)
         {
             SqlParameter param = commandParameters.Add(paramName, SqlDbType.Structured);
-            param.TypeName = "HistoryEvents".PrependSchema(schemaName);
+            param.TypeName = $"{schemaName}.HistoryEvents";
             param.Value = ToHistoryEventsParameter(newEventCollection, instance, nextSequenceNumber, eventPayloadMap);
             return param;
         }

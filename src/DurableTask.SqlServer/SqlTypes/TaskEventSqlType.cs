@@ -56,7 +56,7 @@ namespace DurableTask.SqlServer.SqlTypes
             string schemaName)
         {
             SqlParameter param = commandParameters.Add(paramName, SqlDbType.Structured);
-            param.TypeName = "TaskEvents".PrependSchema(schemaName);
+            param.TypeName = $"{schemaName}.TaskEvents";
             param.Value = ToTaskMessagesParameter(outboundMessages, eventPayloadMap);
             return param;
         }
@@ -68,7 +68,7 @@ namespace DurableTask.SqlServer.SqlTypes
             string schemaName)
         {
             SqlParameter param = commandParameters.Add(paramName, SqlDbType.Structured);
-            param.TypeName = "TaskEvents".PrependSchema(schemaName);
+            param.TypeName = $"{schemaName}.TaskEvents";
             param.Value = ToTaskMessageParameter(message);
             return param;
         }

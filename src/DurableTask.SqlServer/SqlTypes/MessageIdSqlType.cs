@@ -25,7 +25,7 @@ namespace DurableTask.SqlServer.SqlTypes
             string schemaName)
         {
             SqlParameter param = commandParameters.Add(paramName, SqlDbType.Structured);
-            param.TypeName = "MessageIDs".PrependSchema(schemaName);
+            param.TypeName = $"{schemaName}.MessageIDs";
             param.Value = ToMessageIDsParameter(messageCollection);
             return param;
         }
@@ -37,7 +37,7 @@ namespace DurableTask.SqlServer.SqlTypes
             string schemaName)
         {
             SqlParameter param = commandParameters.Add(paramName, SqlDbType.Structured);
-            param.TypeName = "MessageIDs".PrependSchema(schemaName);
+            param.TypeName = $"{schemaName}.MessageIDs";
             param.Value = ToMessageIDsParameter(message);
             return param;
         }
