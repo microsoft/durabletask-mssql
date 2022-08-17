@@ -8,7 +8,24 @@ One of the goals for the Microsoft SQL provider for the Durable Task Framework (
 
 Multitenancy works by isolating each app into a separate [task hub](taskhubs.md). The current task hub is determined by the credentials used to log into the database. For example, if your app connects to a Microsoft SQL database using **dbo** credentials (the default, built-in admin user for most databases), then the name of the connected task hub will be "dbo". Task hubs provide data isolation, ensuring that two users in the same database will not be able to access each other's data.
 
+Another layer of multitenancy is added by the multi-schema support. This increases reliability and security for multiple services that are independently deployed in the same database, allowing each service control over their own schema and further isolation between service's data.
+
 ?> Task hub isolation in the current version of the SQL provider prevents one tenant from accessing data that belongs to another tenant. However, it doesn't impose any restrictions on data volumes or database CPU usage. If this kind of strict resource isolation is required, then each tenant should instead be separated into their own database.
+
+## Managing custom schemas
+
+For self-hosted DTFx app that opt for custom schema name, you can configure the schema name directly in the `SqlOrchestrationServiceSettings` class.
+
+```csharp
+var settings = new SqlOrchestrationServiceSettings
+{
+    schemaName = "customSchemaName",
+    TaskHubConnectionString = Environment.GetEnvironmentVariable("SQLDB_Connection"),
+};
+```
+
+If no schema name name is explicitly configured, the default value `dt` will be used. Note that changing the value requires a restart of the app for the change to take effect.
+
 
 ## Enabling multitenancy
 

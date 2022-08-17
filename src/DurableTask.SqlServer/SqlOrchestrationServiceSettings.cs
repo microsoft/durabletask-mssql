@@ -19,7 +19,7 @@ namespace DurableTask.SqlServer
         /// </summary>
         /// <param name="connectionString">The connection string for connecting to the database.</param>
         /// <param name="taskHubName">Optional. The name of the task hub. If not specified, a default name will be used.</param>
-        /// <param name="schemaName">Optional. The name of the schema. If not specified, the default "dt" value will be used</param>
+        /// <param name="schemaName">Optional. The name of the schema. If not specified, the default 'dt' value will be used.</param>
         public SqlOrchestrationServiceSettings(string connectionString, string? taskHubName = null, string? schemaName = null)
         {
             if (string.IsNullOrEmpty(connectionString))

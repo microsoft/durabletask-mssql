@@ -183,6 +183,100 @@ namespace DurableTask.SqlServer.Tests.Integration
             Assert.DoesNotContain("dt", testDb.GetSchemas());
 
         }
+
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public async Task CanCreateAndDropMultipleSchemas(bool isDatabaseMissing)
+        {
+            using TestDatabase testDb = this.CreateTestDb(!isDatabaseMissing);
+            const string firstTestSchemaName = "firstTestSchemaName";
+            const string secondTestSchemaName = "secondTestSchemaName";
+            IOrchestrationService firstService = this.CreateServiceWithTestDb(testDb, firstTestSchemaName);
+            IOrchestrationService secondService = this.CreateServiceWithTestDb(testDb, secondTestSchemaName);
+            
+            await firstService.CreateAsync(recreateInstanceStore: true);
+            
+            ValidateDatabaseSchema(testDb, firstTestSchemaName);
+
+            await secondService.CreateAsync(recreateInstanceStore: true);
+            
+            LogAssert.NoWarningsOrErrors(this.logProvider);
+            LogAssert
+                .For(this.logProvider)
+                .Expect(
+                    LogAssert.CheckedDatabase())
+                .ExpectIf(
+                    isDatabaseMissing,
+                    LogAssert.CommandCompleted($"CREATE DATABASE [{testDb.Name}]"),
+                    LogAssert.CreatedDatabase(testDb.Name))
+                .Expect(
+                    LogAssert.AcquiredAppLock(),
+                    LogAssert.ExecutedSqlScript("drop-schema.sql"),
+                    LogAssert.ExecutedSqlScript("schema-1.0.0.sql"),
+                    LogAssert.ExecutedSqlScript("logic.sql"),
+                    LogAssert.ExecutedSqlScript("permissions.sql"),
+                    LogAssert.SprocCompleted($"{firstTestSchemaName}._UpdateVersion"))
+                .Expect(
+                    LogAssert.CheckedDatabase())
+                .Expect(
+                    LogAssert.AcquiredAppLock(),
+                    LogAssert.ExecutedSqlScript("drop-schema.sql"),
+                    LogAssert.ExecutedSqlScript("schema-1.0.0.sql"),
+                    LogAssert.ExecutedSqlScript("logic.sql"),
+                    LogAssert.ExecutedSqlScript("permissions.sql"),
+                    LogAssert.SprocCompleted($"{secondTestSchemaName}._UpdateVersion"))
+                .EndOfLog();
+            
+            ValidateDatabaseSchema(testDb, secondTestSchemaName);
+            
+            this.logProvider.Clear();
+            await firstService.CreateIfNotExistsAsync();
+            ValidateDatabaseSchema(testDb, firstTestSchemaName);
+            
+            LogAssert.NoWarningsOrErrors(this.logProvider);
+            LogAssert.Sequence(
+                this.logProvider,
+                LogAssert.CheckedDatabase(),
+                LogAssert.AcquiredAppLock(),
+                LogAssert.SprocCompleted($"{firstTestSchemaName}._GetVersions"));
+
+            this.logProvider.Clear();
+            await secondService.CreateIfNotExistsAsync();
+            ValidateDatabaseSchema(testDb, secondTestSchemaName);
+
+            LogAssert.NoWarningsOrErrors(this.logProvider);
+            LogAssert.Sequence(
+                this.logProvider,
+                LogAssert.CheckedDatabase(),
+                LogAssert.AcquiredAppLock(),
+                LogAssert.SprocCompleted($"{secondTestSchemaName}._GetVersions"));
+
+            Assert.Contains($"{firstTestSchemaName}", testDb.GetSchemas());
+            Assert.Contains($"{secondTestSchemaName}", testDb.GetSchemas());
+            
+            this.logProvider.Clear();
+            await firstService.DeleteAsync();
+            LogAssert.NoWarningsOrErrors(this.logProvider);
+            LogAssert.Sequence(
+                this.logProvider,
+                LogAssert.AcquiredAppLock(),
+                LogAssert.ExecutedSqlScript("drop-schema.sql"));
+            
+            Assert.DoesNotContain($"{firstTestSchemaName}",testDb.GetSchemas());
+            Assert.Contains($"{secondTestSchemaName}", testDb.GetSchemas());
+            
+            this.logProvider.Clear();
+            await secondService.DeleteAsync();
+            LogAssert.NoWarningsOrErrors(this.logProvider);
+            LogAssert.Sequence(
+                this.logProvider,
+                LogAssert.AcquiredAppLock(),
+                LogAssert.ExecutedSqlScript("drop-schema.sql"));
+            
+            Assert.DoesNotContain($"{secondTestSchemaName}",testDb.GetSchemas());
+        }
+
         /// <summary>
         /// Verifies that the CreateIfNotExistsAsync API can correctly initialize the
         /// DB schema. The previous test covered CreateAsync from scratch. This one covers
@@ -363,7 +457,7 @@ namespace DurableTask.SqlServer.Tests.Integration
             Assert.Contains($"{schemaName}", database.GetSchemas());
 
             // Make sure we've accounted for all expected tables
-            foreach (string tableName in database.GetTables())
+            foreach (string tableName in database.GetTables(schemaName))
             {
                 Assert.Contains(tableName, expectedTableNames);
                 expectedTableNames.Remove(tableName);
@@ -372,7 +466,7 @@ namespace DurableTask.SqlServer.Tests.Integration
             Assert.Empty(expectedTableNames);
 
             // Make sure we've accounted for all expected sprocs
-            foreach (string sprocName in database.GetSprocs())
+            foreach (string sprocName in database.GetSprocs(schemaName))
             {
                 Assert.Contains(sprocName, expectedSprocNames);
                 expectedSprocNames.Remove(sprocName);
@@ -381,7 +475,7 @@ namespace DurableTask.SqlServer.Tests.Integration
             Assert.Empty(expectedSprocNames);
 
             // Make sure we've accounted for all expected views
-            foreach (string viewName in database.GetViews())
+            foreach (string viewName in database.GetViews(schemaName))
             {
                 Assert.Contains(viewName, expectedViewNames);
                 expectedViewNames.Remove(viewName);
@@ -390,7 +484,7 @@ namespace DurableTask.SqlServer.Tests.Integration
             Assert.Empty(expectedViewNames);
 
             // Make sure we've accounted for all expected functions
-            foreach (string functionName in database.GetFunctions())
+            foreach (string functionName in database.GetFunctions(schemaName))
             {
                 Assert.Contains(functionName, expectedFunctionNames);
                 expectedFunctionNames.Remove(functionName);
@@ -445,17 +539,20 @@ namespace DurableTask.SqlServer.Tests.Integration
                 }
             }
 
-            public IEnumerable<string> GetTables()
+            public IEnumerable<string> GetTables(string schemaName = "dt")
             {
                 this.testDb.Tables.Refresh();
                 foreach (Table table in this.testDb.Tables)
                 {
                     // e.g. "dt.History"
-                    yield return $"{table.Schema}.{table.Name}";
+                    if(table.Schema == schemaName)
+                    {
+                        yield return $"{table.Schema}.{table.Name}";
+                    }
                 }
             }
 
-            public IEnumerable<string> GetSprocs()
+            public IEnumerable<string> GetSprocs(string schemaName = "dt")
             {
                 this.testDb.StoredProcedures.Refresh();
                 foreach (StoredProcedure sproc in this.testDb.StoredProcedures)
@@ -466,11 +563,14 @@ namespace DurableTask.SqlServer.Tests.Integration
                     }
 
                     // e.g. "dt.LockNextOrchestration"
-                    yield return $"{sproc.Schema}.{sproc.Name}";
+                    if(sproc.Schema == schemaName)
+                    {
+                        yield return $"{sproc.Schema}.{sproc.Name}";
+                    }
                 }
             }
 
-            public IEnumerable<string> GetViews()
+            public IEnumerable<string> GetViews(string schemaName = "dt")
             {
                 this.testDb.Views.Refresh();
                 foreach (View view in this.testDb.Views)
@@ -479,12 +579,15 @@ namespace DurableTask.SqlServer.Tests.Integration
                     {
                         continue;
                     }
-
-                    yield return $"{view.Schema}.{view.Name}";
+                    
+                    if(view.Schema == schemaName)
+                    {
+                        yield return $"{view.Schema}.{view.Name}";
+                    }
                 }
             }
 
-            public IEnumerable<string> GetFunctions()
+            public IEnumerable<string> GetFunctions(string schemaName = "dt")
             {
                 this.testDb.UserDefinedFunctions.Refresh();
                 foreach (UserDefinedFunction function in this.testDb.UserDefinedFunctions)
@@ -494,7 +597,10 @@ namespace DurableTask.SqlServer.Tests.Integration
                         continue;
                     }
 
-                    yield return $"{function.Schema}.{function.Name}";
+                    if(function.Schema == schemaName)
+                    {
+                        yield return $"{function.Schema}.{function.Name}";
+                    }
                 }
             }
 
