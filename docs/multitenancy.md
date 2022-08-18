@@ -19,7 +19,7 @@ For self-hosted DTFx app that opt for custom schema name, you can configure the 
 ```csharp
 var settings = new SqlOrchestrationServiceSettings
 {
-    schemaName = "customSchemaName",
+    SchemaName = "customSchemaName",
     TaskHubConnectionString = Environment.GetEnvironmentVariable("SQLDB_Connection"),
 };
 ```

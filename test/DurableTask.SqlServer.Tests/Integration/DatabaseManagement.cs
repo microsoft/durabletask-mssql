@@ -545,7 +545,7 @@ namespace DurableTask.SqlServer.Tests.Integration
                 foreach (Table table in this.testDb.Tables)
                 {
                     // e.g. "dt.History"
-                    if(table.Schema == schemaName)
+                    if (table.Schema == schemaName)
                     {
                         yield return $"{table.Schema}.{table.Name}";
                     }
@@ -563,7 +563,7 @@ namespace DurableTask.SqlServer.Tests.Integration
                     }
 
                     // e.g. "dt.LockNextOrchestration"
-                    if(sproc.Schema == schemaName)
+                    if (sproc.Schema == schemaName)
                     {
                         yield return $"{sproc.Schema}.{sproc.Name}";
                     }
@@ -580,7 +580,7 @@ namespace DurableTask.SqlServer.Tests.Integration
                         continue;
                     }
                     
-                    if(view.Schema == schemaName)
+                    if (view.Schema == schemaName)
                     {
                         yield return $"{view.Schema}.{view.Name}";
                     }
@@ -597,7 +597,7 @@ namespace DurableTask.SqlServer.Tests.Integration
                         continue;
                     }
 
-                    if(function.Schema == schemaName)
+                    if (function.Schema == schemaName)
                     {
                         yield return $"{function.Schema}.{function.Name}";
                     }

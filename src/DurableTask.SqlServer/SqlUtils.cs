@@ -26,6 +26,7 @@ namespace DurableTask.SqlServer
         {
             return reader.IsDBNull(columnIndex) ? null : reader.GetString(columnIndex);
         }
+        
         public static TaskMessage GetTaskMessage(this DbDataReader reader)
         {
             return new TaskMessage
