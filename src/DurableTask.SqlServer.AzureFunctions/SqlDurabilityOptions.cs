@@ -28,6 +28,9 @@ namespace DurableTask.SqlServer.AzureFunctions
         [JsonProperty("createDatabaseIfNotExists")]
         public bool CreateDatabaseIfNotExists { get; set; }
 
+        [JsonProperty("schemaName")]
+        public string? SchemaName { get; set; }
+
         internal ILoggerFactory LoggerFactory { get; set; } = NullLoggerFactory.Instance;
         
         internal SqlOrchestrationServiceSettings GetOrchestrationServiceSettings(
@@ -56,7 +59,7 @@ namespace DurableTask.SqlServer.AzureFunctions
                 throw new ArgumentException("The provided connection string is invalid.", e);
             }
 
-            var settings = new SqlOrchestrationServiceSettings(connectionStringSection.Value, this.TaskHubName)
+            var settings = new SqlOrchestrationServiceSettings(connectionStringSection.Value, this.TaskHubName, this.SchemaName)
             {
                 CreateDatabaseIfNotExists = this.CreateDatabaseIfNotExists,
                 LoggerFactory = this.LoggerFactory,

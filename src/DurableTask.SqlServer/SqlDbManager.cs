@@ -230,7 +230,7 @@ namespace DurableTask.SqlServer
 
             string scriptText = await GetScriptTextAsync(scriptName);
             
-            scriptText = scriptText.Replace("{{SchemaNamePlaceholder}}", this.settings.SchemaName);
+            scriptText = scriptText.Replace("__SchemaNamePlaceholder__", this.settings.SchemaName);
             
             // Split script into distinct executeable commands
             IEnumerable<string> scriptCommands = Regex.Split(scriptText, @"^\s*GO\s*$", RegexOptions.Multiline | RegexOptions.IgnoreCase)

@@ -21,7 +21,7 @@ dotnet add package Microsoft.DurableTask.SqlServer.AzureFunctions --prerelease
 JavaScript, Python, and PowerShell projects can add the [Microsoft.DurableTask.SqlServer.AzureFunction](https://www.nuget.org/packages/Microsoft.DurableTask.SqlServer.AzureFunctions) package by running the following `func` CLI command. Note that in addition to the Azure Functions Core Tools, you must also have a recent [.NET SDK](https://dotnet.microsoft.com/download) installed locally.
 
 ```bash
-func extensions install -p Microsoft.DurableTask.SqlServer.AzureFunctions -v 1.0.0
+func extensions install -p Microsoft.DurableTask.SqlServer.AzureFunctions -v 1.1.0
 ```
 
 ?> Check [here](https://www.nuget.org/packages/Microsoft.DurableTask.SqlServer.AzureFunctions) to see if newer versions of the SQL provider package are available, and update the above command to reference the latest available version.
@@ -52,7 +52,8 @@ You can configure the Durable SQL provider by updating the `extensions/durableTa
         "type": "mssql",
         "connectionStringName": "SQLDB_Connection",
         "taskEventLockTimeout": "00:02:00",
-        "createDatabaseIfNotExists": true
+        "createDatabaseIfNotExists": true,
+        "schemaName": null
       }
     }
   }
@@ -75,6 +76,8 @@ The `connectionStringName` setting is required and must be set to the name of th
   }
 }
 ```
+
+The `schemaName` settings is an optional string value that defaults to `null`. This property is required when database objects are provisioned under a custom schema name. If not specified, a schema name of `dt` is assumed. See the [Multitenancy](multitenancy.md) documentation for more details.
 
 To enable diagnostic logging, you can also add the following `logging` configuration to your **host.json** file:
 

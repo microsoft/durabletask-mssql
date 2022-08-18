@@ -1,7 +1,7 @@
 ﻿-- Copyright (c) Microsoft Corporation.
 -- Licensed under the MIT License.
 
-CREATE OR ALTER FUNCTION {{SchemaNamePlaceholder}}.CurrentTaskHub()
+CREATE OR ALTER FUNCTION __SchemaNamePlaceholder__.CurrentTaskHub()
     RETURNS varchar(50)
     WITH EXECUTE AS CALLER
 AS
@@ -9,7 +9,7 @@ BEGIN
     -- Task Hub modes:
     -- 0: Task hub names are set by the app
     -- 1: Task hub names are inferred from the user credential
-    DECLARE @taskHubMode sql_variant = (SELECT TOP 1 [Value] FROM {{SchemaNamePlaceholder}}.GlobalSettings WHERE [Name] = 'TaskHubMode');
+    DECLARE @taskHubMode sql_variant = (SELECT TOP 1 [Value] FROM GlobalSettings WHERE [Name] = 'TaskHubMode');
 
     DECLARE @taskHub varchar(150)
 
@@ -30,12 +30,12 @@ END
 GO
 
 
-CREATE OR ALTER FUNCTION {{SchemaNamePlaceholder}}.GetScaleMetric()
+CREATE OR ALTER FUNCTION __SchemaNamePlaceholder__.GetScaleMetric()
     RETURNS INT
     WITH EXECUTE AS CALLER
 AS
 BEGIN
-    DECLARE @taskHub varchar(50) = {{SchemaNamePlaceholder}}.CurrentTaskHub()
+    DECLARE @taskHub varchar(50) = __SchemaNamePlaceholder__.CurrentTaskHub()
     DECLARE @now datetime2 = SYSUTCDATETIME()
 
     DECLARE @liveInstances int = 0
@@ -44,9 +44,9 @@ BEGIN
     SELECT
         @liveInstances = COUNT(DISTINCT E.[InstanceID]),
         @liveTasks = COUNT(T.[InstanceID])
-    FROM {{SchemaNamePlaceholder}}.Instances I WITH (NOLOCK)
-        LEFT OUTER JOIN {{SchemaNamePlaceholder}}.NewEvents E WITH (NOLOCK) ON E.[TaskHub] = @taskHub AND E.[InstanceID] = I.[InstanceID]
-        LEFT OUTER JOIN {{SchemaNamePlaceholder}}.NewTasks T WITH (NOLOCK) ON T.[TaskHub] = @taskHub AND T.[InstanceID] = I.[InstanceID]
+    FROM Instances I WITH (NOLOCK)
+        LEFT OUTER JOIN NewEvents E WITH (NOLOCK) ON E.[TaskHub] = @taskHub AND E.[InstanceID] = I.[InstanceID]
+        LEFT OUTER JOIN NewTasks T WITH (NOLOCK) ON T.[TaskHub] = @taskHub AND T.[InstanceID] = I.[InstanceID]
     WHERE
         I.[TaskHub] = @taskHub
         AND I.[RuntimeStatus] IN ('Pending', 'Running')
@@ -57,12 +57,12 @@ END
 GO
 
 
-CREATE OR ALTER FUNCTION {{SchemaNamePlaceholder}}.GetScaleRecommendation(@MaxOrchestrationsPerWorker real, @MaxActivitiesPerWorker real)
+CREATE OR ALTER FUNCTION __SchemaNamePlaceholder__.GetScaleRecommendation(@MaxOrchestrationsPerWorker real, @MaxActivitiesPerWorker real)
     RETURNS INT
     WITH EXECUTE AS CALLER
 AS
 BEGIN
-    DECLARE @taskHub varchar(50) = {{SchemaNamePlaceholder}}.CurrentTaskHub()
+    DECLARE @taskHub varchar(50) = __SchemaNamePlaceholder__.CurrentTaskHub()
     DECLARE @now datetime2 = SYSUTCDATETIME()
 
     DECLARE @liveInstances int = 0
@@ -71,9 +71,9 @@ BEGIN
     SELECT
         @liveInstances = COUNT(DISTINCT E.[InstanceID]),
         @liveTasks = COUNT(T.[InstanceID])
-    FROM {{SchemaNamePlaceholder}}.Instances I WITH (NOLOCK)
-        LEFT OUTER JOIN {{SchemaNamePlaceholder}}.NewEvents E WITH (NOLOCK) ON E.[TaskHub] = @taskHub AND E.[InstanceID] = I.[InstanceID]
-        LEFT OUTER JOIN {{SchemaNamePlaceholder}}.NewTasks T WITH (NOLOCK) ON T.[TaskHub] = @taskHub AND T.[InstanceID] = I.[InstanceID]
+    FROM Instances I WITH (NOLOCK)
+        LEFT OUTER JOIN NewEvents E WITH (NOLOCK) ON E.[TaskHub] = @taskHub AND E.[InstanceID] = I.[InstanceID]
+        LEFT OUTER JOIN NewTasks T WITH (NOLOCK) ON T.[TaskHub] = @taskHub AND T.[InstanceID] = I.[InstanceID]
     WHERE
         I.[TaskHub] = @taskHub
         AND I.[RuntimeStatus] IN ('Pending', 'Running')
@@ -90,7 +90,7 @@ END
 GO
 
 
-CREATE OR ALTER VIEW {{SchemaNamePlaceholder}}.vInstances
+CREATE OR ALTER VIEW __SchemaNamePlaceholder__.vInstances
 AS
     SELECT
         I.[TaskHub],
@@ -102,24 +102,24 @@ AS
         I.[LastUpdatedTime],
         I.[CompletedTime],
         I.[RuntimeStatus],
-        (SELECT TOP 1 [Text] FROM {{SchemaNamePlaceholder}}.Payloads P WHERE
-            P.[TaskHub] = {{SchemaNamePlaceholder}}.CurrentTaskHub() AND
+        (SELECT TOP 1 [Text] FROM Payloads P WHERE
+            P.[TaskHub] = __SchemaNamePlaceholder__.CurrentTaskHub() AND
             P.[InstanceID] = I.[InstanceID] AND
             P.[PayloadID] = I.[CustomStatusPayloadID]) AS [CustomStatusText],
-        (SELECT TOP 1 [Text] FROM {{SchemaNamePlaceholder}}.Payloads P WHERE
-            P.[TaskHub] = {{SchemaNamePlaceholder}}.CurrentTaskHub() AND
+        (SELECT TOP 1 [Text] FROM Payloads P WHERE
+            P.[TaskHub] = __SchemaNamePlaceholder__.CurrentTaskHub() AND
             P.[InstanceID] = I.[InstanceID] AND
             P.[PayloadID] = I.[InputPayloadID]) AS [InputText],
-        (SELECT TOP 1 [Text] FROM {{SchemaNamePlaceholder}}.Payloads P WHERE 
-            P.[TaskHub] = {{SchemaNamePlaceholder}}.CurrentTaskHub() AND
+        (SELECT TOP 1 [Text] FROM Payloads P WHERE 
+            P.[TaskHub] = __SchemaNamePlaceholder__.CurrentTaskHub() AND
             P.[InstanceID] = I.[InstanceID] AND
             P.[PayloadID] = I.[OutputPayloadID]) AS [OutputText]
-    FROM {{SchemaNamePlaceholder}}.Instances I
+    FROM Instances I
     WHERE
-        I.[TaskHub] = {{SchemaNamePlaceholder}}.CurrentTaskHub()
+        I.[TaskHub] = __SchemaNamePlaceholder__.CurrentTaskHub()
 GO
 
-CREATE OR ALTER VIEW {{SchemaNamePlaceholder}}.vHistory
+CREATE OR ALTER VIEW __SchemaNamePlaceholder__.vHistory
 AS
     SELECT
         H.[TaskHub],
@@ -133,17 +133,17 @@ AS
 	    H.[Name],
 	    H.[RuntimeStatus],
         H.[VisibleTime],
-	    (SELECT TOP 1 [Text] FROM {{SchemaNamePlaceholder}}.Payloads P WHERE
-            P.[TaskHub] = {{SchemaNamePlaceholder}}.CurrentTaskHub() AND
+	    (SELECT TOP 1 [Text] FROM Payloads P WHERE
+            P.[TaskHub] = __SchemaNamePlaceholder__.CurrentTaskHub() AND
             P.[InstanceID] = H.[InstanceID] AND
             P.[PayloadID] = H.[DataPayloadID]) AS [Payload]
-    FROM {{SchemaNamePlaceholder}}.History H
+    FROM History H
     WHERE
-        H.[TaskHub] = {{SchemaNamePlaceholder}}.CurrentTaskHub()
+        H.[TaskHub] = __SchemaNamePlaceholder__.CurrentTaskHub()
 GO
 
 
-CREATE OR ALTER PROCEDURE {{SchemaNamePlaceholder}}.CreateInstance
+CREATE OR ALTER PROCEDURE __SchemaNamePlaceholder__.CreateInstance
     @Name varchar(300),
     @Version varchar(100) = NULL,
     @InstanceID varchar(100) = NULL,
@@ -152,7 +152,7 @@ CREATE OR ALTER PROCEDURE {{SchemaNamePlaceholder}}.CreateInstance
     @StartTime datetime2 = NULL
 AS
 BEGIN
-    DECLARE @TaskHub varchar(50) = {{SchemaNamePlaceholder}}.CurrentTaskHub()
+    DECLARE @TaskHub varchar(50) = __SchemaNamePlaceholder__.CurrentTaskHub()
     DECLARE @EventType varchar(30) = 'ExecutionStarted'
     DECLARE @RuntimeStatus varchar(30) = 'Pending'
 
@@ -167,7 +167,7 @@ BEGIN
 
         DECLARE @existingStatus varchar(30) = (
             SELECT TOP 1 existing.[RuntimeStatus]
-            FROM {{SchemaNamePlaceholder}}.Instances existing WITH (HOLDLOCK)
+            FROM Instances existing WITH (HOLDLOCK)
             WHERE [TaskHub] = @TaskHub AND [InstanceID] = @InstanceID
         )
 
@@ -182,7 +182,7 @@ BEGIN
             -- Purge the existing instance data so that it can be overwritten
             DECLARE @instancesToPurge InstanceIDs
             INSERT INTO @instancesToPurge VALUES (@InstanceID)
-            EXEC {{SchemaNamePlaceholder}}.PurgeInstanceStateByID @instancesToPurge
+            EXEC __SchemaNamePlaceholder__.PurgeInstanceStateByID @instancesToPurge
         END
 
         COMMIT TRANSACTION
@@ -204,11 +204,11 @@ BEGIN
     IF @InputText IS NOT NULL
     BEGIN
         SET @InputPayloadID = NEWID()
-        INSERT INTO {{SchemaNamePlaceholder}}.Payloads ([TaskHub], [InstanceID], [PayloadID], [Text])
+        INSERT INTO Payloads ([TaskHub], [InstanceID], [PayloadID], [Text])
         VALUES (@TaskHub, @InstanceID, @InputPayloadID, @InputText)
     END
 
-    INSERT INTO {{SchemaNamePlaceholder}}.Instances (
+    INSERT INTO Instances (
         [Name],
         [Version],
         [TaskHub],
@@ -226,7 +226,7 @@ BEGIN
         @InputPayloadID
     )
 
-    INSERT INTO {{SchemaNamePlaceholder}}.NewEvents (
+    INSERT INTO NewEvents (
         [Name],
         [TaskHub],
         [InstanceID],
@@ -250,19 +250,19 @@ END
 GO
 
 
-CREATE OR ALTER PROCEDURE {{SchemaNamePlaceholder}}.GetInstanceHistory
+CREATE OR ALTER PROCEDURE __SchemaNamePlaceholder__.GetInstanceHistory
     @InstanceID varchar(100),
     @GetInputsAndOutputs bit = 0
 AS
 BEGIN
-    DECLARE @TaskHub varchar(50) = {{SchemaNamePlaceholder}}.CurrentTaskHub()
+    DECLARE @TaskHub varchar(50) = __SchemaNamePlaceholder__.CurrentTaskHub()
     DECLARE @ParentInstanceID varchar(100)
     DECLARE @Version varchar(100)
     
     SELECT
         @ParentInstanceID = [ParentInstanceID],
         @Version = [Version]
-    FROM {{SchemaNamePlaceholder}}.Instances WHERE [InstanceID] = @InstanceID
+    FROM Instances WHERE [InstanceID] = @InstanceID
 
     SELECT
         H.[InstanceID],
@@ -280,8 +280,8 @@ BEGIN
         [PayloadID],
         @ParentInstanceID as [ParentInstanceID],
         @Version as [Version]
-    FROM {{SchemaNamePlaceholder}}.History H WITH (INDEX (PK_History))
-        LEFT OUTER JOIN {{SchemaNamePlaceholder}}.Payloads P ON
+    FROM History H WITH (INDEX (PK_History))
+        LEFT OUTER JOIN Payloads P ON
             P.[TaskHub] = @TaskHub AND
             P.[InstanceID] = H.[InstanceID] AND
             P.[PayloadID] = H.[DataPayloadID]
@@ -293,7 +293,7 @@ END
 GO
 
 
-CREATE OR ALTER PROCEDURE {{SchemaNamePlaceholder}}.RaiseEvent
+CREATE OR ALTER PROCEDURE __SchemaNamePlaceholder__.RaiseEvent
     @Name varchar(300),
     @InstanceID varchar(100) = NULL,
     @PayloadText varchar(MAX) = NULL,
@@ -302,16 +302,16 @@ AS
 BEGIN
     BEGIN TRANSACTION
 
-    DECLARE @TaskHub varchar(50) = {{SchemaNamePlaceholder}}.CurrentTaskHub()
+    DECLARE @TaskHub varchar(50) = __SchemaNamePlaceholder__.CurrentTaskHub()
 
     -- External event messages must target new instances or they must use
     -- the "auto start" instance ID format of @orchestrationname@identifier.
     IF NOT EXISTS (
         SELECT 1
-        FROM {{SchemaNamePlaceholder}}.Instances I
+        FROM Instances I
         WHERE [TaskHub] = @TaskHub AND I.[InstanceID] = @InstanceID)
     BEGIN
-        INSERT INTO {{SchemaNamePlaceholder}}.Instances (
+        INSERT INTO Instances (
             [TaskHub],
             [InstanceID],
             [ExecutionID],
@@ -337,11 +337,11 @@ BEGIN
     IF @PayloadText IS NOT NULL
     BEGIN
         SET @PayloadID = NEWID()
-        INSERT INTO {{SchemaNamePlaceholder}}.Payloads ([TaskHub], [InstanceID], [PayloadID], [Text])
+        INSERT INTO Payloads ([TaskHub], [InstanceID], [PayloadID], [Text])
         VALUES (@TaskHub, @InstanceID, @PayloadID, @PayloadText)
     END
 
-    INSERT INTO {{SchemaNamePlaceholder}}.NewEvents (
+    INSERT INTO NewEvents (
         [Name],
         [TaskHub],
         [InstanceID],
@@ -361,7 +361,7 @@ BEGIN
 END
 GO
 
-CREATE OR ALTER PROCEDURE {{SchemaNamePlaceholder}}.TerminateInstance
+CREATE OR ALTER PROCEDURE __SchemaNamePlaceholder__.TerminateInstance
     @InstanceID varchar(100),
     @Reason varchar(max) = NULL
 AS
@@ -373,11 +373,11 @@ BEGIN
     -- order across all stored procedures that execute within a transaction.
     -- Table order for this sproc: Instances --> (NewEvents --> Payloads --> NewEvents)  
 
-    DECLARE @TaskHub varchar(50) = {{SchemaNamePlaceholder}}.CurrentTaskHub()
+    DECLARE @TaskHub varchar(50) = __SchemaNamePlaceholder__.CurrentTaskHub()
 
     DECLARE @existingStatus varchar(30) = (
         SELECT TOP 1 existing.[RuntimeStatus]
-        FROM {{SchemaNamePlaceholder}}.Instances existing WITH (HOLDLOCK)
+        FROM Instances existing WITH (HOLDLOCK)
         WHERE [TaskHub] = @TaskHub AND [InstanceID] = @InstanceID
     )
 
@@ -388,7 +388,7 @@ BEGIN
     IF @existingStatus IN ('Pending', 'Running')
     BEGIN
         IF NOT EXISTS (
-            SELECT TOP (1) 1 FROM {{SchemaNamePlaceholder}}.NewEvents
+            SELECT TOP (1) 1 FROM NewEvents
             WHERE [TaskHub] = @TaskHub AND [InstanceID] = @InstanceID AND [EventType] = 'ExecutionTerminated'
         )
         BEGIN
@@ -398,11 +398,11 @@ BEGIN
             BEGIN
                 -- Note that we don't use the Reason column for the Reason with terminate events
                 SET @PayloadID = NEWID()
-                INSERT INTO {{SchemaNamePlaceholder}}.Payloads ([TaskHub], [InstanceID], [PayloadID], [Text])
+                INSERT INTO Payloads ([TaskHub], [InstanceID], [PayloadID], [Text])
                 VALUES (@TaskHub, @InstanceID, @PayloadID, @Reason)
             END
 
-            INSERT INTO {{SchemaNamePlaceholder}}.NewEvents (
+            INSERT INTO NewEvents (
                 [TaskHub],
                 [InstanceID],
                 [EventType],
@@ -420,20 +420,20 @@ END
 GO
 
 
-CREATE OR ALTER PROCEDURE {{SchemaNamePlaceholder}}.PurgeInstanceStateByID
+CREATE OR ALTER PROCEDURE __SchemaNamePlaceholder__.PurgeInstanceStateByID
     @InstanceIDs InstanceIDs READONLY
 AS
 BEGIN
-    DECLARE @TaskHub varchar(50) = {{SchemaNamePlaceholder}}.CurrentTaskHub()
+    DECLARE @TaskHub varchar(50) = __SchemaNamePlaceholder__.CurrentTaskHub()
 
     BEGIN TRANSACTION
 
-    DELETE FROM {{SchemaNamePlaceholder}}.NewEvents WHERE [TaskHub] = @TaskHub AND [InstanceID] IN (SELECT [InstanceID] FROM @InstanceIDs)
-    DELETE FROM {{SchemaNamePlaceholder}}.NewTasks  WHERE [TaskHub] = @TaskHub AND [InstanceID] IN (SELECT [InstanceID] FROM @InstanceIDs)
-    DELETE FROM {{SchemaNamePlaceholder}}.Instances WHERE [TaskHub] = @TaskHub AND [InstanceID] IN (SELECT [InstanceID] FROM @InstanceIDs)
+    DELETE FROM NewEvents WHERE [TaskHub] = @TaskHub AND [InstanceID] IN (SELECT [InstanceID] FROM @InstanceIDs)
+    DELETE FROM NewTasks  WHERE [TaskHub] = @TaskHub AND [InstanceID] IN (SELECT [InstanceID] FROM @InstanceIDs)
+    DELETE FROM Instances WHERE [TaskHub] = @TaskHub AND [InstanceID] IN (SELECT [InstanceID] FROM @InstanceIDs)
     DECLARE @deletedInstances int = @@ROWCOUNT
-    DELETE FROM {{SchemaNamePlaceholder}}.History  WHERE [TaskHub] = @TaskHub AND [InstanceID] IN (SELECT [InstanceID] FROM @InstanceIDs)
-    DELETE FROM {{SchemaNamePlaceholder}}.Payloads WHERE [TaskHub] = @TaskHub AND [InstanceID] IN (SELECT [InstanceID] FROM @InstanceIDs)
+    DELETE FROM History  WHERE [TaskHub] = @TaskHub AND [InstanceID] IN (SELECT [InstanceID] FROM @InstanceIDs)
+    DELETE FROM Payloads WHERE [TaskHub] = @TaskHub AND [InstanceID] IN (SELECT [InstanceID] FROM @InstanceIDs)
 
     COMMIT TRANSACTION
 
@@ -443,26 +443,26 @@ END
 GO
 
 
-CREATE OR ALTER PROCEDURE {{SchemaNamePlaceholder}}.PurgeInstanceStateByTime
+CREATE OR ALTER PROCEDURE __SchemaNamePlaceholder__.PurgeInstanceStateByTime
     @ThresholdTime datetime2,
     @FilterType tinyint = 0
 AS
 BEGIN
-    DECLARE @TaskHub varchar(50) = {{SchemaNamePlaceholder}}.CurrentTaskHub()
+    DECLARE @TaskHub varchar(50) = __SchemaNamePlaceholder__.CurrentTaskHub()
 
     DECLARE @instanceIDs InstanceIDs
 
     IF @FilterType = 0 -- created time
     BEGIN
         INSERT INTO @instanceIDs
-            SELECT [InstanceID] FROM {{SchemaNamePlaceholder}}.Instances
+            SELECT [InstanceID] FROM Instances
             WHERE [TaskHub] = @TaskHub AND [RuntimeStatus] IN ('Completed', 'Terminated', 'Failed')
                 AND [CreatedTime] <= @ThresholdTime
     END
     ELSE IF @FilterType = 1 -- completed time
     BEGIN
         INSERT INTO @instanceIDs
-            SELECT [InstanceID] FROM {{SchemaNamePlaceholder}}.Instances
+            SELECT [InstanceID] FROM Instances
             WHERE [TaskHub] = @TaskHub AND [RuntimeStatus] IN ('Completed', 'Terminated', 'Failed')
                 AND [CompletedTime] <= @ThresholdTime
     END
@@ -473,19 +473,19 @@ BEGIN
     END
 
     DECLARE @deletedInstances int
-    EXECUTE @deletedInstances = {{SchemaNamePlaceholder}}.PurgeInstanceStateByID @instanceIDs
+    EXECUTE @deletedInstances = __SchemaNamePlaceholder__.PurgeInstanceStateByID @instanceIDs
     RETURN @deletedInstances
 END
 GO
 
-CREATE OR ALTER PROCEDURE {{SchemaNamePlaceholder}}.SetGlobalSetting
+CREATE OR ALTER PROCEDURE __SchemaNamePlaceholder__.SetGlobalSetting
     @Name varchar(300),
     @Value sql_variant
 AS
 BEGIN
     BEGIN TRANSACTION
  
-    UPDATE {{SchemaNamePlaceholder}}.GlobalSettings WITH (UPDLOCK, HOLDLOCK)
+    UPDATE GlobalSettings WITH (UPDLOCK, HOLDLOCK)
     SET
         [Value] = @Value,
         [Timestamp] = SYSUTCDATETIME(),
@@ -495,7 +495,7 @@ BEGIN
  
     IF @@ROWCOUNT = 0
     BEGIN
-        INSERT INTO {{SchemaNamePlaceholder}}.GlobalSettings ([Name], [Value]) VALUES (@Name, @Value)
+        INSERT INTO GlobalSettings ([Name], [Value]) VALUES (@Name, @Value)
     END
  
     COMMIT TRANSACTION
@@ -503,7 +503,7 @@ END
 GO
 
 
-CREATE OR ALTER PROCEDURE {{SchemaNamePlaceholder}}._LockNextOrchestration
+CREATE OR ALTER PROCEDURE __SchemaNamePlaceholder__._LockNextOrchestration
     @BatchSize int,
     @LockedBy varchar(100),
     @LockExpiration datetime2
@@ -514,7 +514,7 @@ BEGIN
     DECLARE @parentInstanceID varchar(100)
     DECLARE @version varchar(100)
     DECLARE @runtimeStatus varchar(30)
-    DECLARE @TaskHub varchar(50) = {{SchemaNamePlaceholder}}.CurrentTaskHub()
+    DECLARE @TaskHub varchar(50) = __SchemaNamePlaceholder__.CurrentTaskHub()
 
     BEGIN TRANSACTION
 
@@ -526,7 +526,7 @@ BEGIN
     -- Lock the first active instance that has pending messages.
     -- Delayed events from durable timers will have a non-null VisibleTime value.
     -- Non-active instances will never have their messages or history read.
-    UPDATE TOP (1) {{SchemaNamePlaceholder}}.Instances WITH (READPAST)
+    UPDATE TOP (1) Instances WITH (READPAST)
     SET
         [LockedBy] = @LockedBy,
 	    [LockExpiration] = @LockExpiration,
@@ -535,7 +535,7 @@ BEGIN
         @runtimeStatus = I.[RuntimeStatus],
         @version = I.[Version]
     FROM 
-        {{SchemaNamePlaceholder}}.Instances I WITH (READPAST) INNER JOIN {{SchemaNamePlaceholder}}.NewEvents E WITH (READPAST) ON
+        Instances I WITH (READPAST) INNER JOIN NewEvents E WITH (READPAST) ON
             E.[TaskHub] = @TaskHub AND
             E.[InstanceID] = I.[InstanceID]
     WHERE
@@ -564,8 +564,8 @@ BEGIN
         DATEDIFF(SECOND, [Timestamp], @now) AS [WaitTime],
         @parentInstanceID as [ParentInstanceID],
         @version as [Version]
-    FROM {{SchemaNamePlaceholder}}.NewEvents N
-        LEFT OUTER JOIN {{SchemaNamePlaceholder}}.[Payloads] P ON 
+    FROM NewEvents N
+        LEFT OUTER JOIN __SchemaNamePlaceholder__.[Payloads] P ON 
             P.[TaskHub] = @TaskHub AND
             P.[InstanceID] = N.[InstanceID] AND
             P.[PayloadID] = N.[PayloadID]
@@ -603,8 +603,8 @@ BEGIN
         [PayloadID],
         @parentInstanceID as [ParentInstanceID],
         @version as [Version]
-    FROM {{SchemaNamePlaceholder}}.History H WITH (INDEX (PK_History))
-        LEFT OUTER JOIN {{SchemaNamePlaceholder}}.Payloads P ON
+    FROM History H WITH (INDEX (PK_History))
+        LEFT OUTER JOIN Payloads P ON
             P.[TaskHub] = @TaskHub AND
             P.[InstanceID] = H.[InstanceID] AND
             P.[PayloadID] = H.[DataPayloadID]
@@ -616,7 +616,7 @@ END
 GO
 
 
-CREATE OR ALTER PROCEDURE {{SchemaNamePlaceholder}}._CheckpointOrchestration
+CREATE OR ALTER PROCEDURE __SchemaNamePlaceholder__._CheckpointOrchestration
     @InstanceID varchar(100),
     @ExecutionID varchar(50),
     @RuntimeStatus varchar(30),
@@ -629,7 +629,7 @@ AS
 BEGIN
     BEGIN TRANSACTION
 
-    DECLARE @TaskHub varchar(50) = {{SchemaNamePlaceholder}}.CurrentTaskHub()
+    DECLARE @TaskHub varchar(50) = __SchemaNamePlaceholder__.CurrentTaskHub()
 
     DECLARE @InputPayloadID uniqueidentifier
     DECLARE @CustomStatusPayloadID uniqueidentifier
@@ -644,7 +644,7 @@ BEGIN
         @CustomStatusPayloadID = I.[CustomStatusPayloadID],
         @ExistingCustomStatusPayload = P.[Text],
         @ExistingExecutionID = I.[ExecutionID]
-    FROM {{SchemaNamePlaceholder}}.Payloads P RIGHT OUTER JOIN {{SchemaNamePlaceholder}}.Instances I ON
+    FROM Payloads P RIGHT OUTER JOIN Instances I ON
         P.[TaskHub] = @TaskHub AND
         P.[InstanceID] = I.[InstanceID] AND
         P.[PayloadID] = I.[CustomStatusPayloadID]
@@ -654,10 +654,10 @@ BEGIN
     DECLARE @IsContinueAsNew BIT = 0
     IF @ExistingExecutionID IS NOT NULL AND @ExistingExecutionID <> @ExecutionID
     BEGIN
-        DELETE FROM {{SchemaNamePlaceholder}}.History
+        DELETE FROM History
         WHERE [TaskHub] = @TaskHub AND [InstanceID] = @InstanceID
 
-        DELETE FROM {{SchemaNamePlaceholder}}.Payloads
+        DELETE FROM Payloads
         WHERE [TaskHub] = @TaskHub AND [InstanceID] = @InstanceID
 
         -- The existing payload got purged in the previous statement 
@@ -669,14 +669,14 @@ BEGIN
     IF @ExistingCustomStatusPayload IS NULL AND @CustomStatusPayload IS NOT NULL
     BEGIN
         SET @CustomStatusPayloadID = NEWID()
-        INSERT INTO {{SchemaNamePlaceholder}}.Payloads ([TaskHub], [InstanceID], [PayloadID], [Text])
+        INSERT INTO Payloads ([TaskHub], [InstanceID], [PayloadID], [Text])
         VALUES (@TaskHub, @InstanceID, @CustomStatusPayloadID, @CustomStatusPayload)
     END
 
     -- Custom status case #2: Updating an existing custom status payload
     IF @ExistingCustomStatusPayload IS NOT NULL AND @ExistingCustomStatusPayload <> @CustomStatusPayload
     BEGIN
-        UPDATE {{SchemaNamePlaceholder}}.Payloads SET [Text] = @CustomStatusPayload WHERE 
+        UPDATE Payloads SET [Text] = @CustomStatusPayload WHERE 
             [TaskHub] = @TaskHub AND
             [InstanceID] = @InstanceID AND
             [PayloadID] = @CustomStatusPayloadID
@@ -713,12 +713,12 @@ BEGIN
     -- The [PayloadText] value will be NULL if there is no payload or if a payload is already known to exist in the DB.
     -- The [PayloadID] value might be set even if [PayloadText] and [Reason] are both NULL.
     -- This needs to be done before the UPDATE to Instances because the Instances table needs to reference the output payload.
-    INSERT INTO {{SchemaNamePlaceholder}}.Payloads ([TaskHub], [InstanceID], [PayloadID], [Text], [Reason])
+    INSERT INTO Payloads ([TaskHub], [InstanceID], [PayloadID], [Text], [Reason])
         SELECT @TaskHub, [InstanceID], [PayloadID], [PayloadText], [Reason]
         FROM @NewHistoryEvents
         WHERE [PayloadText] IS NOT NULL OR [Reason] IS NOT NULL
 
-    UPDATE {{SchemaNamePlaceholder}}.Instances
+    UPDATE Instances
     SET
         [ExecutionID] = @ExecutionID,
         [RuntimeStatus] = @RuntimeStatus,
@@ -728,7 +728,7 @@ BEGIN
         [CustomStatusPayloadID] = @CustomStatusPayloadID,
         [InputPayloadID] = @InputPayloadID,
         [OutputPayloadID] = @OutputPayloadID
-    FROM {{SchemaNamePlaceholder}}.Instances
+    FROM Instances
     WHERE [TaskHub] = @TaskHub and [InstanceID] = @InstanceID
 
     IF @@ROWCOUNT = 0
@@ -737,7 +737,7 @@ BEGIN
     -- External event messages can create new instances
     -- NOTE: There is a chance this could result in deadlocks if two 
     --       instances are sending events to each other at the same time
-    INSERT INTO {{SchemaNamePlaceholder}}.Instances (
+    INSERT INTO Instances (
         [TaskHub],
         [InstanceID],
         [ExecutionID],
@@ -756,13 +756,13 @@ BEGIN
         AND CHARINDEX('@', E.[InstanceID], 2) > 0
         AND NOT EXISTS (
             SELECT 1
-            FROM {{SchemaNamePlaceholder}}.Instances I
+            FROM Instances I
             WHERE [TaskHub] = @TaskHub AND I.[InstanceID] = E.[InstanceID])
     GROUP BY E.[InstanceID]
     ORDER BY E.[InstanceID] ASC
 
     -- Create sub-orchestration instances
-    INSERT INTO {{SchemaNamePlaceholder}}.Instances (
+    INSERT INTO Instances (
         [TaskHub],
         [InstanceID],
         [ExecutionID],
@@ -782,24 +782,24 @@ BEGIN
     WHERE E.[EventType] IN ('ExecutionStarted')
         AND NOT EXISTS (
             SELECT 1
-            FROM {{SchemaNamePlaceholder}}.Instances I
+            FROM Instances I
             WHERE [TaskHub] = @TaskHub AND I.[InstanceID] = E.[InstanceID])
     ORDER BY E.[InstanceID] ASC
 
     -- Insert new event data payloads into the Payloads table in batches.
     -- PayloadID values are provided by the caller only if a payload exists.
-    INSERT INTO {{SchemaNamePlaceholder}}.Payloads ([TaskHub], [InstanceID], [PayloadID], [Text], [Reason])
+    INSERT INTO Payloads ([TaskHub], [InstanceID], [PayloadID], [Text], [Reason])
         SELECT @TaskHub, [InstanceID], [PayloadID], [PayloadText], [Reason]
         FROM @NewOrchestrationEvents
         WHERE [PayloadID] IS NOT NULL
 
-    INSERT INTO {{SchemaNamePlaceholder}}.Payloads ([TaskHub], [InstanceID], [PayloadID], [Text])
+    INSERT INTO Payloads ([TaskHub], [InstanceID], [PayloadID], [Text])
         SELECT @TaskHub, [InstanceID], [PayloadID], [PayloadText]
         FROM @NewTaskEvents
         WHERE [PayloadID] IS NOT NULL
 
     -- Insert the new events with references to their payloads, if applicable
-    INSERT INTO {{SchemaNamePlaceholder}}.NewEvents (
+    INSERT INTO NewEvents (
         [TaskHub],
         [InstanceID],
         [ExecutionID],
@@ -826,7 +826,7 @@ BEGIN
     -- warning about missing messages
     DELETE E
     OUTPUT DELETED.InstanceID, DELETED.SequenceNumber
-    FROM {{SchemaNamePlaceholder}}.NewEvents E WITH (FORCESEEK(PK_NewEvents(TaskHub, InstanceID, SequenceNumber)))
+    FROM NewEvents E WITH (FORCESEEK(PK_NewEvents(TaskHub, InstanceID, SequenceNumber)))
         INNER JOIN @DeletedEvents D ON 
             D.InstanceID = E.InstanceID AND
             D.SequenceNumber = E.SequenceNumber AND
@@ -835,7 +835,7 @@ BEGIN
     -- IMPORTANT: This insert is expected to fail with a primary key constraint violation in a
     --            split-brain situation where two instances try to execute the same orchestration
     --            at the same time. The SDK will check for this exact error condition.
-    INSERT INTO {{SchemaNamePlaceholder}}.History (
+    INSERT INTO History (
         [TaskHub],
         [InstanceID],
         [ExecutionID],
@@ -864,7 +864,7 @@ BEGIN
     FROM @NewHistoryEvents H
 
     -- TaskScheduled events
-    INSERT INTO {{SchemaNamePlaceholder}}.NewTasks (
+    INSERT INTO NewTasks (
         [TaskHub],
         [InstanceID],
         [ExecutionID],
@@ -897,31 +897,31 @@ END
 GO
 
 
-CREATE OR ALTER PROCEDURE {{SchemaNamePlaceholder}}._DiscardEventsAndUnlockInstance
+CREATE OR ALTER PROCEDURE __SchemaNamePlaceholder__._DiscardEventsAndUnlockInstance
     @InstanceID varchar(100),
     @DeletedEvents MessageIDs READONLY
 AS
 BEGIN
-    DECLARE @taskHub varchar(50) = {{SchemaNamePlaceholder}}.CurrentTaskHub()
+    DECLARE @taskHub varchar(50) = __SchemaNamePlaceholder__.CurrentTaskHub()
 
     -- We return the list of deleted messages so that the caller can issue a 
     -- warning about missing messages
     DELETE E
     OUTPUT DELETED.InstanceID, DELETED.SequenceNumber
-    FROM {{SchemaNamePlaceholder}}.NewEvents E WITH (FORCESEEK(PK_NewEvents(TaskHub, InstanceID, SequenceNumber)))
+    FROM NewEvents E WITH (FORCESEEK(PK_NewEvents(TaskHub, InstanceID, SequenceNumber)))
         INNER JOIN @DeletedEvents D ON 
             D.InstanceID = E.InstanceID AND
             D.SequenceNumber = E.SequenceNumber AND
             E.TaskHub = @taskHub
 
     -- Release the lock on this instance
-    UPDATE {{SchemaNamePlaceholder}}.Instances SET [LastUpdatedTime] = SYSUTCDATETIME(), [LockExpiration] = NULL
+    UPDATE Instances SET [LastUpdatedTime] = SYSUTCDATETIME(), [LockExpiration] = NULL
     WHERE [TaskHub] = @taskHub and [InstanceID] = @InstanceID
 END
 GO
 
 
-CREATE OR ALTER PROCEDURE {{SchemaNamePlaceholder}}._AddOrchestrationEvents
+CREATE OR ALTER PROCEDURE __SchemaNamePlaceholder__._AddOrchestrationEvents
     @NewOrchestrationEvents OrchestrationEvents READONLY 
 AS
 BEGIN
@@ -932,13 +932,13 @@ BEGIN
     -- order across all stored procedures that execute within a transaction.
     -- Table order for this sproc: Payloads --> NewEvents
 
-    DECLARE @TaskHub varchar(50) = {{SchemaNamePlaceholder}}.CurrentTaskHub()
+    DECLARE @TaskHub varchar(50) = __SchemaNamePlaceholder__.CurrentTaskHub()
     
     -- External event messages can create new instances
     -- NOTE: There is a chance this could result in deadlocks if two 
     --       instances are sending events to each other at the same time
     BEGIN TRY
-        INSERT INTO {{SchemaNamePlaceholder}}.Instances (
+        INSERT INTO Instances (
             [TaskHub],
             [InstanceID],
             [ExecutionID],
@@ -969,13 +969,13 @@ BEGIN
 
     -- Insert new event data payloads into the Payloads table in batches.
     -- PayloadID values are provided by the caller only if a payload exists.
-    INSERT INTO {{SchemaNamePlaceholder}}.Payloads ([TaskHub], [InstanceID], [PayloadID], [Text], [Reason])
+    INSERT INTO Payloads ([TaskHub], [InstanceID], [PayloadID], [Text], [Reason])
         SELECT @TaskHub, [InstanceID], [PayloadID], [PayloadText], [Reason]
         FROM @NewOrchestrationEvents
         WHERE [PayloadID] IS NOT NULL
 
     -- Insert the new events with references to their payloads, if applicable
-    INSERT INTO {{SchemaNamePlaceholder}}.NewEvents (
+    INSERT INTO NewEvents (
         [TaskHub],
         [InstanceID],
         [ExecutionID],
@@ -1002,14 +1002,14 @@ BEGIN
 END
 GO
 
-CREATE OR ALTER PROCEDURE {{SchemaNamePlaceholder}}.QuerySingleOrchestration
+CREATE OR ALTER PROCEDURE __SchemaNamePlaceholder__.QuerySingleOrchestration
     @InstanceID varchar(100),
     @ExecutionID varchar(50) = NULL,
     @FetchInput bit = 1,
     @FetchOutput bit = 1
 AS
 BEGIN
-    DECLARE @TaskHub varchar(50) = {{SchemaNamePlaceholder}}.CurrentTaskHub()
+    DECLARE @TaskHub varchar(50) = __SchemaNamePlaceholder__.CurrentTaskHub()
 
     SELECT TOP 1
         I.[InstanceID],
@@ -1021,19 +1021,19 @@ BEGIN
         I.[CompletedTime],
         I.[RuntimeStatus],
         I.[ParentInstanceID],
-        (SELECT TOP 1 [Text] FROM {{SchemaNamePlaceholder}}.Payloads P WHERE
+        (SELECT TOP 1 [Text] FROM Payloads P WHERE
             P.[TaskHub] = @TaskHub AND
             P.[InstanceID] = I.[InstanceID] AND
             P.[PayloadID] = I.[CustomStatusPayloadID]) AS [CustomStatusText],
-        CASE WHEN @FetchInput = 1 THEN (SELECT TOP 1 [Text] FROM {{SchemaNamePlaceholder}}.Payloads P WHERE
+        CASE WHEN @FetchInput = 1 THEN (SELECT TOP 1 [Text] FROM Payloads P WHERE
             P.[TaskHub] = @TaskHub AND
             P.[InstanceID] = I.[InstanceID] AND
             P.[PayloadID] = I.[InputPayloadID]) ELSE NULL END AS [InputText],
-        CASE WHEN @FetchOutput = 1 THEN (SELECT TOP 1 [Text] FROM {{SchemaNamePlaceholder}}.Payloads P WHERE
+        CASE WHEN @FetchOutput = 1 THEN (SELECT TOP 1 [Text] FROM Payloads P WHERE
             P.[TaskHub] = @TaskHub AND
             P.[InstanceID] = I.[InstanceID] AND
             P.[PayloadID] = I.[OutputPayloadID]) ELSE NULL END AS [OutputText]
-    FROM {{SchemaNamePlaceholder}}.Instances I
+    FROM Instances I
     WHERE
         I.[TaskHub] = @TaskHub AND
         I.[InstanceID] = @InstanceID AND
@@ -1042,7 +1042,7 @@ END
 GO
 
 
-CREATE OR ALTER PROCEDURE {{SchemaNamePlaceholder}}._QueryManyOrchestrations
+CREATE OR ALTER PROCEDURE __SchemaNamePlaceholder__._QueryManyOrchestrations
     @PageSize smallint = 100,
     @PageNumber smallint = 0,
     @FetchInput bit = 1,
@@ -1054,7 +1054,7 @@ CREATE OR ALTER PROCEDURE {{SchemaNamePlaceholder}}._QueryManyOrchestrations
     @ExcludeSubOrchestrations bit = 0
 AS
 BEGIN
-    DECLARE @TaskHub varchar(50) = {{SchemaNamePlaceholder}}.CurrentTaskHub()
+    DECLARE @TaskHub varchar(50) = __SchemaNamePlaceholder__.CurrentTaskHub()
 
     SELECT
         I.[InstanceID],
@@ -1066,20 +1066,20 @@ BEGIN
         I.[CompletedTime],
         I.[RuntimeStatus],
         I.[ParentInstanceID],
-        (SELECT TOP 1 [Text] FROM {{SchemaNamePlaceholder}}.Payloads P WHERE
+        (SELECT TOP 1 [Text] FROM Payloads P WHERE
             P.[TaskHub] = @TaskHub AND
             P.[InstanceID] = I.[InstanceID] AND
             P.[PayloadID] = I.[CustomStatusPayloadID]) AS [CustomStatusText],
-        CASE WHEN @FetchInput = 1 THEN (SELECT TOP 1 [Text] FROM {{SchemaNamePlaceholder}}.Payloads P WHERE
+        CASE WHEN @FetchInput = 1 THEN (SELECT TOP 1 [Text] FROM Payloads P WHERE
             P.[TaskHub] = @TaskHub AND
             P.[InstanceID] = I.[InstanceID] AND
             P.[PayloadID] = I.[InputPayloadID]) ELSE NULL END AS [InputText],
-        CASE WHEN @FetchOutput = 1 THEN (SELECT TOP 1 [Text] FROM {{SchemaNamePlaceholder}}.Payloads P WHERE
+        CASE WHEN @FetchOutput = 1 THEN (SELECT TOP 1 [Text] FROM Payloads P WHERE
             P.[TaskHub] = @TaskHub AND
             P.[InstanceID] = I.[InstanceID] AND
             P.[PayloadID] = I.[OutputPayloadID]) ELSE NULL END AS [OutputText]
     FROM
-        {{SchemaNamePlaceholder}}.Instances I
+        Instances I
     WHERE
         I.[TaskHub] = @TaskHub AND
         (@CreatedTimeFrom IS NULL OR I.[CreatedTime] >= @CreatedTimeFrom) AND
@@ -1093,12 +1093,12 @@ END
 GO
 
 
-CREATE OR ALTER PROCEDURE {{SchemaNamePlaceholder}}._LockNextTask
+CREATE OR ALTER PROCEDURE __SchemaNamePlaceholder__._LockNextTask
     @LockedBy varchar(100),
     @LockExpiration datetime2
 AS
 BEGIN
-    DECLARE @TaskHub varchar(50) = {{SchemaNamePlaceholder}}.CurrentTaskHub()
+    DECLARE @TaskHub varchar(50) = __SchemaNamePlaceholder__.CurrentTaskHub()
     DECLARE @now datetime2 = SYSUTCDATETIME()
 
     DECLARE @SequenceNumber bigint
@@ -1112,14 +1112,14 @@ BEGIN
     -- Update (lock) and return a single row.
     -- The PK_NewTasks hint is specified to help ensure in-order selection.
     -- TODO: Filter out tasks for instances that are in a non-running state (suspended, etc.)
-    UPDATE TOP (1) {{SchemaNamePlaceholder}}.NewTasks WITH (READPAST)
+    UPDATE TOP (1) NewTasks WITH (READPAST)
     SET
         @SequenceNumber = [SequenceNumber],
         [LockedBy] = @LockedBy,
 	    [LockExpiration] = @LockExpiration,
         [DequeueCount] = [DequeueCount] + 1
     FROM
-        {{SchemaNamePlaceholder}}.NewTasks WITH (INDEX (PK_NewTasks))
+        NewTasks WITH (INDEX (PK_NewTasks))
     WHERE
         [TaskHub] = @TaskHub AND
 	    ([LockExpiration] IS NULL OR [LockExpiration] < @now) AND
@@ -1136,12 +1136,12 @@ BEGIN
         [Timestamp],
         [DequeueCount],
         [Version],
-        (SELECT TOP 1 [Text] FROM {{SchemaNamePlaceholder}}.Payloads P WHERE
+        (SELECT TOP 1 [Text] FROM Payloads P WHERE
             P.[TaskHub] = @TaskHub AND
             P.[InstanceID] = N.[InstanceID] AND
             P.[PayloadID] = N.[PayloadID]) AS [PayloadText],
         DATEDIFF(SECOND, [Timestamp], @now) AS [WaitTime]
-    FROM {{SchemaNamePlaceholder}}.NewTasks N
+    FROM NewTasks N
     WHERE [TaskHub] = @TaskHub AND [SequenceNumber] = @SequenceNumber
 
     COMMIT TRANSACTION
@@ -1149,42 +1149,42 @@ END
 GO
 
 
-CREATE OR ALTER PROCEDURE {{SchemaNamePlaceholder}}._RenewOrchestrationLocks
+CREATE OR ALTER PROCEDURE __SchemaNamePlaceholder__._RenewOrchestrationLocks
     @InstanceID varchar(100),
     @LockExpiration datetime2
 AS
 BEGIN
-    DECLARE @TaskHub varchar(50) = {{SchemaNamePlaceholder}}.CurrentTaskHub()
+    DECLARE @TaskHub varchar(50) = __SchemaNamePlaceholder__.CurrentTaskHub()
 
-    UPDATE {{SchemaNamePlaceholder}}.Instances
+    UPDATE Instances
     SET [LockExpiration] = @LockExpiration
     WHERE [TaskHub] = @TaskHub AND [InstanceID] = @InstanceID
 END
 GO
 
 
-CREATE OR ALTER PROCEDURE {{SchemaNamePlaceholder}}._RenewTaskLocks
+CREATE OR ALTER PROCEDURE __SchemaNamePlaceholder__._RenewTaskLocks
     @RenewingTasks MessageIDs READONLY,
     @LockExpiration datetime2
 AS
 BEGIN
-    DECLARE @TaskHub varchar(50) = {{SchemaNamePlaceholder}}.CurrentTaskHub()
+    DECLARE @TaskHub varchar(50) = __SchemaNamePlaceholder__.CurrentTaskHub()
 
     UPDATE N
     SET [LockExpiration] = @LockExpiration
-    FROM {{SchemaNamePlaceholder}}.NewTasks N INNER JOIN @RenewingTasks C ON
+    FROM NewTasks N INNER JOIN @RenewingTasks C ON
         C.[SequenceNumber] = N.[SequenceNumber] AND
         N.[TaskHub] = @TaskHub
 END
 GO
 
 
-CREATE OR ALTER PROCEDURE {{SchemaNamePlaceholder}}._CompleteTasks
+CREATE OR ALTER PROCEDURE __SchemaNamePlaceholder__._CompleteTasks
     @CompletedTasks MessageIDs READONLY,
     @Results TaskEvents READONLY
 AS
 BEGIN
-    DECLARE @TaskHub varchar(50) = {{SchemaNamePlaceholder}}.CurrentTaskHub()
+    DECLARE @TaskHub varchar(50) = __SchemaNamePlaceholder__.CurrentTaskHub()
 
     BEGIN TRANSACTION
 
@@ -1193,7 +1193,7 @@ BEGIN
     DECLARE @existingInstanceID varchar(100)
 
     SELECT @existingInstanceID = R.[InstanceID]
-    FROM {{SchemaNamePlaceholder}}.Instances I WITH (HOLDLOCK)
+    FROM Instances I WITH (HOLDLOCK)
         INNER JOIN @Results R ON 
             I.[TaskHub] = @TaskHub AND
             I.[InstanceID] = R.[InstanceID] AND 
@@ -1205,12 +1205,12 @@ BEGIN
     BEGIN
         -- Insert new event data payloads into the Payloads table in batches.
         -- PayloadID values are provided by the caller only if a payload exists.
-        INSERT INTO {{SchemaNamePlaceholder}}.Payloads ([TaskHub], [InstanceID], [PayloadID], [Text], [Reason])
+        INSERT INTO Payloads ([TaskHub], [InstanceID], [PayloadID], [Text], [Reason])
             SELECT @TaskHub, [InstanceID], [PayloadID], [PayloadText], [Reason]
             FROM @Results
             WHERE [PayloadID] IS NOT NULL
 
-        INSERT INTO {{SchemaNamePlaceholder}}.NewEvents (
+        INSERT INTO NewEvents (
             [TaskHub],
             [InstanceID],
             [ExecutionID],
@@ -1239,7 +1239,7 @@ BEGIN
     DELETE N
     OUTPUT DELETED.[PayloadID] INTO @payloadsToDelete
     OUTPUT DELETED.[SequenceNumber]
-    FROM {{SchemaNamePlaceholder}}.NewTasks N WITH (FORCESEEK(PK_NewTasks(TaskHub, SequenceNumber)))
+    FROM NewTasks N WITH (FORCESEEK(PK_NewTasks(TaskHub, SequenceNumber)))
         INNER JOIN @CompletedTasks C ON
             C.[SequenceNumber] = N.[SequenceNumber] AND
             N.[TaskHub] = @TaskHub
@@ -1255,47 +1255,47 @@ END
 GO
 
 
-CREATE OR ALTER PROCEDURE {{SchemaNamePlaceholder}}._GetVersions
+CREATE OR ALTER PROCEDURE __SchemaNamePlaceholder__._GetVersions
 AS
 BEGIN
     SELECT SemanticVersion, UpgradeTime
-    FROM {{SchemaNamePlaceholder}}.Versions
+    FROM Versions
     ORDER BY UpgradeTime DESC
 END
 GO
 
 
-CREATE OR ALTER PROCEDURE {{SchemaNamePlaceholder}}._UpdateVersion
+CREATE OR ALTER PROCEDURE __SchemaNamePlaceholder__._UpdateVersion
     @SemanticVersion varchar(100)
 AS
 BEGIN
     -- Duplicates are ignored (per the schema definition of dt.Versions)
-    INSERT INTO {{SchemaNamePlaceholder}}.Versions (SemanticVersion)
+    INSERT INTO Versions (SemanticVersion)
     VALUES (@SemanticVersion)
 END
 GO
 
 
-CREATE OR ALTER PROCEDURE {{SchemaNamePlaceholder}}._RewindInstance
+CREATE OR ALTER PROCEDURE __SchemaNamePlaceholder__._RewindInstance
     @InstanceID varchar(100),
     @Reason varchar(max) = NULL
 AS
 BEGIN
     BEGIN TRANSACTION
 
-    EXEC {{SchemaNamePlaceholder}}._RewindInstanceRecursive @InstanceID, @Reason
+    EXEC __SchemaNamePlaceholder__._RewindInstanceRecursive @InstanceID, @Reason
 
     COMMIT TRANSACTION
 END
 GO
 
 
-CREATE OR ALTER PROCEDURE {{SchemaNamePlaceholder}}._RewindInstanceRecursive
+CREATE OR ALTER PROCEDURE __SchemaNamePlaceholder__._RewindInstanceRecursive
     @InstanceID varchar(100),
     @Reason varchar(max) = NULL
 AS
 BEGIN
-    DECLARE @TaskHub varchar(50) = {{SchemaNamePlaceholder}}.CurrentTaskHub()
+    DECLARE @TaskHub varchar(50) = __SchemaNamePlaceholder__.CurrentTaskHub()
 
     -- *** IMPORTANT ***
     -- To prevent deadlocks, it is important to maintain consistent table access
@@ -1306,7 +1306,7 @@ BEGIN
     DECLARE @executionID varchar(50)
     
     SELECT TOP 1 @existingStatus = existing.[RuntimeStatus], @executionID = existing.[ExecutionID]
-    FROM {{SchemaNamePlaceholder}}.Instances existing WITH (HOLDLOCK)
+    FROM Instances existing WITH (HOLDLOCK)
     WHERE [TaskHub] = @TaskHub AND [InstanceID] = @InstanceID
 
     -- Instance IDs can be overwritten only if the orchestration is in a terminal state
@@ -1325,12 +1325,12 @@ BEGIN
     -- Save all events related to failures (ie TaskScheduled/TaskFailed and SubOrchestrationInstanceStarted/SubOrchestrationInstanceFailed couples)
     INSERT INTO @eventsInFailure
     SELECT h.[SequenceNumber], h.[EventType], h.[TaskID], h.[DataPayloadID]
-    FROM {{SchemaNamePlaceholder}}.History h
+    FROM History h
     WHERE h.[TaskHub] = @TaskHub
       AND h.[InstanceID] = @InstanceID
       AND (h.[EventType] IN ('TaskFailed', 'SubOrchestrationInstanceFailed') OR (h.[EventType] IN ('TaskScheduled', 'SubOrchestrationInstanceStarted') AND EXISTS (
         SELECT 1
-        FROM {{SchemaNamePlaceholder}}.History f
+        FROM History f
         WHERE f.[TaskHub] = @TaskHub 
           AND f.[InstanceID] = @InstanceID
           AND f.[TaskID] = h.[TaskID]
@@ -1338,9 +1338,9 @@ BEGIN
 
     -- Mark all events related to failure as rewound
     -- This first batch is for all events that have corresponding records in the Payloads table already
-    UPDATE {{SchemaNamePlaceholder}}.Payloads
+    UPDATE Payloads
     SET [Reason] = CONCAT('Rewound: ', ef.[EventType])
-    FROM {{SchemaNamePlaceholder}}.Payloads p
+    FROM Payloads p
     JOIN @eventsInFailure ef ON p.[PayloadID] = ef.[DataPayloadID]
     WHERE [TaskHub] = @TaskHub
       AND [InstanceID] = @InstanceID
@@ -1360,7 +1360,7 @@ BEGIN
 
     WHILE @@FETCH_STATUS = 0 BEGIN
         SET @payloadId = NEWID()
-        INSERT INTO {{SchemaNamePlaceholder}}.Payloads (
+        INSERT INTO Payloads (
             [TaskHub],
             [InstanceID],
             [PayloadID],
@@ -1373,7 +1373,7 @@ BEGIN
     DEALLOCATE sequenceNumberCursor
 
     -- Transform all events related to failure to GenericEvents, except for SubOrchestrationInstanceStarted that can be kept
-    UPDATE {{SchemaNamePlaceholder}}.History
+    UPDATE History
     SET [EventType] = 'GenericEvent'
     WHERE [TaskHub] = @TaskHub AND [InstanceID] = @InstanceID
       AND ([SequenceNumber] IN (SELECT [SequenceNumber]
@@ -1384,8 +1384,8 @@ BEGIN
     DECLARE @subOrchestrationInstanceID varchar(100)
     DECLARE subOrchestrationCursor CURSOR LOCAL FOR
         SELECT i.[InstanceID]
-        FROM {{SchemaNamePlaceholder}}.Instances i
-          JOIN {{SchemaNamePlaceholder}}.History h ON i.[TaskHub] = h.[TaskHub] AND i.[InstanceID] = h.[InstanceID]
+        FROM Instances i
+          JOIN History h ON i.[TaskHub] = h.[TaskHub] AND i.[InstanceID] = h.[InstanceID]
           JOIN @eventsInFailure e ON e.[TaskID] = h.[TaskID]
         WHERE i.[ParentInstanceID] = @InstanceID 
           AND h.[EventType] = 'ExecutionStarted'
@@ -1397,7 +1397,7 @@ BEGIN
 
     WHILE @@FETCH_STATUS = 0 BEGIN
         -- Call rewind recursively on the failing suborchestrations
-        EXECUTE {{SchemaNamePlaceholder}}._RewindInstanceRecursive @subOrchestrationInstanceID, @Reason
+        EXECUTE __SchemaNamePlaceholder__._RewindInstanceRecursive @subOrchestrationInstanceID, @Reason
         FETCH NEXT FROM subOrchestrationCursor INTO @subOrchestrationInstanceID
     END
     CLOSE subOrchestrationCursor
@@ -1405,14 +1405,14 @@ BEGIN
 
     -- Insert a line in NewEvents to ensure orchestration will start
     SET @payloadId = NEWID()
-    INSERT INTO {{SchemaNamePlaceholder}}.Payloads (
+    INSERT INTO Payloads (
         [TaskHub],
         [InstanceID],
         [PayloadID],
         [Text]
     )
     VALUES (@TaskHub, @InstanceID, @payloadId, @Reason)
-    INSERT INTO {{SchemaNamePlaceholder}}.NewEvents (
+    INSERT INTO NewEvents (
         [TaskHub],
         [InstanceID],
         [ExecutionID],
@@ -1427,7 +1427,7 @@ BEGIN
         @payloadId)
 
     -- Set orchestration status to Pending
-    UPDATE {{SchemaNamePlaceholder}}.Instances
+    UPDATE Instances
     SET [RuntimeStatus] = 'Pending', [LastUpdatedTime] = SYSUTCDATETIME()
     WHERE [TaskHub] = @TaskHub AND [InstanceID] = @InstanceID
 END
