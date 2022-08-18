@@ -4,13 +4,13 @@ The Microsoft SQL Provider for the Durable Task Framework (DTFx) and Durable Fun
 
 ## Table schema
 
-The DTFx schema is provisioned in the target database when the orchestration service is created. When using DTFx, this happens during the call to `SqlOrchestrationService.CreateAsync()`. When using Durable Functions, this happens automatically when the Functions host first starts up. It is not necessary to run any database provisioning scripts manually.
+The DTFx schema is provisioned in the target database when the orchestration service is created. When using DTFx, this happens during the call to `SqlOrchestrationService.CreateAsync()`. When using Durable Functions, this happens automatically when the Functions host first starts up. It's not strictly necessary to run any database provisioning scripts manually. However, this requires that the connection used by the app has appropriate permissions to create schema objects. Otherwise, the schema will need to be provisioned into the database ahead of time by a user with appropriate privileges.
 
-The database provisioning scripts are compiled directly into the main provider DLL file as assembly resources. You can view these scripts in GitHub [here](https://github.com/microsoft/durabletask-mssql/tree/main/src/DurableTask.SqlServer/Scripts). All tables, views, and stored procedures are provisioned under a default `dt` schema to distinguish it from any existing schema in the database, unless another schema name is provided at creation time.
-
-As mentioned, the schema can also have a custom name, in which case the following information regarding tables and scripts will have the `dt` replaced with `{customSchemaName}`.
+The database provisioning scripts are compiled directly into the main provider DLL file as assembly resources. You can view these scripts in GitHub [here](https://github.com/microsoft/durabletask-mssql/tree/main/src/DurableTask.SqlServer/Scripts). Note that these scripts contain schema name placeholders (`__SchemaNamePlaceholder__`) which are replaced at runtime when the scripts are executed. By default, all tables, views, and stored procedures are provisioned under a `dt` schema to distinguish it from any existing schema in the database.
 
 ![Schema](media/schema.png)
+
+To support multiple tenants in the same database, a custom schema name can be configured, in which case the database objects will be created under the custom name instead of `dt`. See the [Multitenancy](multitenancy.md) documentation for more details.
 
 The tables in the default version are as follows:
 
