@@ -14,6 +14,7 @@ namespace DurableTask.SqlServer
     using System.Threading.Tasks;
     using DurableTask.Core;
     using DurableTask.Core.Common;
+    using DurableTask.Core.Exceptions;
     using DurableTask.Core.History;
     using DurableTask.Core.Query;
     using DurableTask.SqlServer.SqlTypes;
@@ -504,6 +505,11 @@ namespace DurableTask.SqlServer
             command.Parameters.Add("@InputText", SqlDbType.VarChar).Value = startEvent.Input;
             command.Parameters.Add("@StartTime", SqlDbType.DateTime2).Value = startEvent.ScheduledStartTime;
 
+            if (dedupeStatuses?.Length > 0)
+            {
+                command.Parameters.Add("@DedupeStatuses", SqlDbType.VarChar).Value = string.Join(",", dedupeStatuses);
+            }
+
             try
             {
                 await SqlUtils.ExecuteNonQueryAsync(command, this.traceHelper, instance.InstanceId);
@@ -511,7 +517,7 @@ namespace DurableTask.SqlServer
             catch (SqlException e) when (e.Number == 50001 /* Instance ID for pending/running instance already exists */)
             {
                 // Try to avoid leaking SQL exception for issues like this
-                throw new InvalidOperationException(e.Message, e);
+                throw new OrchestrationAlreadyExistsException(e.Message, e);
             }
         }
 
