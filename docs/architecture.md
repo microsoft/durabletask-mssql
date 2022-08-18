@@ -6,11 +6,13 @@ The Microsoft SQL Provider for the Durable Task Framework (DTFx) and Durable Fun
 
 The DTFx schema is provisioned in the target database when the orchestration service is created. When using DTFx, this happens during the call to `SqlOrchestrationService.CreateAsync()`. When using Durable Functions, this happens automatically when the Functions host first starts up. It is not necessary to run any database provisioning scripts manually.
 
-The database provisioning scripts are compiled directly into the main provider DLL file as assembly resources. You can view these scripts in GitHub [here](https://github.com/microsoft/durabletask-mssql/tree/main/src/DurableTask.SqlServer/Scripts). All tables, views, and stored procedures are provisioned under a `dt` schema to distinguish it from any existing schema in the database.
+The database provisioning scripts are compiled directly into the main provider DLL file as assembly resources. You can view these scripts in GitHub [here](https://github.com/microsoft/durabletask-mssql/tree/main/src/DurableTask.SqlServer/Scripts). All tables, views, and stored procedures are provisioned under a default `dt` schema to distinguish it from any existing schema in the database, unless another schema name is provided at creation time.
+
+As mentioned, the schema can also have a custom name, in which case the following information regarding tables and scripts will have the `dt` replaced with `{customSchemaName}`.
 
 ![Schema](media/schema.png)
 
-The tables are as follows:
+The tables in the default version are as follows:
 
 * **dt.Instances**: Contains a list of all orchestration and entity instances that exist in this database.
 * **dt.History**: Contains the event history for all orchestration instances.
@@ -28,7 +30,7 @@ You can find the current version of the database schema in the `dt.Versions` tab
 
 The Microsoft SQL provider for DTFx was designed to operate both in the cloud and on-premises, in dedicated databases, and also in databases that might be shared with other line-of-business applications.
 
-As mentioned previously, all schema objects created by this provider are created under a `dt` schema object ("dt" is short for "**D**urable **T**ask"). The intent of creating this schema is to make it easy to reuse an existing database for DTFx and/or Durable Functions securely and without creating conflicts with any existing database objects.
+As mentioned previously, all schema objects created by this provider are created under a default `dt` schema object ("dt" is short for "**D**urable **T**ask"). The intent of creating this schema is to make it easy to reuse an existing database for DTFx and/or Durable Functions securely and without creating conflicts with any existing database objects.
 
 ?> "Schemas" in Microsoft SQL and other relational database management systems are essentially namespaces of objects like tables, views, stored procedures, etc. The advantage of schemas is that they provide the opportunity to simplify the administration of security, backup and restore, and general database organization. They are particularly useful if you want to co-host multiple applications in the same database, as we do in this case.
 

@@ -14,8 +14,6 @@ namespace DurableTask.SqlServer.SqlTypes
 
     static class TaskEventSqlType
     {
-        const string SqlTypeName = "dt.TaskEvents";
-
         static readonly SqlMetaData[] TaskEventSchema = new SqlMetaData[]
         {
             // IMPORTANT: Must be kept in sync with the database schema
@@ -54,10 +52,11 @@ namespace DurableTask.SqlServer.SqlTypes
             this SqlParameterCollection commandParameters,
             string paramName,
             IList<TaskMessage> outboundMessages,
-            EventPayloadMap eventPayloadMap)
+            EventPayloadMap eventPayloadMap,
+            string schemaName)
         {
             SqlParameter param = commandParameters.Add(paramName, SqlDbType.Structured);
-            param.TypeName = SqlTypeName;
+            param.TypeName = $"{schemaName}.TaskEvents";
             param.Value = ToTaskMessagesParameter(outboundMessages, eventPayloadMap);
             return param;
         }
@@ -65,10 +64,11 @@ namespace DurableTask.SqlServer.SqlTypes
         public static SqlParameter AddTaskEventsParameter(
             this SqlParameterCollection commandParameters,
             string paramName,
-            TaskMessage message)
+            TaskMessage message,
+            string schemaName)
         {
             SqlParameter param = commandParameters.Add(paramName, SqlDbType.Structured);
-            param.TypeName = SqlTypeName;
+            param.TypeName = $"{schemaName}.TaskEvents";
             param.Value = ToTaskMessageParameter(message);
             return param;
         }

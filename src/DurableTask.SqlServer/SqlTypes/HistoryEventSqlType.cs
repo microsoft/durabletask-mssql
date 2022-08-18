@@ -60,10 +60,11 @@ namespace DurableTask.SqlServer.SqlTypes
             IEnumerable<HistoryEvent> newEventCollection,
             OrchestrationInstance instance,
             int nextSequenceNumber,
-            EventPayloadMap eventPayloadMap)
+            EventPayloadMap eventPayloadMap,
+            string schemaName)
         {
             SqlParameter param = commandParameters.Add(paramName, SqlDbType.Structured);
-            param.TypeName = "dt.HistoryEvents";
+            param.TypeName = $"{schemaName}.HistoryEvents";
             param.Value = ToHistoryEventsParameter(newEventCollection, instance, nextSequenceNumber, eventPayloadMap);
             return param;
         }

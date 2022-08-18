@@ -7,28 +7,28 @@
 -- being published. Any schema changes must be done in
 -- new schema-{major}.{minor}.{patch}.sql scripts.
 
--- All objects must be created under the "dt" schema
-IF NOT EXISTS (SELECT 1 FROM sys.schemas WHERE name = 'dt')
-    EXEC('CREATE SCHEMA dt');
+-- All objects must be created under the "dt" schema or under a custom schema.
+IF NOT EXISTS (SELECT 1 FROM sys.schemas WHERE name = '{{SchemaNamePlaceholder}}')
+    EXEC('CREATE SCHEMA {{SchemaNamePlaceholder}}');
 
 -- Create custom types
-IF TYPE_ID(N'dt.InstanceIDs') IS NULL
-    CREATE TYPE dt.InstanceIDs AS TABLE (
+IF TYPE_ID(N'{{SchemaNamePlaceholder}}.InstanceIDs') IS NULL
+    CREATE TYPE {{SchemaNamePlaceholder}}.InstanceIDs AS TABLE (
         [InstanceID] varchar(100) NOT NULL
     )
 GO
 
-IF TYPE_ID(N'dt.MessageIDs') IS NULL
+IF TYPE_ID(N'{{SchemaNamePlaceholder}}.MessageIDs') IS NULL
     -- WARNING: Reordering fields is a breaking change!
-    CREATE TYPE dt.MessageIDs AS TABLE (
+    CREATE TYPE {{SchemaNamePlaceholder}}.MessageIDs AS TABLE (
         [InstanceID] varchar(100) NULL,
         [SequenceNumber] bigint NULL
     )
 GO
 
-IF TYPE_ID(N'dt.HistoryEvents') IS NULL
+IF TYPE_ID(N'{{SchemaNamePlaceholder}}.HistoryEvents') IS NULL
     -- WARNING: Reordering fields is a breaking change!
-    CREATE TYPE dt.HistoryEvents AS TABLE (
+    CREATE TYPE {{SchemaNamePlaceholder}}.HistoryEvents AS TABLE (
         [InstanceID] varchar(100) NULL,
         [ExecutionID] varchar(50) NULL,
         [SequenceNumber] bigint NULL,
@@ -47,9 +47,9 @@ IF TYPE_ID(N'dt.HistoryEvents') IS NULL
     )
 GO
 
-IF TYPE_ID(N'dt.OrchestrationEvents') IS NULL
+IF TYPE_ID(N'{{SchemaNamePlaceholder}}.OrchestrationEvents') IS NULL
     -- WARNING: Reordering fields is a breaking change!
-    CREATE TYPE dt.OrchestrationEvents AS TABLE (
+    CREATE TYPE {{SchemaNamePlaceholder}}.OrchestrationEvents AS TABLE (
         [InstanceID] varchar(100) NULL,
         [ExecutionID] varchar(50) NULL,
         [SequenceNumber] bigint NULL,
@@ -66,9 +66,9 @@ IF TYPE_ID(N'dt.OrchestrationEvents') IS NULL
     )
 GO
 
-IF TYPE_ID(N'dt.TaskEvents') IS NULL
+IF TYPE_ID(N'{{SchemaNamePlaceholder}}.TaskEvents') IS NULL
     -- WARNING: Reordering fields is a breaking change!
-    CREATE TYPE dt.TaskEvents AS TABLE (
+    CREATE TYPE {{SchemaNamePlaceholder}}.TaskEvents AS TABLE (
         [InstanceID] varchar(100) NULL,
         [ExecutionID] varchar(50) NULL,
         [Name] varchar(300) NULL,
@@ -90,18 +90,18 @@ GO
 -- Rule #2: Do not use varchar(MAX) except in the Payloads table
 -- Rule #3: Try to follow existing naming and ordering conventions
 
-IF OBJECT_ID(N'dt.Versions', 'U') IS NULL
+IF OBJECT_ID(N'{{SchemaNamePlaceholder}}.Versions', 'U') IS NULL
 BEGIN
-    CREATE TABLE dt.Versions (
+    CREATE TABLE {{SchemaNamePlaceholder}}.Versions (
         SemanticVersion varchar(100) NOT NULL CONSTRAINT PK_Versions_SemanticVersion PRIMARY KEY WITH (IGNORE_DUP_KEY = ON),
         UpgradeTime datetime2 NOT NULL CONSTRAINT DF_Versions_UpgradeTime DEFAULT SYSUTCDATETIME()
     )
 END
 GO
 
-IF OBJECT_ID(N'dt.Payloads', 'U') IS NULL
+IF OBJECT_ID(N'{{SchemaNamePlaceholder}}.Payloads', 'U') IS NULL
 BEGIN
-    CREATE TABLE dt.Payloads (
+    CREATE TABLE {{SchemaNamePlaceholder}}.Payloads (
         [TaskHub] varchar(50) NOT NULL,
         [InstanceID] varchar(100) NOT NULL,
         [PayloadID] uniqueidentifier NOT NULL,
@@ -114,9 +114,9 @@ BEGIN
 END
 GO
 
-IF OBJECT_ID(N'dt.Instances', 'U') IS NULL
+IF OBJECT_ID(N'{{SchemaNamePlaceholder}}.Instances', 'U') IS NULL
 BEGIN
-	CREATE TABLE dt.Instances (
+	CREATE TABLE {{SchemaNamePlaceholder}}.Instances (
 		[TaskHub] varchar(50) NOT NULL,
         [InstanceID] varchar(100) NOT NULL,
 		[ExecutionID] varchar(50) NOT NULL CONSTRAINT DF_Instances_ExecutionID DEFAULT (NEWID()), -- expected to be system generated
@@ -138,17 +138,17 @@ BEGIN
 	)
 
     -- This index is used by LockNext and Purge logic
-    CREATE INDEX IX_Instances_RuntimeStatus ON dt.Instances(TaskHub, RuntimeStatus)
+    CREATE INDEX IX_Instances_RuntimeStatus ON {{SchemaNamePlaceholder}}.Instances(TaskHub, RuntimeStatus)
         INCLUDE ([LockExpiration], [CreatedTime], [CompletedTime])
     
     -- This index is intended to help the performance of multi-instance query
-    CREATE INDEX IX_Instances_CreatedTime ON dt.Instances(TaskHub, CreatedTime)
+    CREATE INDEX IX_Instances_CreatedTime ON {{SchemaNamePlaceholder}}.Instances(TaskHub, CreatedTime)
         INCLUDE ([RuntimeStatus], [CompletedTime], [InstanceID])
 END
 
-IF OBJECT_ID(N'dt.NewEvents', 'U') IS NULL
+IF OBJECT_ID(N'{{SchemaNamePlaceholder}}.NewEvents', 'U') IS NULL
 BEGIN
-    CREATE TABLE dt.NewEvents (
+    CREATE TABLE {{SchemaNamePlaceholder}}.NewEvents (
         [SequenceNumber] bigint IDENTITY NOT NULL, -- order is important for FIFO
         [Timestamp] datetime2 NOT NULL CONSTRAINT DF_NewEvents_Timestamp DEFAULT SYSUTCDATETIME(),
         [VisibleTime] datetime2 NULL, -- for scheduled messages
@@ -168,9 +168,9 @@ BEGIN
     )
 END
 
-IF OBJECT_ID(N'dt.History', 'U') IS NULL
+IF OBJECT_ID(N'{{SchemaNamePlaceholder}}.History', 'U') IS NULL
 BEGIN
-    CREATE TABLE dt.History (
+    CREATE TABLE {{SchemaNamePlaceholder}}.History (
         [TaskHub] varchar(50) NOT NULL,
         [InstanceID] varchar(100) NOT NULL,
 	    [ExecutionID] varchar(50) NOT NULL,
@@ -189,9 +189,9 @@ BEGIN
     )
 END
 
-IF OBJECT_ID(N'dt.NewTasks', 'U') IS NULL
+IF OBJECT_ID(N'{{SchemaNamePlaceholder}}.NewTasks', 'U') IS NULL
 BEGIN
-    CREATE TABLE dt.NewTasks (
+    CREATE TABLE {{SchemaNamePlaceholder}}.NewTasks (
         [TaskHub] varchar(50) NOT NULL,
         [SequenceNumber] bigint IDENTITY NOT NULL,  -- order is important for FIFO
         [InstanceID] varchar(100) NOT NULL,
@@ -211,14 +211,14 @@ BEGIN
     )
 
     -- This index is used by vScaleHints
-    CREATE NONCLUSTERED INDEX IX_NewTasks_InstanceID ON dt.NewTasks(TaskHub, InstanceID)
+    CREATE NONCLUSTERED INDEX IX_NewTasks_InstanceID ON {{SchemaNamePlaceholder}}.NewTasks(TaskHub, InstanceID)
         INCLUDE ([SequenceNumber], [Timestamp], [LockExpiration], [VisibleTime])
 END
 GO
 
-IF OBJECT_ID(N'dt.GlobalSettings', 'U') IS NULL
+IF OBJECT_ID(N'{{SchemaNamePlaceholder}}.GlobalSettings', 'U') IS NULL
 BEGIN
-    CREATE TABLE dt.GlobalSettings (
+    CREATE TABLE {{SchemaNamePlaceholder}}.GlobalSettings (
         [Name] varchar(300) NOT NULL PRIMARY KEY,
         [Value] sql_variant NULL,
         [Timestamp] datetime2 NOT NULL CONSTRAINT DF_GlobalSettings_Timestamp DEFAULT SYSUTCDATETIME(),
@@ -226,6 +226,6 @@ BEGIN
     )
     
     -- Default task hub mode is 1, or "User ID"
-    INSERT INTO dt.GlobalSettings ([Name], [Value]) VALUES ('TaskHubMode', 1)
+    INSERT INTO {{SchemaNamePlaceholder}}.GlobalSettings ([Name], [Value]) VALUES ('TaskHubMode', 1)
 END
 GO

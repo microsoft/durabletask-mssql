@@ -14,8 +14,6 @@ namespace DurableTask.SqlServer.SqlTypes
 
     static class OrchestrationEventSqlType
     {
-        const string SqlTypeName = "dt.OrchestrationEvents";
-
         static readonly SqlMetaData[] OrchestrationEventSchema = new SqlMetaData[]
         {
             // IMPORTANT: The order and schema of these items must always match the order of the SQL type in logic.sql
@@ -58,10 +56,11 @@ namespace DurableTask.SqlServer.SqlTypes
             IList<TaskMessage> orchestratorMessages,
             IList<TaskMessage> timerMessages,
             TaskMessage continuedAsNewMessage,
-            EventPayloadMap eventPayloadMap)
+            EventPayloadMap eventPayloadMap,
+            string schemaName)
         {
             SqlParameter param = commandParameters.Add(paramName, SqlDbType.Structured);
-            param.TypeName = SqlTypeName;
+            param.TypeName = $"{schemaName}.OrchestrationEvents";
 
             IEnumerable<TaskMessage> messages = orchestratorMessages.Union(timerMessages);
             if (continuedAsNewMessage != null)
@@ -76,10 +75,11 @@ namespace DurableTask.SqlServer.SqlTypes
         public static SqlParameter AddOrchestrationEventsParameter(
             this SqlParameterCollection commandParameters,
             string paramName,
-            TaskMessage message)
+            TaskMessage message,
+            string schemaName)
         {
             SqlParameter param = commandParameters.Add(paramName, SqlDbType.Structured);
-            param.TypeName = SqlTypeName;
+            param.TypeName = $"{schemaName}.OrchestrationEvents";
             param.Value = ToOrchestrationMessageParameter(message);
             return param;
         }

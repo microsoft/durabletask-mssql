@@ -41,7 +41,7 @@ namespace DurableTask.SqlServer
             {
                 // If the database already has the latest schema, then skip
                 using SqlCommand command = dbLock.CreateCommand();
-                command.CommandText = "dt._GetVersions";
+                command.CommandText = $"{this.settings.SchemaName}._GetVersions";
                 command.CommandType = CommandType.StoredProcedure;
 
                 try
@@ -110,7 +110,7 @@ namespace DurableTask.SqlServer
             // we need to update the sprocs or views.
             using (SqlCommand command = dbLock.CreateCommand())
             {
-                command.CommandText = "dt._UpdateVersion";
+                command.CommandText = $"{this.settings.SchemaName}._UpdateVersion";
                 command.CommandType = CommandType.StoredProcedure;
                 command.Parameters.Add("@SemanticVersion", SqlDbType.NVarChar, 100).Value = DTUtils.ExtensionVersion.ToString();
 
@@ -229,7 +229,9 @@ namespace DurableTask.SqlServer
             }
 
             string scriptText = await GetScriptTextAsync(scriptName);
-
+            
+            scriptText = scriptText.Replace("{{SchemaNamePlaceholder}}", this.settings.SchemaName);
+            
             // Split script into distinct executeable commands
             IEnumerable<string> scriptCommands = Regex.Split(scriptText, @"^\s*GO\s*$", RegexOptions.Multiline | RegexOptions.IgnoreCase)
                 .Where(x => x.Trim().Length > 0);

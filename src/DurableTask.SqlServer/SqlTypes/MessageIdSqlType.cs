@@ -11,8 +11,6 @@ namespace DurableTask.SqlServer.SqlTypes
 
     static class MessageIdSqlType
     {
-        const string SqlTypeName = "dt.MessageIDs";
-
         static readonly SqlMetaData[] MessageIdSchema = new SqlMetaData[]
         {
             // IMPORTANT: The order and schema of these items must always match the order of the SQL type in logic.sql
@@ -23,10 +21,11 @@ namespace DurableTask.SqlServer.SqlTypes
         public static SqlParameter AddMessageIdParameter(
             this SqlParameterCollection commandParameters,
             string paramName,
-            IEnumerable<TaskMessage> messageCollection)
+            IEnumerable<TaskMessage> messageCollection,
+            string schemaName)
         {
             SqlParameter param = commandParameters.Add(paramName, SqlDbType.Structured);
-            param.TypeName = SqlTypeName;
+            param.TypeName = $"{schemaName}.MessageIDs";
             param.Value = ToMessageIDsParameter(messageCollection);
             return param;
         }
@@ -34,10 +33,11 @@ namespace DurableTask.SqlServer.SqlTypes
         public static SqlParameter AddMessageIdParameter(
             this SqlParameterCollection commandParameters,
             string paramName,
-            TaskMessage message)
+            TaskMessage message,
+            string schemaName)
         {
             SqlParameter param = commandParameters.Add(paramName, SqlDbType.Structured);
-            param.TypeName = SqlTypeName;
+            param.TypeName = $"{schemaName}.MessageIDs";
             param.Value = ToMessageIDsParameter(message);
             return param;
         }
