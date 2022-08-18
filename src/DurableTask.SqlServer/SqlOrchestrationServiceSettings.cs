@@ -19,7 +19,8 @@ namespace DurableTask.SqlServer
         /// </summary>
         /// <param name="connectionString">The connection string for connecting to the database.</param>
         /// <param name="taskHubName">Optional. The name of the task hub. If not specified, a default name will be used.</param>
-        public SqlOrchestrationServiceSettings(string connectionString, string? taskHubName = null)
+        /// <param name="schemaName">Optional. The name of the schema. If not specified, the default 'dt' value will be used.</param>
+        public SqlOrchestrationServiceSettings(string connectionString, string? taskHubName = null, string? schemaName = null)
         {
             if (string.IsNullOrEmpty(connectionString))
             {
@@ -27,6 +28,7 @@ namespace DurableTask.SqlServer
             }
 
             this.TaskHubName = taskHubName ?? "default";
+            this.SchemaName = schemaName ?? "dt";
 
             var builder = new SqlConnectionStringBuilder(connectionString)
             {
@@ -61,6 +63,12 @@ namespace DurableTask.SqlServer
         /// </summary>
         [JsonProperty("taskHubName")]
         public string TaskHubName { get; }
+        
+        /// <summary>
+        /// Gets the name of the schema.
+        /// </summary>
+        [JsonProperty("schemaName")]
+        public string SchemaName { get; }
 
         /// <summary>
         /// Gets or sets the name of the app. Used for logging purposes.
