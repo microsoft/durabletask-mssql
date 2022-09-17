@@ -19,7 +19,7 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
     public class CoreScenarios : IntegrationTestBase
     {
         public CoreScenarios(ITestOutputHelper output)
-            : base(output)
+            : base(output, "CustomTaskHub")
         {
             this.AddFunctions(typeof(Functions));
         }
@@ -73,7 +73,7 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
         [Fact]
         public async Task CanInteractWithEntities()
         {
-            IDurableClient client = await this.GetDurableClientAsync();
+            IDurableClient client = this.GetDurableClient();
 
             var entityId = new EntityId(nameof(Functions.Counter), Guid.NewGuid().ToString("N"));
             EntityStateResponse<int> result = await client.ReadEntityStateAsync<int>(entityId);
@@ -101,7 +101,7 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
             Assert.Equal(OrchestrationRuntimeStatus.Completed, status.RuntimeStatus);
             Assert.Equal(10, (int)status.Output);
 
-            IDurableClient client = await this.GetDurableClientAsync();
+            IDurableClient client = this.GetDurableClient();
             status = await client.GetStatusAsync(status.InstanceId);
 
             Assert.NotNull(status.Input);
@@ -154,7 +154,155 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
 
             DateTime afterAllFinishedTime = SharedTestHelpers.GetCurrentDatabaseTimeUtc();
 
-            IDurableClient client = await this.GetDurableClientAsync();
+            IDurableClient client = this.GetDurableClient();
+
+            // Create one condition object and reuse it for multiple queries
+            var condition = new OrchestrationStatusQueryCondition();
+            OrchestrationStatusQueryResult result;
+
+            // Return all instances
+            result = await client.ListInstancesAsync(condition, CancellationToken.None);
+            Assert.Equal(10, result.DurableOrchestrationState.Count());
+
+            // Test CreatedTimeTo filter
+            condition.CreatedTimeTo = startTime;
+            result = await client.ListInstancesAsync(condition, CancellationToken.None);
+            Assert.Empty(result.DurableOrchestrationState);
+
+            condition.CreatedTimeTo = sequencesFinishedTime;
+            result = await client.ListInstancesAsync(condition, CancellationToken.None);
+            Assert.Equal(5, result.DurableOrchestrationState.Count());
+
+            condition.CreatedTimeTo = afterAllFinishedTime;
+            result = await client.ListInstancesAsync(condition, CancellationToken.None);
+            Assert.Equal(10, result.DurableOrchestrationState.Count());
+
+            // Test CreatedTimeFrom filter
+            condition.CreatedTimeFrom = afterAllFinishedTime;
+            result = await client.ListInstancesAsync(condition, CancellationToken.None);
+            Assert.Empty(result.DurableOrchestrationState);
+
+            condition.CreatedTimeFrom = sequencesFinishedTime;
+            result = await client.ListInstancesAsync(condition, CancellationToken.None);
+            Assert.Equal(5, result.DurableOrchestrationState.Count());
+
+            condition.CreatedTimeFrom = startTime;
+            result = await client.ListInstancesAsync(condition, CancellationToken.None);
+            Assert.Equal(10, result.DurableOrchestrationState.Count());
+
+            // Test RuntimeStatus filter
+            var statusFilters = new HashSet<OrchestrationRuntimeStatus>(new[]
+            {
+                OrchestrationRuntimeStatus.Failed,
+                OrchestrationRuntimeStatus.Pending,
+                OrchestrationRuntimeStatus.Terminated
+            });
+
+            condition.RuntimeStatus = statusFilters;
+            result = await client.ListInstancesAsync(condition, CancellationToken.None);
+            Assert.Empty(result.DurableOrchestrationState);
+
+            statusFilters.Add(OrchestrationRuntimeStatus.Running);
+            result = await client.ListInstancesAsync(condition, CancellationToken.None);
+            Assert.Equal(5, result.DurableOrchestrationState.Count());
+            Assert.All(result.DurableOrchestrationState, state => Assert.Equal(OrchestrationRuntimeStatus.Running, state.RuntimeStatus));
+
+            statusFilters.Add(OrchestrationRuntimeStatus.Completed);
+            result = await client.ListInstancesAsync(condition, CancellationToken.None);
+            Assert.Equal(10, result.DurableOrchestrationState.Count());
+
+            statusFilters.Remove(OrchestrationRuntimeStatus.Running);
+            result = await client.ListInstancesAsync(condition, CancellationToken.None);
+            Assert.Equal(5, result.DurableOrchestrationState.Count());
+            Assert.All(result.DurableOrchestrationState, state => Assert.Equal(OrchestrationRuntimeStatus.Completed, state.RuntimeStatus));
+
+            statusFilters.Clear();
+            result = await client.ListInstancesAsync(condition, CancellationToken.None);
+            Assert.Equal(10, result.DurableOrchestrationState.Count());
+
+            // Test InstanceIdPrefix
+            condition.InstanceIdPrefix = "Foo";
+            result = await client.ListInstancesAsync(condition, CancellationToken.None);
+            Assert.Empty(result.DurableOrchestrationState);
+
+            condition.InstanceIdPrefix = prefix;
+            result = await client.ListInstancesAsync(condition, CancellationToken.None);
+            Assert.Equal(10, result.DurableOrchestrationState.Count());
+
+            // Test PageSize and ContinuationToken
+            var instanceIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            condition.PageSize = 0;
+            while (condition.PageSize++ < 10)
+            {
+                result = await client.ListInstancesAsync(condition, CancellationToken.None);
+                int total = result.DurableOrchestrationState.Count();
+                Assert.Equal(condition.PageSize, total);
+
+                // Make sure all instance IDs are unique
+                Assert.All(result.DurableOrchestrationState, s => instanceIds.Add(s.InstanceId));
+
+                while (total < 10)
+                {
+                    condition.ContinuationToken = result.ContinuationToken;
+                    result = await client.ListInstancesAsync(condition, CancellationToken.None);
+                    int count = result.DurableOrchestrationState.Count();
+                    Assert.NotEqual(0, count);
+                    Assert.True(count <= condition.PageSize);
+                    total += count;
+                    Assert.True(total <= 10);
+                    Assert.All(result.DurableOrchestrationState, s => instanceIds.Add(s.InstanceId));
+                }
+
+                condition.ContinuationToken = null;
+            }
+
+            // Test ShowInput
+            condition.ShowInput = true;
+            condition.CreatedTimeFrom = sequencesFinishedTime;
+            result = await client.ListInstancesAsync(condition, CancellationToken.None);
+            Assert.All(result.DurableOrchestrationState, state => Assert.NotEqual(JValue.CreateNull(), state.Input));
+
+            condition.ShowInput = false;
+            condition.CreatedTimeFrom = startTime;
+            result = await client.ListInstancesAsync(condition, CancellationToken.None);
+            Assert.All(result.DurableOrchestrationState, state => Assert.Equal(JValue.CreateNull(), state.Input));
+        }
+
+         [Fact]
+        public async Task MultiInstanceQueriesWithoutMultiTenancy()
+        {
+            await SharedTestHelpers.DisableMultitenancyAsync();
+            await SharedTestHelpers.PurgeAsync();
+            DateTime startTime = SharedTestHelpers.GetCurrentDatabaseTimeUtc();
+            string prefix = $"{startTime:HHmmss}";
+            await Enumerable.Range(0, 5).ParallelForEachAsync(5, i => this.RunOrchestrationAsync(
+                nameof(Functions.Sequence),
+                instanceId: $"{prefix}.sequence.{i}"));
+
+            // As query is using CreatedTimeFrom, ensure sequencesFinishedTime is more than 100ns
+            // after startTime to cope with sql server datetime2 and c# DateTime precision
+            await Task.Delay(TimeSpan.FromMilliseconds(20));
+
+            DateTime sequencesFinishedTime = SharedTestHelpers.GetCurrentDatabaseTimeUtc();
+
+            // As query is using CreatedTimeTo, ensure new orchestrations start more than 100ns
+            // after sequencesFinishedTime to cope with sql server datetime2 and c# DateTime precision
+            await Task.Delay(TimeSpan.FromMilliseconds(20));
+
+            await Enumerable.Range(0, 5).ParallelForEachAsync(5, i =>
+                this.StartOrchestrationAsync(
+                    nameof(Functions.WaitForEvent),
+                    input: i.ToString(),
+                    instanceId: $"{prefix}.waiter.{i}"));
+
+            // As query is using CreatedTimeFrom and CreatedTimeTo, ensure afterAllFinishedTime is
+            // more than 100ns after previous orchestrations start to cope with sql server datetime2
+            // and c# DateTime precision
+            await Task.Delay(TimeSpan.FromMilliseconds(20));
+
+            DateTime afterAllFinishedTime = SharedTestHelpers.GetCurrentDatabaseTimeUtc();
+
+            IDurableClient client = this.GetDurableClient();
 
             // Create one condition object and reuse it for multiple queries
             var condition = new OrchestrationStatusQueryCondition();
@@ -274,7 +422,7 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
             DurableOrchestrationStatus status = await this.RunOrchestrationAsync(nameof(Functions.NoOp));
             Assert.Equal(OrchestrationRuntimeStatus.Completed, status.RuntimeStatus);
 
-            IDurableClient client = await this.GetDurableClientAsync();
+            IDurableClient client = this.GetDurableClient();
             PurgeHistoryResult result;
             
             // First purge gets the active instance
@@ -315,7 +463,7 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
 
             DateTime endTime = SharedTestHelpers.GetCurrentDatabaseTimeUtc();
 
-            IDurableClient client = await this.GetDurableClientAsync();
+            IDurableClient client = this.GetDurableClient();
             PurgeHistoryResult purgeResult;
 
             // First attempt should delete nothing because it's out of range

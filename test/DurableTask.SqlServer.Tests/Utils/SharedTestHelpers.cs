@@ -125,6 +125,11 @@ namespace DurableTask.SqlServer.Tests.Utils
             return ExecuteSqlAsync($"EXECUTE dt.SetGlobalSetting @Name='TaskHubMode', @Value=1");
         }
 
+        public static Task DisableMultitenancyAsync()
+        {
+            return ExecuteSqlAsync($"EXECUTE dt.SetGlobalSetting @Name='TaskHubMode', @Value=0");
+        }
+
         static string GeneratePassword()
         {
             const string AllowedChars = "abcdefghijklmnopqrstuvwxyzABCDEFGHJKLMNPQRSTWXYZ0123456789#$";
@@ -232,6 +237,15 @@ namespace DurableTask.SqlServer.Tests.Utils
             {
                 semaphore.Release();
             }
+        }
+
+        public static async Task PurgeAsync(string schema = "dt")
+        {
+            await ExecuteSqlAsync($"TRUNCATE TABLE [{schema}].[NewEvents]");
+            await ExecuteSqlAsync($"TRUNCATE TABLE [{schema}].[NewTasks]");
+            await ExecuteSqlAsync($"TRUNCATE TABLE [{schema}].[Instances]");
+            await ExecuteSqlAsync($"TRUNCATE TABLE [{schema}].[History]");
+            await ExecuteSqlAsync($"TRUNCATE TABLE [{schema}].[Payloads]");
         }
     }
 }

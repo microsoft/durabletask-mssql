@@ -82,14 +82,13 @@ namespace DurableTask.SqlServer.AzureFunctions
                 }
 
                 SqlDurabilityOptions clientOptions = this.GetSqlOptions(attribute);
-                IOrchestrationServiceClient serviceClient = 
-                    new SqlOrchestrationService(clientOptions.GetOrchestrationServiceSettings(
+                SqlOrchestrationService orchestrationService = 
+                    new (clientOptions.GetOrchestrationServiceSettings(
                         this.extensionOptions,
                         this.connectionInfoResolver));
                 clientProvider = new SqlDurabilityProvider(
-                    this.GetOrchestrationService(),
-                    clientOptions,
-                    serviceClient);
+                    orchestrationService,
+                    clientOptions);
 
                 this.clientProviders.Add(key, clientProvider);
                 return clientProvider;
