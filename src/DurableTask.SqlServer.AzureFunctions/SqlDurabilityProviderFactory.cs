@@ -23,7 +23,6 @@ namespace DurableTask.SqlServer.AzureFunctions
         readonly IConnectionInfoResolver connectionInfoResolver;
 
         SqlDurabilityOptions? defaultOptions;
-        SqlOrchestrationServiceSettings? orchestrationServiceSettings;
         SqlDurabilityProvider? defaultProvider;
 
         /// <summary>
@@ -131,19 +130,6 @@ namespace DurableTask.SqlServer.AzureFunctions
             }
 
             return options;
-        }
-
-        SqlOrchestrationServiceSettings GetOrchestrationServiceSettings()
-        {
-            if (this.orchestrationServiceSettings == null)
-            {
-                SqlDurabilityOptions options = this.GetDefaultSqlOptions();
-                this.orchestrationServiceSettings = options.GetOrchestrationServiceSettings(
-                    this.extensionOptions,
-                    this.connectionInfoResolver);
-            }
-
-            return this.orchestrationServiceSettings;
         }
     }
 }
