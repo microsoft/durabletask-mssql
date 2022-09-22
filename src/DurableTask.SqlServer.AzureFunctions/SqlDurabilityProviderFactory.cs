@@ -24,7 +24,6 @@ namespace DurableTask.SqlServer.AzureFunctions
 
         SqlDurabilityOptions? defaultOptions;
         SqlOrchestrationServiceSettings? orchestrationServiceSettings;
-        SqlOrchestrationService? service;
         SqlDurabilityProvider? defaultProvider;
 
         /// <summary>
@@ -55,7 +54,7 @@ namespace DurableTask.SqlServer.AzureFunctions
             if (this.defaultProvider == null)
             {
                 SqlDurabilityOptions sqlProviderOptions = this.GetDefaultSqlOptions();
-                SqlOrchestrationService service = this.GetOrchestrationService();
+                SqlOrchestrationService service = this.GetOrchestrationService(sqlProviderOptions);
                 this.defaultProvider = new SqlDurabilityProvider(service, sqlProviderOptions);
             }
 
@@ -65,13 +64,6 @@ namespace DurableTask.SqlServer.AzureFunctions
         // Called by the Durable client binding infrastructure
         public DurabilityProvider GetDurabilityProvider(DurableClientAttribute attribute)
         {
-            // TODO: Much of this logic should go into the base class
-            if (string.IsNullOrEmpty(attribute.ConnectionName) &&
-                string.IsNullOrEmpty(attribute.TaskHub))
-            {
-                return this.GetDurabilityProvider();
-            }
-
             lock (this.clientProviders)
             {
                 string key = GetDurabilityProviderKey(attribute);
@@ -82,9 +74,7 @@ namespace DurableTask.SqlServer.AzureFunctions
 
                 SqlDurabilityOptions clientOptions = this.GetSqlOptions(attribute);
                 SqlOrchestrationService orchestrationService = 
-                    new (clientOptions.GetOrchestrationServiceSettings(
-                        this.extensionOptions,
-                        this.connectionInfoResolver));
+                    this.GetOrchestrationService(clientOptions);
                 clientProvider = new SqlDurabilityProvider(
                     orchestrationService,
                     clientOptions);
@@ -94,20 +84,16 @@ namespace DurableTask.SqlServer.AzureFunctions
             }
         }
 
+        SqlOrchestrationService GetOrchestrationService(SqlDurabilityOptions clientOptions)
+        {
+            return new (clientOptions.GetOrchestrationServiceSettings(
+                this.extensionOptions,
+                this.connectionInfoResolver));
+        }
+
         static string GetDurabilityProviderKey(DurableClientAttribute attribute)
         {
             return attribute.ConnectionName + "|" + attribute.TaskHub;
-        }
-
-        SqlOrchestrationService GetOrchestrationService()
-        {
-            if (this.service == null)
-            {
-                SqlOrchestrationServiceSettings settings = this.GetOrchestrationServiceSettings();
-                this.service = new SqlOrchestrationService(settings);
-            }
-
-            return this.service;
         }
 
         SqlDurabilityOptions GetDefaultSqlOptions()

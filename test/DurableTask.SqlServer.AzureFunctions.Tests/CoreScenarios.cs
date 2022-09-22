@@ -9,17 +9,16 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
     using System.Threading;
     using System.Threading.Tasks;
     using DurableTask.SqlServer.Tests.Utils;
-    using Microsoft.Azure.WebJobs;
     using Microsoft.Azure.WebJobs.Extensions.DurableTask;
     using Newtonsoft.Json;
     using Newtonsoft.Json.Linq;
     using Xunit;
     using Xunit.Abstractions;
 
-    public class CoreScenarios : IntegrationTestBase
+    public abstract class CoreScenarios : IntegrationTestBase
     {
-        public CoreScenarios(ITestOutputHelper output)
-            : base(output, "CustomTaskHub")
+        protected CoreScenarios(ITestOutputHelper output, bool multiTenancy)
+            : base(output, "CustomTaskHub", multiTenancy)
         {
             this.AddFunctions(typeof(Functions));
         }
@@ -123,6 +122,7 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
         [Fact]
         public async Task MultiInstanceQueries()
         {
+            await SharedTestHelpers.PurgeAsync();
             DateTime startTime = SharedTestHelpers.GetCurrentDatabaseTimeUtc();
             string prefix = $"{startTime:HHmmss}";
 
@@ -268,64 +268,6 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
             Assert.All(result.DurableOrchestrationState, state => Assert.Equal(JValue.CreateNull(), state.Input));
         }
 
-        [Fact]
-        public async Task MultiInstanceQueriesWithoutMultiTenancy()
-        {
-            await SharedTestHelpers.DisableMultiTenancyAsync();
-            await this.MultiInstanceQueries();
-        }
-
-        [Fact]
-        public async Task When_Without_MultiTenancy_should_Return_Correct_Orchestration_By_TaskHub()
-        {
-            await SharedTestHelpers.DisableMultiTenancyAsync();
-            
-            string otherTaskHubName = "SomeOtherTaskHub";
-
-            string currentTaskHubInstanceId = Guid.NewGuid().ToString();
-            await this.StartOrchestrationWithoutWaitingAsync(nameof(Functions.Sequence), instanceId: currentTaskHubInstanceId);
-
-            string anotherTaskHubInstanceId = Guid.NewGuid().ToString();
-            await this.StartOrchestrationWithoutWaitingAsync(nameof(Functions.Sequence), instanceId: anotherTaskHubInstanceId, taskHub: otherTaskHubName);
-
-            IDurableClient client = this.GetDurableClient();
-            var current = await client.GetStatusAsync(currentTaskHubInstanceId);
-            Assert.NotNull(current);
-            var otherInstance = await client.GetStatusAsync(anotherTaskHubInstanceId);
-            Assert.Null(otherInstance);
-
-            IDurableClient clientOtherTaskHub = this.GetDurableClient(otherTaskHubName);
-            var currentFromOtherTaskHub = await clientOtherTaskHub.GetStatusAsync(currentTaskHubInstanceId);
-            Assert.Null(currentFromOtherTaskHub);
-            var otherInstanceFromOtherTaskHub = await clientOtherTaskHub.GetStatusAsync(anotherTaskHubInstanceId);
-            Assert.NotNull(otherInstanceFromOtherTaskHub);
-        }
-
-        [Fact]
-        public async Task When_WithMultiTenancy_should_Not_Take_Care_Of_TaskHub()
-        {
-            await SharedTestHelpers.EnableMultiTenancyAsync();
-            
-            string otherTaskHubName = "SomeOtherTaskHub";
-
-            string currentTaskHubInstanceId = Guid.NewGuid().ToString();
-            await this.StartOrchestrationWithoutWaitingAsync(nameof(Functions.Sequence), instanceId: currentTaskHubInstanceId);
-
-            string anotherTaskHubInstanceId = Guid.NewGuid().ToString();
-            await this.StartOrchestrationWithoutWaitingAsync(nameof(Functions.Sequence), instanceId: anotherTaskHubInstanceId, taskHub: otherTaskHubName);
-
-            IDurableClient client = this.GetDurableClient();
-            var current = await client.GetStatusAsync(currentTaskHubInstanceId);
-            Assert.NotNull(current);
-            var otherInstance = await client.GetStatusAsync(anotherTaskHubInstanceId);
-            Assert.NotNull(otherInstance);
-
-            IDurableClient clientOtherTaskHub = this.GetDurableClient(otherTaskHubName);
-            var currentFromOtherTaskHub = await clientOtherTaskHub.GetStatusAsync(currentTaskHubInstanceId);
-            Assert.NotNull(currentFromOtherTaskHub);
-            var otherInstanceFromOtherTaskHub = await clientOtherTaskHub.GetStatusAsync(anotherTaskHubInstanceId);
-            Assert.NotNull(otherInstanceFromOtherTaskHub);
-        }
 
         [Fact]
         public async Task SingleInstancePurge()
@@ -434,162 +376,6 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
             status = await this.RewindOrchestrationAsync(status.InstanceId);
             Assert.Equal(OrchestrationRuntimeStatus.Completed, status.RuntimeStatus);
             Assert.Equal("0,1,2,activity", status.Output);
-        }
-
-        static class Functions
-        {
-            [FunctionName(nameof(Sequence))]
-            public static async Task<int> Sequence(
-                [OrchestrationTrigger] IDurableOrchestrationContext ctx)
-            {
-                int value = 0;
-                for (int i = 0; i < 10; i++)
-                {
-                    value = await ctx.CallActivityAsync<int>(nameof(PlusOne), value);
-                }
-
-                return value;
-            }
-
-            [FunctionName(nameof(PlusOne))]
-            public static int PlusOne([ActivityTrigger] int input) => input + 1;
-
-            [FunctionName(nameof(FanOutFanIn))]
-            public static async Task<string[]> FanOutFanIn(
-                [OrchestrationTrigger] IDurableOrchestrationContext ctx)
-            {
-                var tasks = new List<Task<string>>();
-                for (int i = 0; i < 10; i++)
-                {
-                    tasks.Add(ctx.CallActivityAsync<string>(nameof(IntToString), i));
-                }
-
-                string[] results = await Task.WhenAll(tasks);
-                Array.Sort(results);
-                Array.Reverse(results);
-                return results;
-            }
-
-            [FunctionName(nameof(IntToString))]
-            public static string? IntToString([ActivityTrigger] int input) => input.ToString();
-
-            [FunctionName(nameof(DeterministicGuid))]
-            public static async Task<bool> DeterministicGuid([OrchestrationTrigger] IDurableOrchestrationContext ctx)
-            {
-                Guid currentGuid1 = ctx.NewGuid();
-                Guid originalGuid1 = await ctx.CallActivityAsync<Guid>(nameof(Echo), currentGuid1);
-                if (currentGuid1 != originalGuid1)
-                {
-                    return false;
-                }
-
-                Guid currentGuid2 = ctx.NewGuid();
-                Guid originalGuid2 = await ctx.CallActivityAsync<Guid>(nameof(Echo), currentGuid2);
-                if (currentGuid2 != originalGuid2)
-                {
-                    return false;
-                }
-
-                return currentGuid1 != currentGuid2;
-            }
-
-            [FunctionName(nameof(Echo))]
-            public static object Echo([ActivityTrigger] IDurableActivityContext ctx) => ctx.GetInput<object>();
-
-            [FunctionName(nameof(OrchestrateCounterEntity))]
-            public static async Task<int> OrchestrateCounterEntity(
-                [OrchestrationTrigger] IDurableOrchestrationContext ctx)
-            {
-                var entityId = new EntityId(nameof(Counter), ctx.NewGuid().ToString("N"));
-                ctx.SignalEntity(entityId, "incr");
-                ctx.SignalEntity(entityId, "incr");
-                ctx.SignalEntity(entityId, "incr");
-                ctx.SignalEntity(entityId, "add", 4);
-
-                using (await ctx.LockAsync(entityId))
-                {
-                    int result = await ctx.CallEntityAsync<int>(entityId, "get");
-                    return result;
-                }
-            }
-
-            [FunctionName(nameof(Counter))]
-            public static void Counter([EntityTrigger] IDurableEntityContext ctx)
-            {
-                int current = ctx.GetState<int>();
-                switch (ctx.OperationName)
-                {
-                    case "incr":
-                        ctx.SetState(current + 1);
-                        break;
-                    case "add":
-                        int amount = ctx.GetInput<int>();
-                        ctx.SetState(current + amount);
-                        break;
-                    case "get":
-                        ctx.Return(current);
-                        break;
-                    case "set":
-                        amount = ctx.GetInput<int>();
-                        ctx.SetState(amount);
-                        break;
-                    case "delete":
-                        ctx.DeleteState();
-                        break;
-                    default:
-                        throw new NotImplementedException("No such entity operation");
-                }
-            }
-
-            [FunctionName(nameof(WaitForEvent))]
-            public static Task<object> WaitForEvent([OrchestrationTrigger] IDurableOrchestrationContext ctx)
-            {
-                string name = ctx.GetInput<string>();
-                return ctx.WaitForExternalEvent<object>(name);
-            }
-
-            [FunctionName(nameof(NoOp))]
-            public static Task NoOp([OrchestrationTrigger] IDurableOrchestrationContext ctx) => Task.CompletedTask;
-
-            [FunctionName(nameof(SubOrchestrationTest))]
-            public static async Task<string> SubOrchestrationTest([OrchestrationTrigger] IDurableOrchestrationContext ctx)
-            {
-                await ctx.CallSubOrchestratorAsync(nameof(NoOp), "NoOpInstanceId", null);
-                return "done";
-            }
-
-            [FunctionName(nameof(RewindOrchestration))]
-            public static async Task<string> RewindOrchestration([OrchestrationTrigger] IDurableOrchestrationContext ctx)
-            {
-                return await ctx.CallActivityAsync<string>(nameof(CanFail), "activity");
-            }
-
-            [FunctionName(nameof(RewindSubOrchestration))]
-            public static async Task<string> RewindSubOrchestration([OrchestrationTrigger] IDurableOrchestrationContext ctx)
-            {
-                var tasks = new List<Task<string>>();
-                for (int i = 0; i < 3; i++)
-                {
-                    tasks.Add(ctx.CallActivityAsync<string>(nameof(CanFail), i.ToString()));
-                }
-                tasks.Add(ctx.CallSubOrchestratorAsync<string>(nameof(RewindOrchestration), "RewindOrchestrationId", "suborchestration"));
-
-                var results = await Task.WhenAll(tasks);
-                return string.Join(',', results);
-            }
-
-            public static bool ThrowExceptionInCanFail { get; set; }
-
-            [FunctionName(nameof(CanFail))]
-            public static string CanFail([ActivityTrigger] IDurableActivityContext context)
-            {
-                if (ThrowExceptionInCanFail)
-                {
-                    throw new Exception("exception");
-                }
-
-                return context.GetInput<string>();
-            }
         }
     }
 }

@@ -52,7 +52,7 @@ namespace DurableTask.SqlServer.Tests.Utils
             await new SqlOrchestrationService(this.OrchestrationServiceOptions).CreateIfNotExistsAsync();
 
             // Enable multitenancy to isolate each test using low-privilege credentials
-            await SharedTestHelpers.EnableMultiTenancyAsync();
+            await SharedTestHelpers.EnableMultiTenancyAsync(true);
 
             // The runtime will use low-privilege credentials
             this.testCredential = await SharedTestHelpers.CreateTaskHubLoginAsync(this.testName);

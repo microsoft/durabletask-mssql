@@ -23,6 +23,7 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
 
     public class IntegrationTestBase : IAsyncLifetime
     {
+        readonly bool multiTenancy;
         readonly string taskHubName;
         readonly TestLogProvider logProvider;
         readonly TestFunctionTypeLocator typeLocator;
@@ -33,8 +34,9 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
         
         TestCredential? testCredential;
 
-        public IntegrationTestBase(ITestOutputHelper output, string? taskHubName = null)
+        public IntegrationTestBase(ITestOutputHelper output, string? taskHubName = null, bool multiTenancy = true)
         {
+            this.multiTenancy = multiTenancy;
             this.logProvider = new TestLogProvider(output);
             this.typeLocator = new TestFunctionTypeLocator();
             this.settingsResolver = new TestSettingsResolver();
@@ -82,7 +84,7 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
             await SharedTestHelpers.InitializeDatabaseAsync();
 
             // Create a user login specifically for this test to isolate it from other tests
-            await SharedTestHelpers.EnableMultiTenancyAsync();
+            await SharedTestHelpers.EnableMultiTenancyAsync(this.multiTenancy);
             this.testCredential = await SharedTestHelpers.CreateTaskHubLoginAsync(this.testName);
 
             this.settingsResolver.AddSetting("SQLDB_Connection", this.testCredential.ConnectionString);
