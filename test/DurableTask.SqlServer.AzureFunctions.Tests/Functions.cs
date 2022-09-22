@@ -1,3 +1,6 @@
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+
 namespace DurableTask.SqlServer.AzureFunctions.Tests
 {
     using System;
