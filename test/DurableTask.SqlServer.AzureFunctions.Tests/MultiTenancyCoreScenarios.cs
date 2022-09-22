@@ -9,7 +9,7 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
     public class MultiTenancyCoreScenarios : CoreScenarios
     {
         public MultiTenancyCoreScenarios(ITestOutputHelper output)
-            : base(output, true)
+            : base(output, "TaskHubWithMultiTenancy", true)
         {
         }
 

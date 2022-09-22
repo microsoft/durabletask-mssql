@@ -24,6 +24,7 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
     public class IntegrationTestBase : IAsyncLifetime
     {
         readonly bool multiTenancy;
+        readonly string schema;
         readonly string taskHubName;
         readonly TestLogProvider logProvider;
         readonly TestFunctionTypeLocator typeLocator;
@@ -37,6 +38,7 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
         public IntegrationTestBase(ITestOutputHelper output, string? taskHubName = null, bool multiTenancy = true)
         {
             this.multiTenancy = multiTenancy;
+            this.schema = multiTenancy ? "dt" : "dt2";
             this.logProvider = new TestLogProvider(output);
             this.typeLocator = new TestFunctionTypeLocator();
             this.settingsResolver = new TestSettingsResolver();
@@ -48,8 +50,16 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
             serviceCollection.AddSingleton<INameResolver>(this.settingsResolver);
             serviceCollection.AddSingleton<IConnectionInfoResolver>(this.settingsResolver);
             serviceCollection.AddOptions();
+            serviceCollection.Configure<DurableTaskOptions>(options =>
+            {
+                options.StorageProvider["type"] = "mssql";
+                options.StorageProvider["schemaName"] = this.schema;
+            });
             serviceCollection.AddDurableTaskSqlProvider();
-            serviceCollection.AddDurableClientFactory(a => a.ConnectionName = "SQLDB_Connection");
+            serviceCollection.AddDurableClientFactory(a =>
+            {
+                a.ConnectionName = "SQLDB_Connection";
+            });
 
             this.functionsHost = new HostBuilder()
                 .ConfigureLogging(
@@ -65,6 +75,7 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
                         {
                             options.HubName = this.taskHubName;
                             options.StorageProvider["type"] = "mssql";
+                            options.StorageProvider["schemaName"] = this.schema;
                         });
                     })
                 .ConfigureServices(
@@ -81,11 +92,11 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
 
         async Task IAsyncLifetime.InitializeAsync()
         {
-            await SharedTestHelpers.InitializeDatabaseAsync();
+            await SharedTestHelpers.InitializeDatabaseAsync(this.schema);
 
             // Create a user login specifically for this test to isolate it from other tests
-            await SharedTestHelpers.EnableMultiTenancyAsync(this.multiTenancy);
-            this.testCredential = await SharedTestHelpers.CreateTaskHubLoginAsync(this.testName);
+            await SharedTestHelpers.EnableMultiTenancyAsync(this.multiTenancy, this.schema);
+            this.testCredential = await SharedTestHelpers.CreateTaskHubLoginAsync(this.testName, this.schema);
 
             this.settingsResolver.AddSetting("SQLDB_Connection", this.testCredential.ConnectionString);
             await this.functionsHost.StartAsync();
@@ -98,7 +109,7 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
             // Remove the temporarily-created credentials from the database
             if (this.testCredential != null)
             {
-                await SharedTestHelpers.DropTaskHubLoginAsync(this.testCredential);
+                await SharedTestHelpers.DropTaskHubLoginAsync(this.testCredential, this.schema);
             }
         }
 

@@ -12,7 +12,7 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
     public class WithoutMultiTenancyCoreScenarios : CoreScenarios
     {
         public WithoutMultiTenancyCoreScenarios(ITestOutputHelper output)
-            : base(output, false)
+            : base(output, "TaskHubWithoutMultiTenancy", false)
         {
         }
 

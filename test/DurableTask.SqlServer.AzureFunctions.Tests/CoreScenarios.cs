@@ -17,8 +17,8 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
 
     public abstract class CoreScenarios : IntegrationTestBase
     {
-        protected CoreScenarios(ITestOutputHelper output, bool multiTenancy)
-            : base(output, "CustomTaskHub", multiTenancy)
+        protected CoreScenarios(ITestOutputHelper output, string taskHubName, bool multiTenancy)
+            : base(output, taskHubName, multiTenancy)
         {
             this.AddFunctions(typeof(Functions));
         }
@@ -122,7 +122,6 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
         [Fact]
         public async Task MultiInstanceQueries()
         {
-            await SharedTestHelpers.PurgeAsync();
             DateTime startTime = SharedTestHelpers.GetCurrentDatabaseTimeUtc();
             string prefix = $"{startTime:HHmmss}";
 

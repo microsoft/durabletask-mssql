@@ -17,6 +17,7 @@ namespace DurableTask.SqlServer.Tests.Utils
 
     public static class SharedTestHelpers
     {
+        private const string DefaultSchema = "dt";
         public static string GetTestName(ITestOutputHelper output)
         {
             Type type = output.GetType();
@@ -80,14 +81,14 @@ namespace DurableTask.SqlServer.Tests.Utils
             throw lastException;
         }
 
-        public static async Task InitializeDatabaseAsync()
+        public static async Task InitializeDatabaseAsync(string schema = DefaultSchema)
         {
-            var options = new SqlOrchestrationServiceSettings(GetDefaultConnectionString());
+            var options = new SqlOrchestrationServiceSettings(GetDefaultConnectionString(), schemaName: schema);
             var service = new SqlOrchestrationService(options);
             await service.CreateIfNotExistsAsync();
         }
 
-        public static async Task<TestCredential> CreateTaskHubLoginAsync(string prefix)
+        public static async Task<TestCredential> CreateTaskHubLoginAsync(string prefix, string schema = DefaultSchema)
         {
             // NOTE: Max length for user IDs is 128 characters
             string userId = $"{prefix}_{DateTime.UtcNow:yyyyMMddhhmmssff}";
@@ -96,7 +97,7 @@ namespace DurableTask.SqlServer.Tests.Utils
             // Generate a low-priviledge user account. This will map to a unique task hub.
             await ExecuteSqlAsync($"CREATE LOGIN [testlogin_{userId}] WITH PASSWORD = '{password}'");
             await ExecuteSqlAsync($"CREATE USER [testuser_{userId}] FOR LOGIN [testlogin_{userId}]");
-            await ExecuteSqlAsync($"ALTER ROLE dt_runtime ADD MEMBER [testuser_{userId}]");
+            await ExecuteSqlAsync($"ALTER ROLE {schema}_runtime ADD MEMBER [testuser_{userId}]");
 
             var builder = new SqlConnectionStringBuilder(GetDefaultConnectionString())
             {
@@ -108,11 +109,11 @@ namespace DurableTask.SqlServer.Tests.Utils
             return new TestCredential(userId, builder.ToString());
         }
 
-        public static async Task DropTaskHubLoginAsync(TestCredential credential)
+        public static async Task DropTaskHubLoginAsync(TestCredential credential, string schema = DefaultSchema)
         {
             // Drop the generated user information
             string userId = credential.UserId;
-            await ExecuteSqlAsync($"ALTER ROLE dt_runtime DROP MEMBER [testuser_{userId}]");
+            await ExecuteSqlAsync($"ALTER ROLE {schema}_runtime DROP MEMBER [testuser_{userId}]");
             await ExecuteSqlAsync($"DROP USER IF EXISTS [testuser_{userId}]");
 
             // drop all the connections; otherwise, the DROP LOGIN statement will fail
@@ -120,12 +121,11 @@ namespace DurableTask.SqlServer.Tests.Utils
             await ExecuteSqlAsync($"DROP LOGIN [testlogin_{userId}]");
         }
 
-        public static async Task EnableMultiTenancyAsync(bool multiTenancy)
+        public static async Task EnableMultiTenancyAsync(bool multiTenancy, string schema = DefaultSchema)
         {
-            
-            await PurgeAsync();
+            await PurgeAsync(schema);
             int param = multiTenancy ? 1 : 0;
-            await ExecuteSqlAsync($"EXECUTE dt.SetGlobalSetting @Name='TaskHubMode', @Value={param}");
+            await ExecuteSqlAsync($"EXECUTE {schema}.SetGlobalSetting @Name='TaskHubMode', @Value={param}");
         }
 
         static string GeneratePassword()
