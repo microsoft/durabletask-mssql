@@ -124,19 +124,19 @@ namespace DurableTask.SqlServer.Tests.Utils
         {
             
             await PurgeAsync();
-            var param = multiTenancy ? 1 : 0;
+            int param = multiTenancy ? 1 : 0;
             await ExecuteSqlAsync($"EXECUTE dt.SetGlobalSetting @Name='TaskHubMode', @Value={param}");
         }
 
         static string GeneratePassword()
         {
             const string AllowedChars = "abcdefghijklmnopqrstuvwxyzABCDEFGHJKLMNPQRSTWXYZ0123456789#$";
-            const int PasswordLenth = 16;
+            const int PasswordLength = 16;
 
-            string password = GetRandomString(AllowedChars, PasswordLenth);
+            string password = GetRandomString(AllowedChars, PasswordLength);
             while (!MeetsSqlPasswordConstraint(password))
             {
-                password = GetRandomString(AllowedChars, PasswordLenth);
+                password = GetRandomString(AllowedChars, PasswordLength);
             }
 
             return password;
@@ -239,8 +239,8 @@ namespace DurableTask.SqlServer.Tests.Utils
 
         public static async Task PurgeAsync(string schema = "dt")
         {
-            await ExecuteSqlAsync($"TRUNCATE TABLE [{schema}].[NewEvents]");
             await ExecuteSqlAsync($"TRUNCATE TABLE [{schema}].[NewTasks]");
+            await ExecuteSqlAsync($"TRUNCATE TABLE [{schema}].[NewEvents]");
             await ExecuteSqlAsync($"TRUNCATE TABLE [{schema}].[Instances]");
             await ExecuteSqlAsync($"TRUNCATE TABLE [{schema}].[History]");
             await ExecuteSqlAsync($"TRUNCATE TABLE [{schema}].[Payloads]");
