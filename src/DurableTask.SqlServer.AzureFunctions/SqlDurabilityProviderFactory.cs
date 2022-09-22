@@ -5,7 +5,6 @@ namespace DurableTask.SqlServer.AzureFunctions
 {
     using System;
     using System.Collections.Generic;
-    using DurableTask.Core;
     using Microsoft.Azure.WebJobs.Extensions.DurableTask;
     using Microsoft.Extensions.Logging;
     using Microsoft.Extensions.Options;

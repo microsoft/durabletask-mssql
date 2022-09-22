@@ -23,7 +23,7 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
 
     public class IntegrationTestBase : IAsyncLifetime
     {
-        private readonly string taskHubName;
+        readonly string taskHubName;
         readonly TestLogProvider logProvider;
         readonly TestFunctionTypeLocator typeLocator;
         readonly TestSettingsResolver settingsResolver;
@@ -82,7 +82,7 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
             await SharedTestHelpers.InitializeDatabaseAsync();
 
             // Create a user login specifically for this test to isolate it from other tests
-            await SharedTestHelpers.EnableMultitenancyAsync();
+            await SharedTestHelpers.EnableMultiTenancyAsync();
             this.testCredential = await SharedTestHelpers.CreateTaskHubLoginAsync(this.testName);
 
             this.settingsResolver.AddSetting("SQLDB_Connection", this.testCredential.ConnectionString);
@@ -140,9 +140,10 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
         protected async Task<DurableOrchestrationStatus> StartOrchestrationAsync(
             string name,
             object? input = null,
-            string? instanceId = null)
+            string? instanceId = null,
+            string? taskHub = null)
         {
-            IDurableClient client = this.GetDurableClient();
+            IDurableClient client = this.GetDurableClient(taskHub ?? this.taskHubName);
             instanceId = await client.StartNewAsync(name, instanceId ?? Guid.NewGuid().ToString("N"), input);
 
             TimeSpan timeout = Debugger.IsAttached ? TimeSpan.FromMinutes(5) : TimeSpan.FromSeconds(10);
@@ -151,6 +152,19 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
             return status;
         }
 
+
+        protected async Task StartOrchestrationWithoutWaitingAsync(
+            string name,
+            object? input = null,
+            string? instanceId = null,
+            string? taskHub = null)
+        {
+            IDurableClient client = this.GetDurableClient(taskHub ?? this.taskHubName);
+            instanceId = await client.StartNewAsync(name, instanceId ?? Guid.NewGuid().ToString("N"), input);
+
+            
+            Assert.NotNull(instanceId);
+        }
         protected async Task<DurableOrchestrationStatus> RewindOrchestrationAsync(string instanceId)
         {
             IDurableClient client = this.GetDurableClient();

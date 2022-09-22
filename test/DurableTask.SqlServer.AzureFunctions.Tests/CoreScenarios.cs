@@ -268,152 +268,63 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
             Assert.All(result.DurableOrchestrationState, state => Assert.Equal(JValue.CreateNull(), state.Input));
         }
 
-         [Fact]
+        [Fact]
         public async Task MultiInstanceQueriesWithoutMultiTenancy()
         {
-            await SharedTestHelpers.DisableMultitenancyAsync();
-            await SharedTestHelpers.PurgeAsync();
-            DateTime startTime = SharedTestHelpers.GetCurrentDatabaseTimeUtc();
-            string prefix = $"{startTime:HHmmss}";
-            await Enumerable.Range(0, 5).ParallelForEachAsync(5, i => this.RunOrchestrationAsync(
-                nameof(Functions.Sequence),
-                instanceId: $"{prefix}.sequence.{i}"));
+            await SharedTestHelpers.DisableMultiTenancyAsync();
+            await this.MultiInstanceQueries();
+        }
 
-            // As query is using CreatedTimeFrom, ensure sequencesFinishedTime is more than 100ns
-            // after startTime to cope with sql server datetime2 and c# DateTime precision
-            await Task.Delay(TimeSpan.FromMilliseconds(20));
+        [Fact]
+        public async Task When_Without_MultiTenancy_should_Return_Correct_Orchestration_By_TaskHub()
+        {
+            await SharedTestHelpers.DisableMultiTenancyAsync();
+            
+            string otherTaskHubName = "SomeOtherTaskHub";
 
-            DateTime sequencesFinishedTime = SharedTestHelpers.GetCurrentDatabaseTimeUtc();
+            string currentTaskHubInstanceId = Guid.NewGuid().ToString();
+            await this.StartOrchestrationWithoutWaitingAsync(nameof(Functions.Sequence), instanceId: currentTaskHubInstanceId);
 
-            // As query is using CreatedTimeTo, ensure new orchestrations start more than 100ns
-            // after sequencesFinishedTime to cope with sql server datetime2 and c# DateTime precision
-            await Task.Delay(TimeSpan.FromMilliseconds(20));
-
-            await Enumerable.Range(0, 5).ParallelForEachAsync(5, i =>
-                this.StartOrchestrationAsync(
-                    nameof(Functions.WaitForEvent),
-                    input: i.ToString(),
-                    instanceId: $"{prefix}.waiter.{i}"));
-
-            // As query is using CreatedTimeFrom and CreatedTimeTo, ensure afterAllFinishedTime is
-            // more than 100ns after previous orchestrations start to cope with sql server datetime2
-            // and c# DateTime precision
-            await Task.Delay(TimeSpan.FromMilliseconds(20));
-
-            DateTime afterAllFinishedTime = SharedTestHelpers.GetCurrentDatabaseTimeUtc();
+            string anotherTaskHubInstanceId = Guid.NewGuid().ToString();
+            await this.StartOrchestrationWithoutWaitingAsync(nameof(Functions.Sequence), instanceId: anotherTaskHubInstanceId, taskHub: otherTaskHubName);
 
             IDurableClient client = this.GetDurableClient();
+            var current = await client.GetStatusAsync(currentTaskHubInstanceId);
+            Assert.NotNull(current);
+            var otherInstance = await client.GetStatusAsync(anotherTaskHubInstanceId);
+            Assert.Null(otherInstance);
 
-            // Create one condition object and reuse it for multiple queries
-            var condition = new OrchestrationStatusQueryCondition();
-            OrchestrationStatusQueryResult result;
+            IDurableClient clientOtherTaskHub = this.GetDurableClient(otherTaskHubName);
+            var currentFromOtherTaskHub = await clientOtherTaskHub.GetStatusAsync(currentTaskHubInstanceId);
+            Assert.Null(currentFromOtherTaskHub);
+            var otherInstanceFromOtherTaskHub = await clientOtherTaskHub.GetStatusAsync(anotherTaskHubInstanceId);
+            Assert.NotNull(otherInstanceFromOtherTaskHub);
+        }
 
-            // Return all instances
-            result = await client.ListInstancesAsync(condition, CancellationToken.None);
-            Assert.Equal(10, result.DurableOrchestrationState.Count());
+        [Fact]
+        public async Task When_WithMultiTenancy_should_Not_Take_Care_Of_TaskHub()
+        {
+            await SharedTestHelpers.EnableMultiTenancyAsync();
+            
+            string otherTaskHubName = "SomeOtherTaskHub";
 
-            // Test CreatedTimeTo filter
-            condition.CreatedTimeTo = startTime;
-            result = await client.ListInstancesAsync(condition, CancellationToken.None);
-            Assert.Empty(result.DurableOrchestrationState);
+            string currentTaskHubInstanceId = Guid.NewGuid().ToString();
+            await this.StartOrchestrationWithoutWaitingAsync(nameof(Functions.Sequence), instanceId: currentTaskHubInstanceId);
 
-            condition.CreatedTimeTo = sequencesFinishedTime;
-            result = await client.ListInstancesAsync(condition, CancellationToken.None);
-            Assert.Equal(5, result.DurableOrchestrationState.Count());
+            string anotherTaskHubInstanceId = Guid.NewGuid().ToString();
+            await this.StartOrchestrationWithoutWaitingAsync(nameof(Functions.Sequence), instanceId: anotherTaskHubInstanceId, taskHub: otherTaskHubName);
 
-            condition.CreatedTimeTo = afterAllFinishedTime;
-            result = await client.ListInstancesAsync(condition, CancellationToken.None);
-            Assert.Equal(10, result.DurableOrchestrationState.Count());
+            IDurableClient client = this.GetDurableClient();
+            var current = await client.GetStatusAsync(currentTaskHubInstanceId);
+            Assert.NotNull(current);
+            var otherInstance = await client.GetStatusAsync(anotherTaskHubInstanceId);
+            Assert.NotNull(otherInstance);
 
-            // Test CreatedTimeFrom filter
-            condition.CreatedTimeFrom = afterAllFinishedTime;
-            result = await client.ListInstancesAsync(condition, CancellationToken.None);
-            Assert.Empty(result.DurableOrchestrationState);
-
-            condition.CreatedTimeFrom = sequencesFinishedTime;
-            result = await client.ListInstancesAsync(condition, CancellationToken.None);
-            Assert.Equal(5, result.DurableOrchestrationState.Count());
-
-            condition.CreatedTimeFrom = startTime;
-            result = await client.ListInstancesAsync(condition, CancellationToken.None);
-            Assert.Equal(10, result.DurableOrchestrationState.Count());
-
-            // Test RuntimeStatus filter
-            var statusFilters = new HashSet<OrchestrationRuntimeStatus>(new[]
-            {
-                OrchestrationRuntimeStatus.Failed,
-                OrchestrationRuntimeStatus.Pending,
-                OrchestrationRuntimeStatus.Terminated
-            });
-
-            condition.RuntimeStatus = statusFilters;
-            result = await client.ListInstancesAsync(condition, CancellationToken.None);
-            Assert.Empty(result.DurableOrchestrationState);
-
-            statusFilters.Add(OrchestrationRuntimeStatus.Running);
-            result = await client.ListInstancesAsync(condition, CancellationToken.None);
-            Assert.Equal(5, result.DurableOrchestrationState.Count());
-            Assert.All(result.DurableOrchestrationState, state => Assert.Equal(OrchestrationRuntimeStatus.Running, state.RuntimeStatus));
-
-            statusFilters.Add(OrchestrationRuntimeStatus.Completed);
-            result = await client.ListInstancesAsync(condition, CancellationToken.None);
-            Assert.Equal(10, result.DurableOrchestrationState.Count());
-
-            statusFilters.Remove(OrchestrationRuntimeStatus.Running);
-            result = await client.ListInstancesAsync(condition, CancellationToken.None);
-            Assert.Equal(5, result.DurableOrchestrationState.Count());
-            Assert.All(result.DurableOrchestrationState, state => Assert.Equal(OrchestrationRuntimeStatus.Completed, state.RuntimeStatus));
-
-            statusFilters.Clear();
-            result = await client.ListInstancesAsync(condition, CancellationToken.None);
-            Assert.Equal(10, result.DurableOrchestrationState.Count());
-
-            // Test InstanceIdPrefix
-            condition.InstanceIdPrefix = "Foo";
-            result = await client.ListInstancesAsync(condition, CancellationToken.None);
-            Assert.Empty(result.DurableOrchestrationState);
-
-            condition.InstanceIdPrefix = prefix;
-            result = await client.ListInstancesAsync(condition, CancellationToken.None);
-            Assert.Equal(10, result.DurableOrchestrationState.Count());
-
-            // Test PageSize and ContinuationToken
-            var instanceIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            condition.PageSize = 0;
-            while (condition.PageSize++ < 10)
-            {
-                result = await client.ListInstancesAsync(condition, CancellationToken.None);
-                int total = result.DurableOrchestrationState.Count();
-                Assert.Equal(condition.PageSize, total);
-
-                // Make sure all instance IDs are unique
-                Assert.All(result.DurableOrchestrationState, s => instanceIds.Add(s.InstanceId));
-
-                while (total < 10)
-                {
-                    condition.ContinuationToken = result.ContinuationToken;
-                    result = await client.ListInstancesAsync(condition, CancellationToken.None);
-                    int count = result.DurableOrchestrationState.Count();
-                    Assert.NotEqual(0, count);
-                    Assert.True(count <= condition.PageSize);
-                    total += count;
-                    Assert.True(total <= 10);
-                    Assert.All(result.DurableOrchestrationState, s => instanceIds.Add(s.InstanceId));
-                }
-
-                condition.ContinuationToken = null;
-            }
-
-            // Test ShowInput
-            condition.ShowInput = true;
-            condition.CreatedTimeFrom = sequencesFinishedTime;
-            result = await client.ListInstancesAsync(condition, CancellationToken.None);
-            Assert.All(result.DurableOrchestrationState, state => Assert.NotEqual(JValue.CreateNull(), state.Input));
-
-            condition.ShowInput = false;
-            condition.CreatedTimeFrom = startTime;
-            result = await client.ListInstancesAsync(condition, CancellationToken.None);
-            Assert.All(result.DurableOrchestrationState, state => Assert.Equal(JValue.CreateNull(), state.Input));
+            IDurableClient clientOtherTaskHub = this.GetDurableClient(otherTaskHubName);
+            var currentFromOtherTaskHub = await clientOtherTaskHub.GetStatusAsync(currentTaskHubInstanceId);
+            Assert.NotNull(currentFromOtherTaskHub);
+            var otherInstanceFromOtherTaskHub = await clientOtherTaskHub.GetStatusAsync(anotherTaskHubInstanceId);
+            Assert.NotNull(otherInstanceFromOtherTaskHub);
         }
 
         [Fact]
@@ -424,7 +335,7 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
 
             IDurableClient client = this.GetDurableClient();
             PurgeHistoryResult result;
-            
+
             // First purge gets the active instance
             result = await client.PurgeInstanceHistoryAsync(status.InstanceId);
             Assert.NotNull(result);
@@ -505,7 +416,7 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
             Functions.ThrowExceptionInCanFail = true;
             DurableOrchestrationStatus status = await this.RunOrchestrationAsync(nameof(Functions.RewindOrchestration));
             Assert.Equal(OrchestrationRuntimeStatus.Failed, status.RuntimeStatus);
-            
+
             Functions.ThrowExceptionInCanFail = false;
             status = await this.RewindOrchestrationAsync(status.InstanceId);
             Assert.Equal(OrchestrationRuntimeStatus.Completed, status.RuntimeStatus);
@@ -518,7 +429,7 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
             Functions.ThrowExceptionInCanFail = true;
             DurableOrchestrationStatus status = await this.RunOrchestrationAsync(nameof(Functions.RewindSubOrchestration));
             Assert.Equal(OrchestrationRuntimeStatus.Failed, status.RuntimeStatus);
-            
+
             Functions.ThrowExceptionInCanFail = false;
             status = await this.RewindOrchestrationAsync(status.InstanceId);
             Assert.Equal(OrchestrationRuntimeStatus.Completed, status.RuntimeStatus);

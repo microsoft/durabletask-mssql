@@ -120,14 +120,17 @@ namespace DurableTask.SqlServer.Tests.Utils
             await ExecuteSqlAsync($"DROP LOGIN [testlogin_{userId}]");
         }
 
-        public static Task EnableMultitenancyAsync()
+        public static async Task EnableMultiTenancyAsync()
         {
-            return ExecuteSqlAsync($"EXECUTE dt.SetGlobalSetting @Name='TaskHubMode', @Value=1");
+            
+            await PurgeAsync();
+            await ExecuteSqlAsync($"EXECUTE dt.SetGlobalSetting @Name='TaskHubMode', @Value=1");
         }
 
-        public static Task DisableMultitenancyAsync()
+        public static async Task DisableMultiTenancyAsync()
         {
-            return ExecuteSqlAsync($"EXECUTE dt.SetGlobalSetting @Name='TaskHubMode', @Value=0");
+            await PurgeAsync();
+            await ExecuteSqlAsync($"EXECUTE dt.SetGlobalSetting @Name='TaskHubMode', @Value=0");
         }
 
         static string GeneratePassword()
