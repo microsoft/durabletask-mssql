@@ -15,10 +15,16 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
     using Xunit;
     using Xunit.Abstractions;
 
-    public abstract class CoreScenarios : IntegrationTestBase
+    public class CoreScenarios : IntegrationTestBase
     {
         protected CoreScenarios(ITestOutputHelper output, string taskHubName, bool multiTenancy)
             : base(output, taskHubName, multiTenancy)
+        {
+            this.AddFunctions(typeof(Functions));
+        }
+
+        public CoreScenarios(ITestOutputHelper output)
+            : base(output, "TaskHubWithMultiTenancy", true)
         {
             this.AddFunctions(typeof(Functions));
         }

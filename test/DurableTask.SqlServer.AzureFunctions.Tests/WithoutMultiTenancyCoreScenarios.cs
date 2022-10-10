@@ -22,7 +22,7 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
             string otherTaskHubName = "SomeOtherTaskHub";
 
             string currentTaskHubInstanceId = Guid.NewGuid().ToString();
-            await this.StartOrchestrationWithoutWaitingAsync(nameof(Functions.Sequence), instanceId: currentTaskHubInstanceId);
+            await this.StartOrchestrationAsync(nameof(Functions.Sequence), instanceId: currentTaskHubInstanceId);
 
             string anotherTaskHubInstanceId = Guid.NewGuid().ToString();
             await this.StartOrchestrationWithoutWaitingAsync(nameof(Functions.Sequence), instanceId: anotherTaskHubInstanceId, taskHub: otherTaskHubName);
