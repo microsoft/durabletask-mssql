@@ -6,6 +6,10 @@
 
 * Support multiple schemas in a single database ([#110](https://github.com/microsoft/durabletask-mssql/pull/110)) - contributed by [@AndreiRR24](https://github.com/AndreiRR24)
 
+### Updates
+
+* Fixed issue where external client ignores task hub name configuration ([#128](https://github.com/microsoft/durabletask-mssql/issues/128)) - contributed by [@bhugot](https://github.com/bhugot)
+
 ## v1.0.1
 
 ### Updates
