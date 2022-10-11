@@ -23,7 +23,7 @@ namespace DurableTask.SqlServer.Tests.Utils
             Type type = output.GetType();
             FieldInfo testMember = type.GetField("test", BindingFlags.Instance | BindingFlags.NonPublic);
             var test = (ITest)testMember.GetValue(output);
-            return test.TestCase.TestMethod.Method.Name;
+            return $"{test.TestCase.TestMethod.Method.Name}" + (test.TestCase.TestMethodArguments == null || test.TestCase.TestMethodArguments.Length == 0 ? string.Empty : $"_{ string.Join("_",test.TestCase.TestMethodArguments.Select(a => a.ToString()))}") ;
         }
 
         public static string GetDefaultConnectionString(string database = "DurableDB")
@@ -123,7 +123,11 @@ namespace DurableTask.SqlServer.Tests.Utils
 
         public static async Task EnableMultiTenancyAsync(bool multiTenancy, string schema = DefaultSchema)
         {
+            if (!multiTenancy)
+            {
             await PurgeAsync(schema);
+            }
+
             int param = multiTenancy ? 1 : 0;
             await ExecuteSqlAsync($"EXECUTE {schema}.SetGlobalSetting @Name='TaskHubMode', @Value={param}");
         }
