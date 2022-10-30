@@ -5,7 +5,6 @@ namespace DurableTask.SqlServer.AzureFunctions
 {
     using System;
     using System.Collections.Generic;
-    using DurableTask.Core;
     using Microsoft.Azure.WebJobs.Extensions.DurableTask;
     using Microsoft.Extensions.Logging;
     using Microsoft.Extensions.Options;
@@ -24,8 +23,6 @@ namespace DurableTask.SqlServer.AzureFunctions
         readonly IConnectionInfoResolver connectionInfoResolver;
 
         SqlDurabilityOptions? defaultOptions;
-        SqlOrchestrationServiceSettings? orchestrationServiceSettings;
-        SqlOrchestrationService? service;
         SqlDurabilityProvider? defaultProvider;
 
         /// <summary>
@@ -56,7 +53,7 @@ namespace DurableTask.SqlServer.AzureFunctions
             if (this.defaultProvider == null)
             {
                 SqlDurabilityOptions sqlProviderOptions = this.GetDefaultSqlOptions();
-                SqlOrchestrationService service = this.GetOrchestrationService();
+                SqlOrchestrationService service = this.GetOrchestrationService(sqlProviderOptions);
                 this.defaultProvider = new SqlDurabilityProvider(service, sqlProviderOptions);
             }
 
@@ -66,13 +63,6 @@ namespace DurableTask.SqlServer.AzureFunctions
         // Called by the Durable client binding infrastructure
         public DurabilityProvider GetDurabilityProvider(DurableClientAttribute attribute)
         {
-            // TODO: Much of this logic should go into the base class
-            if (string.IsNullOrEmpty(attribute.ConnectionName) &&
-                string.IsNullOrEmpty(attribute.TaskHub))
-            {
-                return this.GetDurabilityProvider();
-            }
-
             lock (this.clientProviders)
             {
                 string key = GetDurabilityProviderKey(attribute);
@@ -82,34 +72,27 @@ namespace DurableTask.SqlServer.AzureFunctions
                 }
 
                 SqlDurabilityOptions clientOptions = this.GetSqlOptions(attribute);
-                IOrchestrationServiceClient serviceClient = 
-                    new SqlOrchestrationService(clientOptions.GetOrchestrationServiceSettings(
-                        this.extensionOptions,
-                        this.connectionInfoResolver));
+                SqlOrchestrationService orchestrationService = 
+                    this.GetOrchestrationService(clientOptions);
                 clientProvider = new SqlDurabilityProvider(
-                    this.GetOrchestrationService(),
-                    clientOptions,
-                    serviceClient);
+                    orchestrationService,
+                    clientOptions);
 
                 this.clientProviders.Add(key, clientProvider);
                 return clientProvider;
             }
         }
 
+        SqlOrchestrationService GetOrchestrationService(SqlDurabilityOptions clientOptions)
+        {
+            return new (clientOptions.GetOrchestrationServiceSettings(
+                this.extensionOptions,
+                this.connectionInfoResolver));
+        }
+
         static string GetDurabilityProviderKey(DurableClientAttribute attribute)
         {
             return attribute.ConnectionName + "|" + attribute.TaskHub;
-        }
-
-        SqlOrchestrationService GetOrchestrationService()
-        {
-            if (this.service == null)
-            {
-                SqlOrchestrationServiceSettings settings = this.GetOrchestrationServiceSettings();
-                this.service = new SqlOrchestrationService(settings);
-            }
-
-            return this.service;
         }
 
         SqlDurabilityOptions GetDefaultSqlOptions()
@@ -147,19 +130,6 @@ namespace DurableTask.SqlServer.AzureFunctions
             }
 
             return options;
-        }
-
-        SqlOrchestrationServiceSettings GetOrchestrationServiceSettings()
-        {
-            if (this.orchestrationServiceSettings == null)
-            {
-                SqlDurabilityOptions options = this.GetDefaultSqlOptions();
-                this.orchestrationServiceSettings = options.GetOrchestrationServiceSettings(
-                    this.extensionOptions,
-                    this.connectionInfoResolver);
-            }
-
-            return this.orchestrationServiceSettings;
         }
     }
 }

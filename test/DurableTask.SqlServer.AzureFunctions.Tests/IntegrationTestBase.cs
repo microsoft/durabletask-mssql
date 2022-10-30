@@ -12,6 +12,8 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
     using DurableTask.SqlServer.Tests.Utils;
     using Microsoft.Azure.WebJobs;
     using Microsoft.Azure.WebJobs.Extensions.DurableTask;
+    using Microsoft.Azure.WebJobs.Extensions.DurableTask.ContextImplementations;
+    using Microsoft.Azure.WebJobs.Extensions.DurableTask.Options;
     using Microsoft.Extensions.Configuration;
     using Microsoft.Extensions.DependencyInjection;
     using Microsoft.Extensions.Hosting;
@@ -21,21 +23,43 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
 
     public class IntegrationTestBase : IAsyncLifetime
     {
+        readonly bool multiTenancy;
+        readonly string schema;
+        readonly string taskHubName;
         readonly TestLogProvider logProvider;
         readonly TestFunctionTypeLocator typeLocator;
         readonly TestSettingsResolver settingsResolver;
         readonly string testName;
         readonly IHost functionsHost;
-
+        readonly IDurableClientFactory clientFactory;
+        
         TestCredential? testCredential;
 
-        public IntegrationTestBase(ITestOutputHelper output)
+        public IntegrationTestBase(ITestOutputHelper output, string? taskHubName = null, bool multiTenancy = true)
         {
+            this.multiTenancy = multiTenancy;
+            this.schema = multiTenancy ? "dt" : "dt2";
             this.logProvider = new TestLogProvider(output);
             this.typeLocator = new TestFunctionTypeLocator();
             this.settingsResolver = new TestSettingsResolver();
 
             this.testName = SharedTestHelpers.GetTestName(output);
+            this.taskHubName = taskHubName ?? SharedTestHelpers.GetTestName(output);
+
+            var serviceCollection = new ServiceCollection();
+            serviceCollection.AddSingleton<INameResolver>(this.settingsResolver);
+            serviceCollection.AddSingleton<IConnectionInfoResolver>(this.settingsResolver);
+            serviceCollection.AddOptions();
+            serviceCollection.Configure<DurableTaskOptions>(options =>
+            {
+                options.StorageProvider["type"] = "mssql";
+                options.StorageProvider["schemaName"] = this.schema;
+            });
+            serviceCollection.AddDurableTaskSqlProvider();
+            serviceCollection.AddDurableClientFactory(a =>
+            {
+                a.ConnectionName = "SQLDB_Connection";
+            });
 
             this.functionsHost = new HostBuilder()
                 .ConfigureLogging(
@@ -49,7 +73,9 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
                     {
                         webJobsBuilder.AddDurableTask(options =>
                         {
+                            options.HubName = this.taskHubName;
                             options.StorageProvider["type"] = "mssql";
+                            options.StorageProvider["schemaName"] = this.schema;
                         });
                     })
                 .ConfigureServices(
@@ -61,17 +87,16 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
                         services.AddDurableTaskSqlProvider();
                     })
                 .Build();
-
-            this.AddFunctions(typeof(ClientFunctions));
+            this.clientFactory = serviceCollection.BuildServiceProvider().GetRequiredService<IDurableClientFactory>();
         }
 
         async Task IAsyncLifetime.InitializeAsync()
         {
-            await SharedTestHelpers.InitializeDatabaseAsync();
+            await SharedTestHelpers.InitializeDatabaseAsync(this.schema);
 
             // Create a user login specifically for this test to isolate it from other tests
-            await SharedTestHelpers.EnableMultitenancyAsync();
-            this.testCredential = await SharedTestHelpers.CreateTaskHubLoginAsync(this.testName);
+            await SharedTestHelpers.EnableMultiTenancyAsync(this.multiTenancy, this.schema);
+            this.testCredential = await SharedTestHelpers.CreateTaskHubLoginAsync(this.testName, this.schema);
 
             this.settingsResolver.AddSetting("SQLDB_Connection", this.testCredential.ConnectionString);
             await this.functionsHost.StartAsync();
@@ -84,7 +109,7 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
             // Remove the temporarily-created credentials from the database
             if (this.testCredential != null)
             {
-                await SharedTestHelpers.DropTaskHubLoginAsync(this.testCredential);
+                await SharedTestHelpers.DropTaskHubLoginAsync(this.testCredential, this.schema);
             }
         }
 
@@ -116,7 +141,7 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
             object? input = null,
             string? instanceId = null)
         {
-            IDurableClient client = await this.GetDurableClientAsync();
+            IDurableClient client = this.GetDurableClient();
             instanceId = await client.StartNewAsync(name, instanceId ?? Guid.NewGuid().ToString("N"), input);
 
             TimeSpan timeout = Debugger.IsAttached ? TimeSpan.FromMinutes(5) : TimeSpan.FromSeconds(10);
@@ -128,9 +153,10 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
         protected async Task<DurableOrchestrationStatus> StartOrchestrationAsync(
             string name,
             object? input = null,
-            string? instanceId = null)
+            string? instanceId = null,
+            string? taskHub = null)
         {
-            IDurableClient client = await this.GetDurableClientAsync();
+            IDurableClient client = this.GetDurableClient(taskHub ?? this.taskHubName);
             instanceId = await client.StartNewAsync(name, instanceId ?? Guid.NewGuid().ToString("N"), input);
 
             TimeSpan timeout = Debugger.IsAttached ? TimeSpan.FromMinutes(5) : TimeSpan.FromSeconds(10);
@@ -139,9 +165,22 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
             return status;
         }
 
+
+        protected async Task StartOrchestrationWithoutWaitingAsync(
+            string name,
+            object? input = null,
+            string? instanceId = null,
+            string? taskHub = null)
+        {
+            IDurableClient client = this.GetDurableClient(taskHub ?? this.taskHubName);
+            instanceId = await client.StartNewAsync(name, instanceId ?? Guid.NewGuid().ToString("N"), input);
+
+            
+            Assert.NotNull(instanceId);
+        }
         protected async Task<DurableOrchestrationStatus> RewindOrchestrationAsync(string instanceId)
         {
-            IDurableClient client = await this.GetDurableClientAsync();
+            IDurableClient client = this.GetDurableClient();
 #pragma warning disable CS0618 // Type or member is obsolete (preview feature)
             await client.RewindAsync(instanceId, "rewind");
 #pragma warning restore CS0618
@@ -152,11 +191,12 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
             return status;
         }
 
-        protected async Task<IDurableClient> GetDurableClientAsync()
+        protected IDurableClient GetDurableClient(string? taskHubName = null)
         {
-            var clientRef = new IDurableClient[1];
-            await this.CallFunctionAsync(nameof(ClientFunctions.GetDurableClient), "clientRef", clientRef);
-            IDurableClient client = clientRef[0];
+            var client = this.clientFactory.CreateClient(new DurableClientOptions
+            {
+                TaskHub = taskHubName ?? this.taskHubName
+            });
             Assert.NotNull(client);
             return client;
         }
@@ -235,17 +275,6 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
                 }
 
                 return Environment.GetEnvironmentVariable(name);
-            }
-        }
-
-        static class ClientFunctions
-        {
-            [NoAutomaticTrigger]
-            public static void GetDurableClient(
-                [DurableClient] IDurableClient client,
-                IDurableClient[] clientRef)
-            {
-                clientRef[0] = client;
             }
         }
     }

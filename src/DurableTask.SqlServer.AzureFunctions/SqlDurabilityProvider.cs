@@ -32,17 +32,7 @@ namespace DurableTask.SqlServer.AzureFunctions
             this.service = service ?? throw new ArgumentNullException(nameof(service));
             this.durabilityOptions = durabilityOptions;
         }
-
-        public SqlDurabilityProvider(
-            SqlOrchestrationService service,
-            SqlDurabilityOptions durabilityOptions,
-            IOrchestrationServiceClient client)
-            : base(Name, service, client, durabilityOptions.ConnectionStringName)
-        {
-            this.service = service ?? throw new ArgumentNullException(nameof(service));
-            this.durabilityOptions = durabilityOptions;
-        }
-
+        
         public override bool GuaranteesOrderedDelivery => true;
 
         public override JObject ConfigurationJson => JObject.FromObject(this.durabilityOptions);
