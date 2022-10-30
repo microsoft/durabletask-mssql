@@ -143,13 +143,15 @@ namespace DurableTask.SqlServer.Tests.Utils
             return this.client.TerminateInstanceAsync(this.instance, reason);
         }
 
-        internal async Task RestartAsync(TInput newInput)
+        internal async Task RestartAsync(TInput newInput, OrchestrationStatus[] dedupeStatuses = null)
         {
             OrchestrationInstance newInstance = await this.client.CreateOrchestrationInstanceAsync(
                 this.name,
                 this.version,
                 this.InstanceId,
-                newInput);
+                newInput,
+                tags: null,
+                dedupeStatuses);
 
             this.input = newInput;
             this.startTime = DateTime.UtcNow;

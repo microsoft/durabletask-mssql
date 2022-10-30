@@ -9,6 +9,7 @@ namespace DurableTask.SqlServer.Tests.Integration
     using System.Threading;
     using System.Threading.Tasks;
     using DurableTask.Core;
+    using DurableTask.Core.Exceptions;
     using DurableTask.SqlServer.Tests.Logging;
     using DurableTask.SqlServer.Tests.Utils;
     using Moq;
@@ -584,9 +585,14 @@ namespace DurableTask.SqlServer.Tests.Integration
             await instance.WaitForStart();
 
             // Run the same instance again with the same instance ID
-            InvalidOperationException exception = Assert.Throws<InvalidOperationException>(
+            InvalidOperationException exception = Assert.Throws<OrchestrationAlreadyExistsException>(
                 () => instance.RestartAsync(input).GetAwaiter().GetResult());
             Assert.Contains(instanceId, exception.Message);
+
+            // This time allow overwriting pending and running instances.
+            string oldExecutionId = instance.ExecutionId;
+            await instance.RestartAsync(input, new[] { OrchestrationStatus.Canceled });
+            Assert.NotEqual(oldExecutionId, instance.ExecutionId);
         }
     }
 }

@@ -149,7 +149,8 @@ CREATE OR ALTER PROCEDURE __SchemaNamePlaceholder__.CreateInstance
     @InstanceID varchar(100) = NULL,
     @ExecutionID varchar(50) = NULL,
     @InputText varchar(MAX) = NULL,
-    @StartTime datetime2 = NULL
+    @StartTime datetime2 = NULL,
+    @DedupeStatuses varchar(MAX) = 'Pending,Running'
 AS
 BEGIN
     DECLARE @TaskHub varchar(50) = __SchemaNamePlaceholder__.CurrentTaskHub()
@@ -172,7 +173,8 @@ BEGIN
         )
 
         -- Instance IDs can be overwritten only if the orchestration is in a terminal state
-        IF @existingStatus IN ('Pending', 'Running')
+        --IF @existingStatus IN ('Pending', 'Running')
+        IF @existingStatus IN (SELECT value FROM STRING_SPLIT(@DedupeStatuses, ','))
         BEGIN
             DECLARE @msg nvarchar(4000) = FORMATMESSAGE('Cannot create instance with ID ''%s'' because a pending or running instance with ID already exists.', @InstanceID);
             THROW 50001, @msg, 1;
