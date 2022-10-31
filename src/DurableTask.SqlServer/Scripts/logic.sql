@@ -113,7 +113,8 @@ AS
         (SELECT TOP 1 [Text] FROM Payloads P WHERE 
             P.[TaskHub] = __SchemaNamePlaceholder__.CurrentTaskHub() AND
             P.[InstanceID] = I.[InstanceID] AND
-            P.[PayloadID] = I.[OutputPayloadID]) AS [OutputText]
+            P.[PayloadID] = I.[OutputPayloadID]) AS [OutputText],
+        I.[ParentInstanceID]
     FROM Instances I
     WHERE
         I.[TaskHub] = __SchemaNamePlaceholder__.CurrentTaskHub()

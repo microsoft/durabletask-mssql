@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio Version 16
-VisualStudioVersion = 16.0.29806.167
+# Visual Studio Version 17
+VisualStudioVersion = 17.3.32929.385
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DurableTask.SqlServer", "src\DurableTask.SqlServer\DurableTask.SqlServer.csproj", "{FC7FB0AF-2322-4356-AF64-A8E2EB7D1EF8}"
 EndProject
@@ -33,6 +33,10 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "test", "test", "{4A7226CF-5
 		test\setup.ps1 = test\setup.ps1
 	EndProjectSection
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TestDBGenerator", "tools\TestDBGenerator\TestDBGenerator.csproj", "{28117755-60C3-463D-A32D-E0A38E9E4ADA}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tools", "tools", "{C6E6ACAB-F123-4D18-891E-DE9C44539153}"
+EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Functions.Worker.Extensions.DurableTask.SqlServer", "src\Functions.Worker.Extensions.DurableTask.SqlServer\Functions.Worker.Extensions.DurableTask.SqlServer.csproj", "{307C5A62-9943-48B8-8513-BBCDF0FBC3D0}"
 EndProject
 Global
@@ -61,6 +65,10 @@ Global
 		{DD1E1B3F-4FA2-4F3A-9AE1-6B2A0B864AAF}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{DD1E1B3F-4FA2-4F3A-9AE1-6B2A0B864AAF}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{DD1E1B3F-4FA2-4F3A-9AE1-6B2A0B864AAF}.Release|Any CPU.Build.0 = Release|Any CPU
+		{28117755-60C3-463D-A32D-E0A38E9E4ADA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{28117755-60C3-463D-A32D-E0A38E9E4ADA}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{28117755-60C3-463D-A32D-E0A38E9E4ADA}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{28117755-60C3-463D-A32D-E0A38E9E4ADA}.Release|Any CPU.Build.0 = Release|Any CPU
 		{307C5A62-9943-48B8-8513-BBCDF0FBC3D0}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{307C5A62-9943-48B8-8513-BBCDF0FBC3D0}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{307C5A62-9943-48B8-8513-BBCDF0FBC3D0}.Release|Any CPU.ActiveCfg = Release|Any CPU
@@ -75,6 +83,7 @@ Global
 		{FC03BDA8-8A73-45F4-8D21-25F739BFF9E1} = {D33AB157-04B9-4BAD-B580-C3C87C17828C}
 		{1809EEF7-0772-404A-96C2-D76D80F1D191} = {4A7226CF-57BF-4CA3-A4AC-91A398A1D84B}
 		{DD1E1B3F-4FA2-4F3A-9AE1-6B2A0B864AAF} = {4A7226CF-57BF-4CA3-A4AC-91A398A1D84B}
+		{28117755-60C3-463D-A32D-E0A38E9E4ADA} = {C6E6ACAB-F123-4D18-891E-DE9C44539153}
 		{307C5A62-9943-48B8-8513-BBCDF0FBC3D0} = {D33AB157-04B9-4BAD-B580-C3C87C17828C}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
