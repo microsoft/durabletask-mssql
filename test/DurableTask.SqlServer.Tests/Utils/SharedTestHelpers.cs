@@ -29,7 +29,7 @@ namespace DurableTask.SqlServer.Tests.Utils
         public static string GetDefaultConnectionString(string database = "DurableDB")
         {
             // The default for local development on a Windows OS
-            string defaultConnectionString = $"Server=localhost;Database={database};Trusted_Connection=True;";
+            string defaultConnectionString = $"Server=localhost;Database={database};Trusted_Connection=True;Encrypt=False;";
             var builder = new SqlConnectionStringBuilder(defaultConnectionString);
 
             // The use of SA_PASSWORD is intended for use with the mssql docker container
