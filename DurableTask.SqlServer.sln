@@ -33,6 +33,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "test", "test", "{4A7226CF-5
 		test\setup.ps1 = test\setup.ps1
 	EndProjectSection
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Functions.Worker.Extensions.DurableTask.SqlServer", "src\Functions.Worker.Extensions.DurableTask.SqlServer\Functions.Worker.Extensions.DurableTask.SqlServer.csproj", "{307C5A62-9943-48B8-8513-BBCDF0FBC3D0}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -59,6 +61,10 @@ Global
 		{DD1E1B3F-4FA2-4F3A-9AE1-6B2A0B864AAF}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{DD1E1B3F-4FA2-4F3A-9AE1-6B2A0B864AAF}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{DD1E1B3F-4FA2-4F3A-9AE1-6B2A0B864AAF}.Release|Any CPU.Build.0 = Release|Any CPU
+		{307C5A62-9943-48B8-8513-BBCDF0FBC3D0}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{307C5A62-9943-48B8-8513-BBCDF0FBC3D0}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{307C5A62-9943-48B8-8513-BBCDF0FBC3D0}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{307C5A62-9943-48B8-8513-BBCDF0FBC3D0}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -69,6 +75,7 @@ Global
 		{FC03BDA8-8A73-45F4-8D21-25F739BFF9E1} = {D33AB157-04B9-4BAD-B580-C3C87C17828C}
 		{1809EEF7-0772-404A-96C2-D76D80F1D191} = {4A7226CF-57BF-4CA3-A4AC-91A398A1D84B}
 		{DD1E1B3F-4FA2-4F3A-9AE1-6B2A0B864AAF} = {4A7226CF-57BF-4CA3-A4AC-91A398A1D84B}
+		{307C5A62-9943-48B8-8513-BBCDF0FBC3D0} = {D33AB157-04B9-4BAD-B580-C3C87C17828C}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {238A9613-5411-41CF-BDEC-168CCD5C03FB}

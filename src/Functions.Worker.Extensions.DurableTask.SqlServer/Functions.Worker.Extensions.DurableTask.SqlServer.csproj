@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Import common properties for all shipping packages-->
+  <Import Project="../common.props" />
+  
+  <PropertyGroup>
+    <TargetFrameworks>netstandard2.0</TargetFrameworks>
+  </PropertyGroup>
+  
+  <!-- NuGet package settings -->
+  <PropertyGroup>
+    <PackageId>Microsoft.Azure.Functions.Worker.Extensions.DurableTask.SqlServer</PackageId>
+    <Title>Azure Durable Functions SQL Provider</Title>
+    <Description>Microsoft SQL provider for Azure Durable Functions.</Description>
+    <PackageTags>Microsoft;Azure;Functions;Durable;Task;Orchestration;Workflow;Activity;Reliable;SQL</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Azure.Functions.Worker.Extensions.Abstractions" Version="1.1.0" />
+  </ItemGroup>
+
+</Project>
