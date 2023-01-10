@@ -6,7 +6,7 @@ For local development using Azure Functions, select one of the [tools available 
 
 !> At the time of writing, the Durable SQL provider is in its early stages and does not yet work with the Azure Functions Consumption plan. It does work with the Azure Functions Elastic Premium plan but you must enable [Runtime Scale Monitoring](https://docs.microsoft.com/azure/azure-functions/functions-networking-options#premium-plan-with-virtual-network-triggers) to get automatic scaling. App Service plans are also supported. Consumption plan support and Scale Controller support for Elastic Premium is coming in a later release.
 
-### .NET
+### .NET InProc
 
 Durable Functions projects targeting the .NET in-process worker can add the [Microsoft.DurableTask.SqlServer.AzureFunction](https://www.nuget.org/packages/Microsoft.DurableTask.SqlServer.AzureFunctions) package by running the following `dotnet` CLI command:
 
@@ -14,7 +14,19 @@ Durable Functions projects targeting the .NET in-process worker can add the [Mic
 dotnet add package Microsoft.DurableTask.SqlServer.AzureFunctions --prerelease
 ```
 
-!> Durable Functions is not currently supported in the .NET Isolated worker.
+The `Microsoft.Azure.Functions.Worker.Extensions.DurableTask.SqlServer` package from .NET isolated should **not** be added.
+
+### .NET Isolated
+
+!> Durable Functions is in preview for dotnet isolated.
+
+Durable Functions projects targeting the .NET isolated worker can add the [Microsoft.Azure.Functions.Worker.Extensions.DurableTask.SqlServer](https://www.nuget.org/packages/Microsoft.Azure.Functions.Worker.Extensions.DurableTask.SqlServer) package by running the following `dotnet` CLI command:
+
+```bash
+dotnet add package Microsoft.Azure.Functions.Worker.Extensions.DurableTask.SqlServer --prerelease
+```
+
+The `Microsoft.DurableTask.SqlServer.AzureFunctions` package from .NET InProc should **not** be added.
 
 ### JavaScript, Python, Java, and PowerShell
 
