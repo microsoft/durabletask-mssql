@@ -9,8 +9,10 @@
 ### Updates
 
 * Updated [Microsoft.Azure.DurableTask.Core](https://www.nuget.org/packages/Microsoft.Azure.DurableTask.Core) dependency to v2.10.0.
+* Updated [Microsoft.Azure.WebJobs.Extensions.DurableTask](https://www.nuget.org/packages/Microsoft.Azure.WebJobs.Extensions.DurableTask) dependency to v2.9.0.
 * Fixed issue where de-dupe status values on orchestration creation were being ignored ([#120](https://github.com/microsoft/durabletask-mssql/issues/120)).
 * Fixed issue where external client ignores task hub name configuration ([#128](https://github.com/microsoft/durabletask-mssql/issues/128)) - contributed by [@bhugot](https://github.com/bhugot)
+* Enable implicit entity deletion for Durable Entities ([#119](https://github.com/microsoft/durabletask-mssql/issues/119))
 
 ### Breaking changes
 

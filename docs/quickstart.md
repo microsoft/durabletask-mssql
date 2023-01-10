@@ -2,42 +2,21 @@
 
 ## Azure Functions
 
-For local development using Azure Functions, select one of the [tools available for local development](https://docs.microsoft.com/azure/azure-functions/functions-develop-local). To configure the Durable SQL provider, you'll need to add the [Microsoft.DurableTask.SqlServer.AzureFunction](https://www.nuget.org/packages/Microsoft.DurableTask.SqlServer.AzureFunctions) NuGet package reference to your project.
-
-!> At the time of writing, the Durable SQL provider is in its early stages and does not yet work with the Azure Functions Consumption plan. It does work with the Azure Functions Elastic Premium plan but you must enable [Runtime Scale Monitoring](https://docs.microsoft.com/azure/azure-functions/functions-networking-options#premium-plan-with-virtual-network-triggers) to get automatic scaling. App Service plans are also supported. Consumption plan support and Scale Controller support for Elastic Premium is coming in a later release.
+For local development using Azure Functions, select one of the [tools available for local development](https://docs.microsoft.com/azure/azure-functions/functions-develop-local). To configure the Durable SQL provider, you'll need to add the [Microsoft.DurableTask.SqlServer.AzureFunctions](https://www.nuget.org/packages/Microsoft.DurableTask.SqlServer.AzureFunctions) NuGet package reference to your project.
 
 ### .NET
 
-Durable Functions projects targeting the .NET in-process worker can add the [Microsoft.DurableTask.SqlServer.AzureFunction](https://www.nuget.org/packages/Microsoft.DurableTask.SqlServer.AzureFunctions) package by running the following `dotnet` CLI command:
+Durable Functions projects targeting the .NET in-process worker can add the [Microsoft.DurableTask.SqlServer.AzureFunctions](https://www.nuget.org/packages/Microsoft.DurableTask.SqlServer.AzureFunctions) package by running the following `dotnet` CLI command:
 
 ```bash
-dotnet add package Microsoft.DurableTask.SqlServer.AzureFunctions --prerelease
+dotnet add package Microsoft.DurableTask.SqlServer.AzureFunctions
 ```
 
-!> Durable Functions is not currently supported in the .NET Isolated worker.
+!> Durable Functions is not currently supported in the .NET Isolated worker (but support is coming [soon](https://github.com/microsoft/durabletask-mssql/pull/136)).
 
 ### JavaScript, Python, Java, and PowerShell
 
-JavaScript, Python, and PowerShell projects can add the [Microsoft.DurableTask.SqlServer.AzureFunction](https://www.nuget.org/packages/Microsoft.DurableTask.SqlServer.AzureFunctions) package by running the following `func` CLI command. Note that in addition to the Azure Functions Core Tools, you must also have a recent [.NET SDK](https://dotnet.microsoft.com/download) installed locally.
-
-```bash
-func extensions install -p Microsoft.DurableTask.SqlServer.AzureFunctions -v 1.1.0
-```
-
-?> Check [here](https://www.nuget.org/packages/Microsoft.DurableTask.SqlServer.AzureFunctions) to see if newer versions of the SQL provider package are available, and update the above command to reference the latest available version.
-
-!> The Durable SQL backend is not currently supported with extension bundles. Support for extension bundles will be available at or before the *General Availability* release.
-
-This command will generate a file named **extensions.csproj** in the local directory, or update the file if one already exists. At the time of writing, you'll need to make an additional edit to this file to work around [this Azure Functions tooling issue](https://github.com/Azure/azure-functions-host/issues/6925#issuecomment-885253901):
-
-```xml
-  <!-- Workaround for https://github.com/Azure/azure-functions-host/issues/6925 -->
-  <Target Name="PostBuild" AfterTargets="PostBuildEvent">
-    <Move SourceFiles="$(OutDir)/extensions.deps.json" DestinationFiles="$(OutDir)/function.deps.json" />
-  </Target>
-```
-
-This ensures that all native dependencies are available when you try to start up the Function app.
+JavaScript, Python, Java, and PowerShell projects automatically get access to the MSSQL backend extension when they use the latest version of v3 or v4 extension bundles.
 
 ### Host.json configuration
 
