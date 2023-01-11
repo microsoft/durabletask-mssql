@@ -35,6 +35,8 @@ namespace DurableTask.SqlServer.AzureFunctions
         
         public override bool GuaranteesOrderedDelivery => true;
 
+        public override bool SupportsImplicitEntityDeletion => true;
+
         public override JObject ConfigurationJson => JObject.FromObject(this.durabilityOptions);
 
         public override TimeSpan MaximumDelayTime { get; set; } = TimeSpan.MaxValue;
