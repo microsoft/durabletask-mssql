@@ -5,7 +5,10 @@ namespace DurableTask.SqlServer.AzureFunctions
 {
     using Microsoft.Azure.WebJobs.Host.Scale;
 
-    class SqlScaleMetric : ScaleMetrics
+    /// <summary>
+    /// Contains metrics used to make scale decisions for a SqlScaleMetric.
+    /// </summary>
+    public class SqlScaleMetric : ScaleMetrics
     {
         public int RecommendedReplicaCount { get; set; }
     }
