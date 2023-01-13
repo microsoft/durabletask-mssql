@@ -4,15 +4,27 @@
 
 For local development using Azure Functions, select one of the [tools available for local development](https://docs.microsoft.com/azure/azure-functions/functions-develop-local). To configure the Durable SQL provider, you'll need to add the [Microsoft.DurableTask.SqlServer.AzureFunctions](https://www.nuget.org/packages/Microsoft.DurableTask.SqlServer.AzureFunctions) NuGet package reference to your project.
 
-### .NET
+### .NET InProc
 
 Durable Functions projects targeting the .NET in-process worker can add the [Microsoft.DurableTask.SqlServer.AzureFunctions](https://www.nuget.org/packages/Microsoft.DurableTask.SqlServer.AzureFunctions) package by running the following `dotnet` CLI command:
 
 ```bash
-dotnet add package Microsoft.DurableTask.SqlServer.AzureFunctions
+dotnet add package Microsoft.DurableTask.SqlServer.AzureFunctions --prerelease
 ```
 
-!> Durable Functions is not currently supported in the .NET Isolated worker (but support is coming [soon](https://github.com/microsoft/durabletask-mssql/pull/136)).
+The `Microsoft.Azure.Functions.Worker.Extensions.DurableTask.SqlServer` package from .NET isolated should **not** be added.
+
+### .NET Isolated
+
+!> Durable Functions is in preview for dotnet isolated.
+
+Durable Functions projects targeting the .NET isolated worker can add the [Microsoft.Azure.Functions.Worker.Extensions.DurableTask.SqlServer](https://www.nuget.org/packages/Microsoft.Azure.Functions.Worker.Extensions.DurableTask.SqlServer) package by running the following `dotnet` CLI command:
+
+```bash
+dotnet add package Microsoft.Azure.Functions.Worker.Extensions.DurableTask.SqlServer --prerelease
+```
+
+The `Microsoft.DurableTask.SqlServer.AzureFunctions` package from .NET InProc should **not** be added.
 
 ### JavaScript, Python, Java, and PowerShell
 
