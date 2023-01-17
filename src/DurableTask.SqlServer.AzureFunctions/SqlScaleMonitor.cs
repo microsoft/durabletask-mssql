@@ -13,7 +13,7 @@ namespace DurableTask.SqlServer.AzureFunctions
     /// <summary>
     /// Azure Functions scale monitor implementation for the Durable Functions SQL backend.
     /// </summary>
-    public class SqlScaleMonitor : IScaleMonitor<SqlScaleMetric>
+    class SqlScaleMonitor : IScaleMonitor<SqlScaleMetric>
     {
         static readonly ScaleStatus ScaleInVote = new ScaleStatus { Vote = ScaleVote.ScaleIn };
         static readonly ScaleStatus NoScaleVote = new ScaleStatus { Vote = ScaleVote.None };
@@ -23,12 +23,6 @@ namespace DurableTask.SqlServer.AzureFunctions
 
         int? previousWorkerCount = -1;
 
-        /// <summary>
-        /// Creates a SqlScaleMonitor instance.
-        /// </summary>
-        /// <param name="service">The SqlOrchestrationService used to create the connection.</param>
-        /// <param name="taskHubName">The name of the monitored task hub.</param>
-        /// <exception cref="ArgumentNullException"></exception>
         public SqlScaleMonitor(SqlOrchestrationService service, string taskHubName)
         {
             this.service = service ?? throw new ArgumentNullException(nameof(service));
