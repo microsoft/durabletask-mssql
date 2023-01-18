@@ -9,7 +9,7 @@ For local development using Azure Functions, select one of the [tools available 
 Durable Functions projects targeting the .NET in-process worker can add the [Microsoft.DurableTask.SqlServer.AzureFunctions](https://www.nuget.org/packages/Microsoft.DurableTask.SqlServer.AzureFunctions) package by running the following `dotnet` CLI command:
 
 ```bash
-dotnet add package Microsoft.DurableTask.SqlServer.AzureFunctions --prerelease
+dotnet add package Microsoft.DurableTask.SqlServer.AzureFunctions
 ```
 
 The `Microsoft.Azure.Functions.Worker.Extensions.DurableTask.SqlServer` package from .NET isolated should **not** be added.
@@ -21,7 +21,7 @@ The `Microsoft.Azure.Functions.Worker.Extensions.DurableTask.SqlServer` package 
 Durable Functions projects targeting the .NET isolated worker can add the [Microsoft.Azure.Functions.Worker.Extensions.DurableTask.SqlServer](https://www.nuget.org/packages/Microsoft.Azure.Functions.Worker.Extensions.DurableTask.SqlServer) package by running the following `dotnet` CLI command:
 
 ```bash
-dotnet add package Microsoft.Azure.Functions.Worker.Extensions.DurableTask.SqlServer --prerelease
+dotnet add package Microsoft.Azure.Functions.Worker.Extensions.DurableTask.SqlServer
 ```
 
 The `Microsoft.DurableTask.SqlServer.AzureFunctions` package from .NET InProc should **not** be added.
