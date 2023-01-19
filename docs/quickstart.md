@@ -16,15 +16,7 @@ The `Microsoft.Azure.Functions.Worker.Extensions.DurableTask.SqlServer` package 
 
 ### .NET Isolated
 
-!> Durable Functions is in preview for dotnet isolated.
-
-Durable Functions projects targeting the .NET isolated worker can add the [Microsoft.Azure.Functions.Worker.Extensions.DurableTask.SqlServer](https://www.nuget.org/packages/Microsoft.Azure.Functions.Worker.Extensions.DurableTask.SqlServer) package by running the following `dotnet` CLI command:
-
-```bash
-dotnet add package Microsoft.Azure.Functions.Worker.Extensions.DurableTask.SqlServer
-```
-
-The `Microsoft.DurableTask.SqlServer.AzureFunctions` package from .NET InProc should **not** be added.
+The SQL provider does not yet support Durable Functions on the .NET Isolated worker. See [this GitHub issue](https://github.com/microsoft/durabletask-mssql/issues/106) for the latest updates.
 
 ### JavaScript, Python, Java, and PowerShell
 
