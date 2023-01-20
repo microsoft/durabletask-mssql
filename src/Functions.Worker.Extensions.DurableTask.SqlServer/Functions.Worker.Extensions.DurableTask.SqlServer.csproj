@@ -5,11 +5,12 @@
   
   <PropertyGroup>
     <TargetFrameworks>netstandard2.0</TargetFrameworks>
+    <AssemblyName>Microsoft.Azure.Functions.Worker.Extensions.DurableTask.SqlServer</AssemblyName>
   </PropertyGroup>
   
   <!-- NuGet package settings -->
   <PropertyGroup>
-    <PackageId>Microsoft.Azure.Functions.Worker.Extensions.DurableTask.SqlServer</PackageId>
+    <PackageId>$(AssemblyName)</PackageId>
     <Title>Azure Durable Functions SQL Provider</Title>
     <Description>Microsoft SQL provider for Azure Durable Functions.</Description>
     <PackageTags>Microsoft;Azure;Functions;Durable;Task;Orchestration;Workflow;Activity;Reliable;SQL</PackageTags>
