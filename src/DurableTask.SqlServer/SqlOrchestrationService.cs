@@ -538,7 +538,10 @@ namespace DurableTask.SqlServer
             TimeSpan timeout,
             CancellationToken cancellationToken)
         {
-            using var timeoutCts = new CancellationTokenSource(timeout);
+            using var timeoutCts = timeout < TimeSpan.MaxValue && timeout >= TimeSpan.Zero ?
+                new CancellationTokenSource(timeout) :
+                new CancellationTokenSource();
+
             using var combinedCts = CancellationTokenSource.CreateLinkedTokenSource(
                 timeoutCts.Token,
                 cancellationToken);
