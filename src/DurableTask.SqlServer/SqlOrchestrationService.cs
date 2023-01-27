@@ -150,7 +150,7 @@ namespace DurableTask.SqlServer
                     int longestWaitTime = 0;
                     var messages = new List<TaskMessage>(capacity: batchSize);
                     var eventPayloadMappings = new EventPayloadMap(capacity: batchSize);
-                    while (await reader.ReadAsync(cancellationToken))
+                    while (!cancellationToken.IsCancellationRequested && reader.Read())
                     {
                         TaskMessage message = reader.GetTaskMessage();
                         messages.Add(message);
@@ -187,7 +187,7 @@ namespace DurableTask.SqlServer
                     // Result #2: The runtime status of the orchestration instance
                     if (await reader.NextResultAsync(cancellationToken))
                     {
-                        bool instanceExists = await reader.ReadAsync(cancellationToken);
+                        bool instanceExists = reader.Read();
                         string instanceId;
                         OrchestrationStatus? currentStatus;
 
@@ -406,7 +406,7 @@ namespace DurableTask.SqlServer
         {
             while (!cancellationToken.IsCancellationRequested)
             {
-                using SqlConnection connection = await this.GetAndOpenConnectionAsync();
+                using SqlConnection connection = await this.GetAndOpenConnectionAsync(cancellationToken);
                 using SqlCommand command = this.GetSprocCommand(connection, $"{this.settings.SchemaName}._LockNextTask");
 
                 DateTime lockExpiration = DateTime.UtcNow.Add(this.settings.WorkItemLockTimeout);
@@ -419,7 +419,7 @@ namespace DurableTask.SqlServer
                     this.traceHelper,
                     instanceId: null,
                     cancellationToken);
-                if (!await reader.ReadAsync())
+                if (!await reader.ReadAsync(cancellationToken))
                 {
                     await this.activityBackoffHelper.WaitAsync(cancellationToken);
                     continue;
@@ -596,7 +596,7 @@ namespace DurableTask.SqlServer
                 instanceId,
                 cancellationToken);
 
-            if (await reader.ReadAsync(cancellationToken))
+            if (reader.Read())
             {
                 OrchestrationState state = reader.GetOrchestrationState();
                 return state;
@@ -625,7 +625,7 @@ namespace DurableTask.SqlServer
             CancellationToken cancellationToken = default)
         {
             var history = new List<HistoryEvent>(capacity: 128);
-            while (await reader.ReadAsync(cancellationToken))
+            while (!cancellationToken.IsCancellationRequested &&  reader.Read())
             {
                 string executionId = SqlUtils.GetExecutionId(reader)!;
                 HistoryEvent e = reader.GetHistoryEvent(isOrchestrationHistory: true);
@@ -820,7 +820,7 @@ namespace DurableTask.SqlServer
                 cancellationToken);
 
             var results = new List<OrchestrationState>(query.PageSize);
-            while (await reader.ReadAsync(cancellationToken))
+            while (!cancellationToken.IsCancellationRequested && reader.Read())
             {
                 OrchestrationState state = reader.GetOrchestrationState();
                 results.Add(state);
@@ -872,7 +872,7 @@ namespace DurableTask.SqlServer
             command.Parameters.Add("@MaxConcurrentOrchestrations", SqlDbType.Int).Value = this.MaxConcurrentTaskOrchestrationWorkItems;
             command.Parameters.Add("@MaxConcurrentActivities", SqlDbType.Int).Value = this.MaxConcurrentTaskActivityWorkItems;
 
-            int recommendedReplicaCount = (int)await command.ExecuteScalarAsync();
+            int recommendedReplicaCount = (int)await command.ExecuteScalarAsync(cancellationToken);
             if (currentReplicaCount != null && currentReplicaCount != recommendedReplicaCount)
             {
                 this.traceHelper.ReplicaCountChangeRecommended(currentReplicaCount.Value, recommendedReplicaCount);

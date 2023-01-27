@@ -398,7 +398,7 @@ namespace DurableTask.SqlServer
                 command,
                 traceHelper,
                 instanceId,
-                cmd => cmd.ExecuteReader());
+                cmd => cmd.ExecuteReaderAsync(cancellationToken));
         }
 
         public static Task<int> ExecuteNonQueryAsync(
@@ -432,32 +432,6 @@ namespace DurableTask.SqlServer
             LogHelper traceHelper,
             string? instanceId,
             Func<DbCommand, Task<T>> executor)
-        {
-            var context = new SprocExecutionContext();
-            try
-            {
-                return await WithRetry(() => executor(command), context, traceHelper, instanceId);
-            }
-            finally
-            {
-                context.LatencyStopwatch.Stop();
-                switch (command.CommandType)
-                {
-                    case CommandType.StoredProcedure:
-                        traceHelper.SprocCompleted(command.CommandText, context.LatencyStopwatch, context.RetryCount, instanceId);
-                        break;
-                    default:
-                        traceHelper.CommandCompleted(command.CommandText, context.LatencyStopwatch, context.RetryCount, instanceId);
-                        break;
-                }
-            }
-        }
-
-        static async Task<T> ExecuteSprocAndTraceAsync<T>(
-            DbCommand command,
-            LogHelper traceHelper,
-            string? instanceId,
-            Func<DbCommand, T> executor)
         {
             var context = new SprocExecutionContext();
             try

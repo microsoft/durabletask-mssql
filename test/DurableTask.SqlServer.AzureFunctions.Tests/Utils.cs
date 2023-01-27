@@ -72,7 +72,7 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
                     return status;
                 }
 
-                await Task.Delay(TimeSpan.FromMilliseconds(500));
+                await Task.Delay(TimeSpan.FromMilliseconds(500), cancellationToken);
             }
 
             cancellationToken.ThrowIfCancellationRequested();
