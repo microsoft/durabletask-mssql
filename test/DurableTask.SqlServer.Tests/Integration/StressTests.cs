@@ -29,7 +29,7 @@ namespace DurableTask.SqlServer.Tests.Integration
         Task IAsyncLifetime.InitializeAsync() => this.testService.InitializeAsync();
 
         Task IAsyncLifetime.DisposeAsync() => this.testService.DisposeAsync();
-        static string bigString = string.Join("",  Enumerable.Range(0, 1024 * 1024 * 10).Select(x => "1"));
+        static readonly string BigString = string.Join("",  Enumerable.Range(0, 1024 * 1024 * 10).Select(x => "1"));
         // This test has previously been used to uncover various deadlock issues by stressing the code paths
         // related to foreign keys that point to the Instances and Payloads tables.
         // Example: https://github.com/microsoft/durabletask-mssql/issues/45 
@@ -101,7 +101,7 @@ namespace DurableTask.SqlServer.Tests.Integration
                             name: SubOrchestrationName,
                             version: "",
                             instanceId: $"suborchestration[{i}]",
-                            input: $"{i}-{bigString}");
+                            input: $"{i}-{BigString}");
                         listInstances.Add(instance);
                     }
 

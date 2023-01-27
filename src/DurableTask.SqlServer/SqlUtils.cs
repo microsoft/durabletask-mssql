@@ -529,50 +529,6 @@ namespace DurableTask.SqlServer
             }
         }
 
-        static async Task<T> WithRetry<T>(Func<T> func, SprocExecutionContext context, LogHelper traceHelper, string? instanceId, int maxRetries = 5)
-        {
-            context.RetryCount = 0;
-
-            while (true)
-            {
-                try
-                {
-                    return func();
-                }
-                catch (Exception e)
-                {
-                    if (!IsTransient(e))
-                    {
-                        // Not a retriable exception
-                        throw;
-                    }
-
-                    if (context.RetryCount >= maxRetries)
-                    {
-                        // Maxed out on retries. The layer above may do its own retries later.
-                        throw;
-                    }
-
-                    // Linear backoff where we add 1 second each time, so for retryCount = 5
-                    // we could delay as long as 0 + 1 + 2 + 3 + 4 = 10 total seconds.
-                    TimeSpan delay = TimeSpan.FromSeconds(context.RetryCount);
-                    lock (random)
-                    {
-                        // Add a small amount of random delay to distribute concurrent retries 
-                        delay += TimeSpan.FromMilliseconds(random.Next(100));
-                    }
-
-                    // Log a warning so that these issues can be properly investigated
-                    traceHelper.TransientDatabaseFailure(e, instanceId, context.RetryCount);
-
-                    await Task.Delay(delay);
-
-                    context.RetryCount++;
-                }
-            }
-        }
-
-
         static bool IsTransient(Exception exception)
         {
             if (exception is SqlException sqlException)

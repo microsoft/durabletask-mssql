@@ -252,7 +252,7 @@ namespace DurableTask.SqlServer
                     IList<HistoryEvent> history;
                     if (await reader.NextResultAsync(cancellationToken))
                     {
-                        history = await ReadHistoryEventsAsync(reader, executionIdFilter: null, cancellationToken);
+                        history = ReadHistoryEvents(reader, executionIdFilter: null, cancellationToken);
                     }
                     else
                     {
@@ -615,17 +615,17 @@ namespace DurableTask.SqlServer
 
             using DbDataReader reader = await SqlUtils.ExecuteReaderAsync(command, this.traceHelper, instanceId);
 
-            List<HistoryEvent> history = await ReadHistoryEventsAsync(reader, executionIdFilter);
+            List<HistoryEvent> history = ReadHistoryEvents(reader, executionIdFilter);
             return JsonConvert.SerializeObject(history);
         }
 
-        static async Task<List<HistoryEvent>> ReadHistoryEventsAsync(
+        static List<HistoryEvent> ReadHistoryEvents(
             DbDataReader reader,
             string? executionIdFilter = null,
             CancellationToken cancellationToken = default)
         {
             var history = new List<HistoryEvent>(capacity: 128);
-            while (!cancellationToken.IsCancellationRequested &&  reader.Read())
+            while (!cancellationToken.IsCancellationRequested && reader.Read())
             {
                 string executionId = SqlUtils.GetExecutionId(reader)!;
                 HistoryEvent e = reader.GetHistoryEvent(isOrchestrationHistory: true);
