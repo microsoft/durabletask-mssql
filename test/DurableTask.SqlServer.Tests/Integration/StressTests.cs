@@ -29,7 +29,7 @@ namespace DurableTask.SqlServer.Tests.Integration
         Task IAsyncLifetime.InitializeAsync() => this.testService.InitializeAsync();
 
         Task IAsyncLifetime.DisposeAsync() => this.testService.DisposeAsync();
-        static readonly string BigString = string.Join("",  Enumerable.Range(0, 1024 * 1024 * 10).Select(x => "1"));
+
         // This test has previously been used to uncover various deadlock issues by stressing the code paths
         // related to foreign keys that point to the Instances and Payloads tables.
         // Example: https://github.com/microsoft/durabletask-mssql/issues/45 
@@ -79,7 +79,8 @@ namespace DurableTask.SqlServer.Tests.Integration
         public async Task ParallelWithBigPayload(int subOrchestrationCount)
         {
             const string SubOrchestrationName = "SubOrchestration";
-           
+            string bigString = string.Join("", Enumerable.Range(0, 1024 * 1024 * 10).Select(x => "1"));
+
             this.testService.RegisterInlineOrchestration<DateTime, string>(
                 orchestrationName: SubOrchestrationName,
                 version: "",
@@ -101,7 +102,7 @@ namespace DurableTask.SqlServer.Tests.Integration
                             name: SubOrchestrationName,
                             version: "",
                             instanceId: $"suborchestration[{i}]",
-                            input: $"{i}-{BigString}");
+                            input: $"{i}-{bigString}");
                         listInstances.Add(instance);
                     }
 
@@ -109,9 +110,7 @@ namespace DurableTask.SqlServer.Tests.Integration
                     return new List<DateTime>(results);
                 });
 
-            // On a fast Windows desktop machine, a 2000 sub-orchestration test should complete in 30-40 seconds.
-            // On slower CI machines, this test could take several minutes to complete.
-            await testInstance.WaitForCompletion(TimeSpan.FromMinutes(5));
+            await testInstance.WaitForCompletion(TimeSpan.FromMinutes(1));
         }
     }
 }

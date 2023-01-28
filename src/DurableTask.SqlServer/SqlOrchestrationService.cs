@@ -150,8 +150,12 @@ namespace DurableTask.SqlServer
                     int longestWaitTime = 0;
                     var messages = new List<TaskMessage>(capacity: batchSize);
                     var eventPayloadMappings = new EventPayloadMap(capacity: batchSize);
-                    while (!cancellationToken.IsCancellationRequested && reader.Read())
+
+                    // Synchronous reads have significantly better performance: https://github.com/dotnet/SqlClient/issues/593
+                    while (reader.Read())
                     {
+                        cancellationToken.ThrowIfCancellationRequested();
+
                         TaskMessage message = reader.GetTaskMessage();
                         messages.Add(message);
                         Guid? payloadId = reader.GetPayloadId();
@@ -187,6 +191,7 @@ namespace DurableTask.SqlServer
                     // Result #2: The runtime status of the orchestration instance
                     if (await reader.NextResultAsync(cancellationToken))
                     {
+                        // Synchronous reads have significantly better performance: https://github.com/dotnet/SqlClient/issues/593
                         bool instanceExists = reader.Read();
                         string instanceId;
                         OrchestrationStatus? currentStatus;
@@ -402,11 +407,13 @@ namespace DurableTask.SqlServer
         // removes the need for a DB access and also ensures that a work-item can't spam the error logs in a tight loop.
         public override Task AbandonTaskOrchestrationWorkItemAsync(TaskOrchestrationWorkItem workItem) => Task.CompletedTask;
 
-        public override async Task<TaskActivityWorkItem?> LockNextTaskActivityWorkItem(TimeSpan receiveTimeout, CancellationToken cancellationToken)
+        public override async Task<TaskActivityWorkItem?> LockNextTaskActivityWorkItem(
+            TimeSpan receiveTimeout,
+            CancellationToken shutdownCancellationToken)
         {
-            while (!cancellationToken.IsCancellationRequested)
+            while (!shutdownCancellationToken.IsCancellationRequested)
             {
-                using SqlConnection connection = await this.GetAndOpenConnectionAsync(cancellationToken);
+                using SqlConnection connection = await this.GetAndOpenConnectionAsync(shutdownCancellationToken);
                 using SqlCommand command = this.GetSprocCommand(connection, $"{this.settings.SchemaName}._LockNextTask");
 
                 DateTime lockExpiration = DateTime.UtcNow.Add(this.settings.WorkItemLockTimeout);
@@ -418,10 +425,10 @@ namespace DurableTask.SqlServer
                     command,
                     this.traceHelper,
                     instanceId: null,
-                    cancellationToken);
-                if (!await reader.ReadAsync(cancellationToken))
+                    shutdownCancellationToken);
+                if (!await reader.ReadAsync(shutdownCancellationToken))
                 {
-                    await this.activityBackoffHelper.WaitAsync(cancellationToken);
+                    await this.activityBackoffHelper.WaitAsync(shutdownCancellationToken);
                     continue;
                 }
 
@@ -596,6 +603,7 @@ namespace DurableTask.SqlServer
                 instanceId,
                 cancellationToken);
 
+            // Synchronous reads have significantly better performance: https://github.com/dotnet/SqlClient/issues/593
             if (reader.Read())
             {
                 OrchestrationState state = reader.GetOrchestrationState();
@@ -625,8 +633,12 @@ namespace DurableTask.SqlServer
             CancellationToken cancellationToken = default)
         {
             var history = new List<HistoryEvent>(capacity: 128);
-            while (!cancellationToken.IsCancellationRequested && reader.Read())
+
+            // Synchronous reads have significantly better performance: https://github.com/dotnet/SqlClient/issues/593
+            while (reader.Read())
             {
+                cancellationToken.ThrowIfCancellationRequested();
+
                 string executionId = SqlUtils.GetExecutionId(reader)!;
                 HistoryEvent e = reader.GetHistoryEvent(isOrchestrationHistory: true);
                 if (executionIdFilter == null)
