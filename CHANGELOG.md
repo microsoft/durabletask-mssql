@@ -4,7 +4,7 @@
 
 ### Updates
 
-* Synchronous reads for improved performance for large payloads ((#134)[https://github.com/microsoft/durabletask-mssql/pull/134])
+* Synchronous reads for improved performance for large payloads ([#134](https://github.com/microsoft/durabletask-mssql/pull/134)) - contributed by [@bhugot](https://github.com/bhugot)
 
 ## v1.1.0
 
