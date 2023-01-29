@@ -150,8 +150,12 @@ namespace DurableTask.SqlServer
                     int longestWaitTime = 0;
                     var messages = new List<TaskMessage>(capacity: batchSize);
                     var eventPayloadMappings = new EventPayloadMap(capacity: batchSize);
-                    while (await reader.ReadAsync(cancellationToken))
+
+                    // Synchronous reads have significantly better performance: https://github.com/dotnet/SqlClient/issues/593
+                    while (reader.Read())
                     {
+                        cancellationToken.ThrowIfCancellationRequested();
+
                         TaskMessage message = reader.GetTaskMessage();
                         messages.Add(message);
                         Guid? payloadId = reader.GetPayloadId();
@@ -187,7 +191,8 @@ namespace DurableTask.SqlServer
                     // Result #2: The runtime status of the orchestration instance
                     if (await reader.NextResultAsync(cancellationToken))
                     {
-                        bool instanceExists = await reader.ReadAsync(cancellationToken);
+                        // Synchronous reads have significantly better performance: https://github.com/dotnet/SqlClient/issues/593
+                        bool instanceExists = reader.Read();
                         string instanceId;
                         OrchestrationStatus? currentStatus;
 
@@ -252,7 +257,7 @@ namespace DurableTask.SqlServer
                     IList<HistoryEvent> history;
                     if (await reader.NextResultAsync(cancellationToken))
                     {
-                        history = await ReadHistoryEventsAsync(reader, executionIdFilter: null, cancellationToken);
+                        history = ReadHistoryEvents(reader, executionIdFilter: null, cancellationToken);
                     }
                     else
                     {
@@ -402,11 +407,13 @@ namespace DurableTask.SqlServer
         // removes the need for a DB access and also ensures that a work-item can't spam the error logs in a tight loop.
         public override Task AbandonTaskOrchestrationWorkItemAsync(TaskOrchestrationWorkItem workItem) => Task.CompletedTask;
 
-        public override async Task<TaskActivityWorkItem?> LockNextTaskActivityWorkItem(TimeSpan receiveTimeout, CancellationToken cancellationToken)
+        public override async Task<TaskActivityWorkItem?> LockNextTaskActivityWorkItem(
+            TimeSpan receiveTimeout,
+            CancellationToken shutdownCancellationToken)
         {
-            while (!cancellationToken.IsCancellationRequested)
+            while (!shutdownCancellationToken.IsCancellationRequested)
             {
-                using SqlConnection connection = await this.GetAndOpenConnectionAsync();
+                using SqlConnection connection = await this.GetAndOpenConnectionAsync(shutdownCancellationToken);
                 using SqlCommand command = this.GetSprocCommand(connection, $"{this.settings.SchemaName}._LockNextTask");
 
                 DateTime lockExpiration = DateTime.UtcNow.Add(this.settings.WorkItemLockTimeout);
@@ -418,10 +425,10 @@ namespace DurableTask.SqlServer
                     command,
                     this.traceHelper,
                     instanceId: null,
-                    cancellationToken);
-                if (!await reader.ReadAsync())
+                    shutdownCancellationToken);
+                if (!await reader.ReadAsync(shutdownCancellationToken))
                 {
-                    await this.activityBackoffHelper.WaitAsync(cancellationToken);
+                    await this.activityBackoffHelper.WaitAsync(shutdownCancellationToken);
                     continue;
                 }
 
@@ -596,7 +603,8 @@ namespace DurableTask.SqlServer
                 instanceId,
                 cancellationToken);
 
-            if (await reader.ReadAsync(cancellationToken))
+            // Synchronous reads have significantly better performance: https://github.com/dotnet/SqlClient/issues/593
+            if (reader.Read())
             {
                 OrchestrationState state = reader.GetOrchestrationState();
                 return state;
@@ -615,18 +623,22 @@ namespace DurableTask.SqlServer
 
             using DbDataReader reader = await SqlUtils.ExecuteReaderAsync(command, this.traceHelper, instanceId);
 
-            List<HistoryEvent> history = await ReadHistoryEventsAsync(reader, executionIdFilter);
+            List<HistoryEvent> history = ReadHistoryEvents(reader, executionIdFilter);
             return JsonConvert.SerializeObject(history);
         }
 
-        static async Task<List<HistoryEvent>> ReadHistoryEventsAsync(
+        static List<HistoryEvent> ReadHistoryEvents(
             DbDataReader reader,
             string? executionIdFilter = null,
             CancellationToken cancellationToken = default)
         {
             var history = new List<HistoryEvent>(capacity: 128);
-            while (await reader.ReadAsync(cancellationToken))
+
+            // Synchronous reads have significantly better performance: https://github.com/dotnet/SqlClient/issues/593
+            while (reader.Read())
             {
+                cancellationToken.ThrowIfCancellationRequested();
+
                 string executionId = SqlUtils.GetExecutionId(reader)!;
                 HistoryEvent e = reader.GetHistoryEvent(isOrchestrationHistory: true);
                 if (executionIdFilter == null)
@@ -820,7 +832,7 @@ namespace DurableTask.SqlServer
                 cancellationToken);
 
             var results = new List<OrchestrationState>(query.PageSize);
-            while (await reader.ReadAsync(cancellationToken))
+            while (!cancellationToken.IsCancellationRequested && reader.Read())
             {
                 OrchestrationState state = reader.GetOrchestrationState();
                 results.Add(state);
@@ -872,7 +884,7 @@ namespace DurableTask.SqlServer
             command.Parameters.Add("@MaxConcurrentOrchestrations", SqlDbType.Int).Value = this.MaxConcurrentTaskOrchestrationWorkItems;
             command.Parameters.Add("@MaxConcurrentActivities", SqlDbType.Int).Value = this.MaxConcurrentTaskActivityWorkItems;
 
-            int recommendedReplicaCount = (int)await command.ExecuteScalarAsync();
+            int recommendedReplicaCount = (int)await command.ExecuteScalarAsync(cancellationToken);
             if (currentReplicaCount != null && currentReplicaCount != recommendedReplicaCount)
             {
                 this.traceHelper.ReplicaCountChangeRecommended(currentReplicaCount.Value, recommendedReplicaCount);
