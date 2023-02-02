@@ -6,6 +6,7 @@
 
 * Synchronous reads for improved performance for large payloads ([#134](https://github.com/microsoft/durabletask-mssql/pull/134)) - contributed by [@bhugot](https://github.com/bhugot)
 * Fix for sub-orchestration handling over gRPC ([#149](https://github.com/microsoft/durabletask-mssql/pull/149))
+* Fix continue-as-new data corruption race condition ([#150](https://github.com/microsoft/durabletask-mssql/pull/150))
 
 ## v1.1.0
 
