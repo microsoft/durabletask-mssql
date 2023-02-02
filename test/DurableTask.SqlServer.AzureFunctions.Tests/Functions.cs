@@ -114,6 +114,26 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
             }
         }
 
+        [FunctionName(nameof(IncrementThenGet))]
+        public static async Task<int> IncrementThenGet([OrchestrationTrigger] IDurableOrchestrationContext context)
+        {
+            // Key needs to be pseudo-random to avoid conflicts with multiple test runs.
+            string key = context.NewGuid().ToString().Substring(0, 8);
+            EntityId entityId = new EntityId(nameof(Counter), key);
+
+            context.SignalEntity(entityId, "add", 1);
+
+            // Invoking a sub-orchestration as a regression test for https://github.com/microsoft/durabletask-mssql/issues/146
+            return await context.CallSubOrchestratorAsync<int>(nameof(GetEntityAsync), entityId);
+        }
+
+        [FunctionName(nameof(GetEntityAsync))]
+        public static async Task<int> GetEntityAsync([OrchestrationTrigger] IDurableOrchestrationContext context)
+        {
+            EntityId entityId = context.GetInput<EntityId>();
+            return await context.CallEntityAsync<int>(entityId, "get");
+        }
+
         [FunctionName(nameof(WaitForEvent))]
         public static Task<object> WaitForEvent([OrchestrationTrigger] IDurableOrchestrationContext ctx)
         {

@@ -77,7 +77,7 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
         }
 
         [Fact]
-        public async Task CanInteractWithEntities()
+        public async Task CanClientInteractWithEntities()
         {
             IDurableClient client = this.GetDurableClient();
 
@@ -96,6 +96,14 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
             result = await client.ReadEntityStateAsync<int>(entityId);
             Assert.True(result.EntityExists);
             Assert.Equal(7, result.EntityState);
+        }
+
+        [Fact]
+        public async Task CanOrchestrationInteractWithEntities()
+        {
+            DurableOrchestrationStatus status = await this.RunOrchestrationAsync(nameof(Functions.IncrementThenGet));
+            Assert.Equal(OrchestrationRuntimeStatus.Completed, status.RuntimeStatus);
+            Assert.Equal(1, (int)status.Output);
         }
 
         [Fact]

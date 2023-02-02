@@ -84,6 +84,8 @@ namespace DurableTask.SqlServer.Tests.Utils
         public static async Task InitializeDatabaseAsync(string schema = DefaultSchema)
         {
             var options = new SqlOrchestrationServiceSettings(GetDefaultConnectionString(), schemaName: schema);
+            options.CreateDatabaseIfNotExists = true;
+
             var service = new SqlOrchestrationService(options);
             await service.CreateIfNotExistsAsync();
         }
