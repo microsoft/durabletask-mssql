@@ -635,6 +635,7 @@ BEGIN
 
     DECLARE @InputPayloadID uniqueidentifier
     DECLARE @CustomStatusPayloadID uniqueidentifier
+    DECLARE @ExistingOutputPayloadID uniqueidentifier
     DECLARE @ExistingCustomStatusPayload varchar(MAX)
     DECLARE @ExistingExecutionID varchar(50)
 
@@ -644,6 +645,7 @@ BEGIN
     SELECT TOP 1 
         @InputPayloadID = I.[InputPayloadID],
         @CustomStatusPayloadID = I.[CustomStatusPayloadID],
+        @ExistingOutputPayloadID = I.[OutputPayloadID],
         @ExistingCustomStatusPayload = P.[Text],
         @ExistingExecutionID = I.[ExecutionID]
     FROM Payloads P RIGHT OUTER JOIN Instances I ON
@@ -652,15 +654,24 @@ BEGIN
         P.[PayloadID] = I.[CustomStatusPayloadID]
     WHERE I.[TaskHub] = @TaskHub AND I.[InstanceID] = @InstanceID
 
-    -- ContinueAsNew case: delete all existing runtime state (history and payloads)
+    -- ContinueAsNew case: delete all existing runtime state (history and payloads), but be careful
+    -- not to delete payloads of unprocessed state, like new events.
     DECLARE @IsContinueAsNew BIT = 0
     IF @ExistingExecutionID IS NOT NULL AND @ExistingExecutionID <> @ExecutionID
     BEGIN
+        DECLARE @PayloadIDsToDelete TABLE ([PayloadID] uniqueidentifier NULL)
+        INSERT INTO @PayloadIDsToDelete
+        VALUES (@InputPayloadID), (@CustomStatusPayloadID), (@ExistingOutputPayloadID)
+
         DELETE FROM History
+        OUTPUT DELETED.[DataPayloadID] INTO @PayloadIDsToDelete
         WHERE [TaskHub] = @TaskHub AND [InstanceID] = @InstanceID
 
         DELETE FROM Payloads
-        WHERE [TaskHub] = @TaskHub AND [InstanceID] = @InstanceID
+        WHERE
+            [TaskHub] = @TaskHub AND
+            [InstanceID] = @InstanceID AND
+            [PayloadID] IN (SELECT [PayloadID] FROM @PayloadIDsToDelete)
 
         -- The existing payload got purged in the previous statement 
         SET @ExistingCustomStatusPayload = NULL
