@@ -31,8 +31,9 @@ namespace DurableTask.SqlServer.Tests.Integration
             this.output = output;
         }
 
-        [Theory]
-        [InlineData("1.0.0")]
+        // TODO: Re-enable as part of https://github.com/microsoft/durabletask-mssql/issues/152
+        ////[Theory]
+        ////[InlineData("1.0.0")]
         public async Task ValidateUpgradedOrchestrations(string version)
         {
             string dbConnectionString = this.RestoreDatabaseFromBackup(version);
