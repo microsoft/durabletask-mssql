@@ -65,8 +65,8 @@ BEGIN
     DECLARE @taskHub varchar(50) = __SchemaNamePlaceholder__.CurrentTaskHub()
     DECLARE @now datetime2 = SYSUTCDATETIME()
 
-    DECLARE @liveInstances int = 0
-    DECLARE @liveTasks int = 0
+    DECLARE @liveInstances bigint = 0
+    DECLARE @liveTasks bigint = 0
 
     SELECT
         @liveInstances = COUNT(DISTINCT E.[InstanceID]),
@@ -1057,7 +1057,7 @@ GO
 
 CREATE OR ALTER PROCEDURE __SchemaNamePlaceholder__._QueryManyOrchestrations
     @PageSize smallint = 100,
-    @PageNumber smallint = 0,
+    @PageNumber int = 0,
     @FetchInput bit = 1,
     @FetchOutput bit = 1,
     @CreatedTimeFrom datetime2 = NULL,
