@@ -38,12 +38,12 @@ BEGIN
     DECLARE @taskHub varchar(50) = __SchemaNamePlaceholder__.CurrentTaskHub()
     DECLARE @now datetime2 = SYSUTCDATETIME()
 
-    DECLARE @liveInstances int = 0
-    DECLARE @liveTasks int = 0
+    DECLARE @liveInstances bigint = 0
+    DECLARE @liveTasks bigint = 0
 
     SELECT
-        @liveInstances = COUNT(DISTINCT E.[InstanceID]),
-        @liveTasks = COUNT(T.[InstanceID])
+        @liveInstances = COUNT_BIG(DISTINCT E.[InstanceID]),
+        @liveTasks = COUNT_BIG(T.[InstanceID])
     FROM Instances I WITH (NOLOCK)
         LEFT OUTER JOIN NewEvents E WITH (NOLOCK) ON E.[TaskHub] = @taskHub AND E.[InstanceID] = I.[InstanceID]
         LEFT OUTER JOIN NewTasks T WITH (NOLOCK) ON T.[TaskHub] = @taskHub AND T.[InstanceID] = I.[InstanceID]
@@ -69,8 +69,8 @@ BEGIN
     DECLARE @liveTasks bigint = 0
 
     SELECT
-        @liveInstances = COUNT(DISTINCT E.[InstanceID]),
-        @liveTasks = COUNT(T.[InstanceID])
+        @liveInstances = COUNT_BIG(DISTINCT E.[InstanceID]),
+        @liveTasks = COUNT_BIG(T.[InstanceID])
     FROM Instances I WITH (NOLOCK)
         LEFT OUTER JOIN NewEvents E WITH (NOLOCK) ON E.[TaskHub] = @taskHub AND E.[InstanceID] = I.[InstanceID]
         LEFT OUTER JOIN NewTasks T WITH (NOLOCK) ON T.[TaskHub] = @taskHub AND T.[InstanceID] = I.[InstanceID]
