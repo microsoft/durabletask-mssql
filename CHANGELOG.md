@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.1.2
+
+### Updates
+
+* Fix integer overflow issues in GetScaleMetric and QueryManyOrchestrations ([#155](https://github.com/microsoft/durabletask-mssql/pull/155)) - contributed by [@bhugot](https://github.com/bhugot)
+
 ## v1.1.1
 
 ### Updates

@@ -146,6 +146,7 @@ _TeamCity*
 _NCrunch_*
 .*crunch*.local.xml
 nCrunchTemp_*
+*.ncrunch*
 
 # MightyMoose
 *.mm.*
@@ -437,3 +438,4 @@ $RECYCLE.BIN/
 
 # The build keeps auto-generating this file. We do not want this.
 /.nuget/NuGet.Config
+

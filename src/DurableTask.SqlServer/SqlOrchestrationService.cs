@@ -811,13 +811,13 @@ namespace DurableTask.SqlServer
             using SqlCommand command = this.GetSprocCommand(connection, $"{this.settings.SchemaName}._QueryManyOrchestrations");
 
             command.Parameters.Add("@PageSize", SqlDbType.SmallInt).Value = query.PageSize;
-            command.Parameters.Add("@PageNumber", SqlDbType.SmallInt).Value = query.PageNumber;
+            command.Parameters.Add("@PageNumber", SqlDbType.Int).Value = query.PageNumber;
             command.Parameters.Add("@FetchInput", SqlDbType.Bit).Value = query.FetchInput;
             command.Parameters.Add("@FetchOutput", SqlDbType.Bit).Value = query.FetchOutput;
             command.Parameters.Add("@CreatedTimeFrom", SqlDbType.DateTime2).Value = createdTimeFrom;
             command.Parameters.Add("@CreatedTimeTo", SqlDbType.DateTime2).Value = createdTimeTo;
             command.Parameters.Add("@InstanceIDPrefix", SqlDbType.VarChar, size: 100).Value = query.InstanceIdPrefix ?? SqlString.Null;
-            command.Parameters.Add("@ExcludeSubOrchestrations", SqlDbType.SmallInt).Value = query.ExcludeSubOrchestrations;
+            command.Parameters.Add("@ExcludeSubOrchestrations", SqlDbType.Bit).Value = query.ExcludeSubOrchestrations;
 
             if (query.StatusFilter?.Count > 0)
             {
