@@ -261,7 +261,7 @@ namespace DurableTask.SqlServer.Tests.Utils
         public async Task<string> GetTaskHubNameAsync()
         {
             return (string)await SharedTestHelpers.ExecuteSqlAsync(
-                "SELECT dt.CurrentTaskHub()",
+                "SELECT dt.CurrentTaskHub(null)",
                 this.testCredential.ConnectionString);
         }
 

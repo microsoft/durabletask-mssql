@@ -388,6 +388,15 @@ namespace DurableTask.SqlServer
             return param;
         }
 
+        internal static void AddTaskHubNameParameter(this SqlCommand command, string? value)
+        {
+            command.Parameters.Add(new SqlParameter("@TaskHubName", SqlDbType.VarChar, 150)
+            {
+                IsNullable = true,
+                Value = value ?? (object)DBNull.Value
+            });
+        }
+
         public static Task<DbDataReader> ExecuteReaderAsync(
             DbCommand command,
             LogHelper traceHelper,
@@ -451,6 +460,47 @@ namespace DurableTask.SqlServer
                         break;
                 }
             }
+        }
+
+        /// <summary>
+        /// Allocated command to execute stored procedure
+        /// </summary>
+        /// <param name="connection">Existing database connection</param>
+        /// <param name="sprocName">Stored procedure name with schema</param>
+        public static SqlCommand GetSprocCommand(this SqlConnection connection, string sprocName)
+        {
+            SqlCommand command = connection.CreateCommand();
+            command.CommandType = CommandType.StoredProcedure;
+            command.CommandText = sprocName;
+            return command;
+        }
+
+        /// <summary>
+        /// Returns command with out-of-the box return value parameter to be used 
+        /// with <see cref="ExecuteFuncAsync{T}(DbCommand, CancellationToken)"/>
+        /// </summary>
+        /// <param name="connection">Existing database connection</param>
+        /// <param name="funcName">Function name with schema prefix</param>
+        /// <param name="retType">Return type of the function</param>
+        /// <param name="retSize">Optional return type size</param>
+        public static SqlCommand GetFuncCommand(this SqlConnection connection, string funcName, SqlDbType retType, int retSize = 0)
+        {
+            SqlCommand command = connection.CreateCommand();
+            command.CommandType = CommandType.StoredProcedure;
+            command.CommandText = funcName;
+            command.Parameters.Add(new SqlParameter("@RETURN_VALUE", retType, retSize) 
+            { 
+                Direction = ParameterDirection.ReturnValue, 
+                IsNullable = true 
+            });
+            return command;
+        }
+
+        public static async Task<T?> ExecuteFuncAsync<T>(this DbCommand command, CancellationToken cancellationToken)
+        {
+            await command.ExecuteNonQueryAsync(cancellationToken);
+            object value = command.Parameters[0].Value;
+            return value == DBNull.Value ? default : (T) value;
         }
 
         public static bool IsUniqueKeyViolation(SqlException exception)

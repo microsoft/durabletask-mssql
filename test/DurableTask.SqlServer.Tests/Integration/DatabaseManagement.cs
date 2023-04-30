@@ -96,7 +96,8 @@ namespace DurableTask.SqlServer.Tests.Integration
                     LogAssert.ExecutedSqlScript("schema-1.0.0.sql"),
                     LogAssert.ExecutedSqlScript("logic.sql"),
                     LogAssert.ExecutedSqlScript("permissions.sql"),
-                    LogAssert.SprocCompleted("dt._UpdateVersion"))
+                    LogAssert.SprocCompleted("dt._UpdateVersion"),
+                    LogAssert.SprocCompleted("dt.SetGlobalSetting"))
                 .EndOfLog();
 
             ValidateDatabaseSchema(testDb);
@@ -155,7 +156,8 @@ namespace DurableTask.SqlServer.Tests.Integration
                     LogAssert.ExecutedSqlScript("schema-1.0.0.sql"),
                     LogAssert.ExecutedSqlScript("logic.sql"),
                     LogAssert.ExecutedSqlScript("permissions.sql"),
-                    LogAssert.SprocCompleted($"{schemaName}._UpdateVersion"))
+                    LogAssert.SprocCompleted($"{schemaName}._UpdateVersion"),
+                    LogAssert.SprocCompleted($"{schemaName}.SetGlobalSetting"))
                 .EndOfLog();
             
             ValidateDatabaseSchema(testDb, schemaName);
@@ -216,7 +218,8 @@ namespace DurableTask.SqlServer.Tests.Integration
                     LogAssert.ExecutedSqlScript("schema-1.0.0.sql"),
                     LogAssert.ExecutedSqlScript("logic.sql"),
                     LogAssert.ExecutedSqlScript("permissions.sql"),
-                    LogAssert.SprocCompleted($"{firstTestSchemaName}._UpdateVersion"))
+                    LogAssert.SprocCompleted($"{firstTestSchemaName}._UpdateVersion"), 
+                    LogAssert.SprocCompleted($"{firstTestSchemaName}.SetGlobalSetting"))
                 .Expect(
                     LogAssert.CheckedDatabase())
                 .Expect(
@@ -225,7 +228,8 @@ namespace DurableTask.SqlServer.Tests.Integration
                     LogAssert.ExecutedSqlScript("schema-1.0.0.sql"),
                     LogAssert.ExecutedSqlScript("logic.sql"),
                     LogAssert.ExecutedSqlScript("permissions.sql"),
-                    LogAssert.SprocCompleted($"{secondTestSchemaName}._UpdateVersion"))
+                    LogAssert.SprocCompleted($"{secondTestSchemaName}._UpdateVersion"),
+                    LogAssert.SprocCompleted($"{secondTestSchemaName}.SetGlobalSetting"))
                 .EndOfLog();
             
             ValidateDatabaseSchema(testDb, secondTestSchemaName);
@@ -307,7 +311,8 @@ namespace DurableTask.SqlServer.Tests.Integration
                     LogAssert.ExecutedSqlScript("schema-1.0.0.sql"),
                     LogAssert.ExecutedSqlScript("logic.sql"),
                     LogAssert.ExecutedSqlScript("permissions.sql"),
-                    LogAssert.SprocCompleted("dt._UpdateVersion"))
+                    LogAssert.SprocCompleted("dt._UpdateVersion"),
+                    LogAssert.SprocCompleted("dt.SetGlobalSetting"))
                 .EndOfLog();
 
             ValidateDatabaseSchema(testDb);
@@ -364,6 +369,7 @@ namespace DurableTask.SqlServer.Tests.Integration
                     LogAssert.ExecutedSqlScript("logic.sql"),
                     LogAssert.ExecutedSqlScript("permissions.sql"),
                     LogAssert.SprocCompleted("dt._UpdateVersion"),
+                    LogAssert.SprocCompleted("dt.SetGlobalSetting"),
                     // 2nd
                     LogAssert.AcquiredAppLock(),
                     LogAssert.SprocCompleted("dt._GetVersions"),

@@ -17,7 +17,7 @@ namespace DurableTask.SqlServer.AzureFunctions
         public string ConnectionStringName { get; set; } = "SQLDB_Connection";
 
         [JsonProperty("taskHubName")]
-        public string TaskHubName { get; set; } = "default";
+        public string TaskHubName { get; set; } = SqlOrchestrationServiceSettings.DefaultTaskHubName;
 
         [JsonProperty("taskEventLockTimeout")]
         public TimeSpan TaskEventLockTimeout { get; set; } = TimeSpan.FromMinutes(2);

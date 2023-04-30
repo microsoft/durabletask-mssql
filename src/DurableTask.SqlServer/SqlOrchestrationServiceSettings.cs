@@ -15,6 +15,11 @@ namespace DurableTask.SqlServer
     public class SqlOrchestrationServiceSettings
     {
         /// <summary>
+        /// Default value for <see cref="TaskHubName"/> property
+        /// </summary>
+        public static readonly string DefaultTaskHubName = "default";
+
+        /// <summary>
         /// Initializes a new instance of the <see cref="SqlOrchestrationServiceSettings"/> class.
         /// </summary>
         /// <param name="connectionString">The connection string for connecting to the database.</param>
@@ -27,15 +32,10 @@ namespace DurableTask.SqlServer
                 throw new ArgumentNullException(nameof(connectionString));
             }
 
-            this.TaskHubName = taskHubName ?? "default";
+            this.TaskHubName = taskHubName ?? DefaultTaskHubName;
             this.SchemaName = schemaName ?? "dt";
 
-            var builder = new SqlConnectionStringBuilder(connectionString)
-            {
-                // We use the task hub name as the application name so that
-                // stored procedures have easy access to this information.
-                ApplicationName = this.TaskHubName,
-            };
+            var builder = new SqlConnectionStringBuilder(connectionString);
 
             if (string.IsNullOrEmpty(builder.InitialCatalog))
             {
@@ -71,7 +71,8 @@ namespace DurableTask.SqlServer
         public string SchemaName { get; }
 
         /// <summary>
-        /// Gets or sets the name of the app. Used for logging purposes.
+        /// Gets or sets the name of the app. Used as prefix of the lock owner, 
+        /// and need to be unique across machines that connect to the hub.
         /// </summary>
         [JsonProperty("appName")]
         public string AppName { get; set; } = Environment.MachineName;
@@ -101,6 +102,14 @@ namespace DurableTask.SqlServer
         /// </remarks>
         [JsonProperty("createDatabaseIfNotExists")]
         public bool CreateDatabaseIfNotExists { get; set; }
+
+        /// <summary>
+        /// Gets or sets a flag indicating wether task hub is created for multi-tennant naming
+        /// (derived from sql server user name) or for application specified naming.
+        /// </summary>
+        /// <seealso cref="SqlOrchestrationService.CreateAsync(bool)"/>
+        [JsonProperty("createMultiTennantTaskHub ")]
+        public bool CreateMultiTennantTaskHub { get; set; } = true;
 
         /// <summary>
         /// Gets a SQL connection string associated with the configured task hub.
