@@ -20,13 +20,15 @@ namespace DurableTask.SqlServer.AzureFunctions
         static readonly ScaleStatus ScaleOutVote = new ScaleStatus { Vote = ScaleVote.ScaleOut };
 
         readonly SqlOrchestrationService service;
+        readonly SqlMetricsProvider metricsProvider;
 
         int? previousWorkerCount = -1;
 
-        public SqlScaleMonitor(SqlOrchestrationService service, string taskHubName)
+        public SqlScaleMonitor(SqlOrchestrationService service, string taskHubName, SqlMetricsProvider sqlMetricsProvider)
         {
             this.service = service ?? throw new ArgumentNullException(nameof(service));
             this.Descriptor = new ScaleMonitorDescriptor($"DurableTask-SqlServer:{taskHubName ?? "default"}");
+            this.metricsProvider = sqlMetricsProvider ?? throw new ArgumentNullException(nameof(sqlMetricsProvider));
         }
 
         /// <inheritdoc />
@@ -38,13 +40,7 @@ namespace DurableTask.SqlServer.AzureFunctions
         /// <inheritdoc />
         public async Task<SqlScaleMetric> GetMetricsAsync()
         {
-            // GetRecommendedReplicaCountAsync will write a trace if the recommendation results
-            // in a worker count that is different from the worker count we pass in as an argument.
-            int recommendedReplicaCount = await this.service.GetRecommendedReplicaCountAsync(
-                this.previousWorkerCount,
-                CancellationToken.None);
-
-            return new SqlScaleMetric { RecommendedReplicaCount = recommendedReplicaCount };
+            return await this.metricsProvider.GetMetricsAsync();
         }
 
         /// <inheritdoc />
