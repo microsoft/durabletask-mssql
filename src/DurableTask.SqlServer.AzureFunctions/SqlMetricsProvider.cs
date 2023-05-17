@@ -6,7 +6,7 @@ namespace DurableTask.SqlServer.AzureFunctions
     using System.Threading;
     using System.Threading.Tasks;
 
-    class SqlMetricsProvider
+    public class SqlMetricsProvider
     {
         readonly SqlOrchestrationService service;
 
@@ -15,7 +15,7 @@ namespace DurableTask.SqlServer.AzureFunctions
             this.service = service;
         }
 
-        public async Task<SqlScaleMetric> GetMetricsAsync(int? previousWorkerCount = null)
+        public virtual async Task<SqlScaleMetric> GetMetricsAsync(int? previousWorkerCount = null)
         {
             // GetRecommendedReplicaCountAsync will write a trace if the recommendation results
             // in a worker count that is different from the worker count we pass in as an argument.

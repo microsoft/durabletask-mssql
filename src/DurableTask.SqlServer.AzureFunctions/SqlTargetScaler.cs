@@ -7,7 +7,7 @@ namespace DurableTask.SqlServer.AzureFunctions
     using Microsoft.Azure.WebJobs.Host.Scale;
 
 #if !NETSTANDARD
-    class SqlTargetScaler : ITargetScaler
+    public class SqlTargetScaler : ITargetScaler
     {
         readonly SqlMetricsProvider sqlMetricsProvider;
         readonly TargetScalerResult scaleResult;
