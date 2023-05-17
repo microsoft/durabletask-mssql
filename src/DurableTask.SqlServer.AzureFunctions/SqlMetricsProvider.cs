@@ -9,20 +9,18 @@ namespace DurableTask.SqlServer.AzureFunctions
     class SqlMetricsProvider
     {
         readonly SqlOrchestrationService service;
-        readonly int? previousWorkerCount;
 
         public SqlMetricsProvider(SqlOrchestrationService service, int? previousWorkerCount = null)
         {
             this.service = service;
-            this.previousWorkerCount = previousWorkerCount;
         }
 
-        public async Task<SqlScaleMetric> GetMetricsAsync()
+        public async Task<SqlScaleMetric> GetMetricsAsync(int? previousWorkerCount = null)
         {
             // GetRecommendedReplicaCountAsync will write a trace if the recommendation results
             // in a worker count that is different from the worker count we pass in as an argument.
             int recommendedReplicaCount = await this.service.GetRecommendedReplicaCountAsync(
-                this.previousWorkerCount,
+                previousWorkerCount,
                 CancellationToken.None);
 
             return new SqlScaleMetric { RecommendedReplicaCount = recommendedReplicaCount };

@@ -40,7 +40,7 @@ namespace DurableTask.SqlServer.AzureFunctions
         /// <inheritdoc />
         public async Task<SqlScaleMetric> GetMetricsAsync()
         {
-            return await this.metricsProvider.GetMetricsAsync();
+            return await this.metricsProvider.GetMetricsAsync(this.previousWorkerCount);
         }
 
         /// <inheritdoc />
