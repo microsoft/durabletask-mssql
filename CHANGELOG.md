@@ -2,6 +2,10 @@
 
 ## v1.1.2
 
+### New
+
+* Support configurable backoff intervals ([#163](https://github.com/microsoft/durabletask-mssql/pull/163)) - contributed by [@tompostler](https://github.com/tompostler)
+
 ### Updates
 
 * Fix integer overflow issues in GetScaleMetric and QueryManyOrchestrations ([#155](https://github.com/microsoft/durabletask-mssql/pull/155)) - contributed by [@bhugot](https://github.com/bhugot)

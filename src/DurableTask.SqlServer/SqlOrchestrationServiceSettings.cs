@@ -94,6 +94,22 @@ namespace DurableTask.SqlServer
         public int MaxActiveOrchestrations { get; set; } = Environment.ProcessorCount;
 
         /// <summary>
+        /// Gets or sets the maximum interval to poll for orchestrations.
+        /// Polling interval increases when no orchestrations or activities are found.
+        /// The default value is 3 seconds.
+        /// </summary>
+        [JsonProperty("maxOrchestrationPollingInterval")]
+        public TimeSpan MaxOrchestrationPollingInterval { get; set; } = TimeSpan.FromSeconds(3);
+
+        /// <summary>
+        /// Gets or sets the maximum interval to poll for activities.
+        /// Polling interval increases when no activities are found.
+        /// The default value is 3 seconds.
+        /// </summary>
+        [JsonProperty("maxActivityPollingInterval")]
+        public TimeSpan MaxActivityPollingInterval { get; set; } = TimeSpan.FromSeconds(3);
+
+        /// <summary>
         /// Gets or sets a flag indicating whether the database should be automatically created if it does not exist.
         /// </summary>
         /// <remarks>
