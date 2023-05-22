@@ -14,15 +14,7 @@ BEGIN
     DECLARE @taskHub varchar(150) = @TaskHubName;
 
     IF @taskHubMode = 1 
-    BEGIN
         SET @taskHub = USER_NAME();
-        IF @TaskHubName IS NOT NULL AND @TaskHubName <> ''
-        BEGIN
-            DECLARE @msg nvarchar(max) = FORMATMESSAGE('Task hub name ''%s'' is invalid in multi tennant mode (it can be NULL, or '''').', @TaskHubName);
-            -- function will not allow raising custom error, so approximate with invalid cast
-            RETURN cast(@msg as int);
-        END
-    END
     
     -- if the name is too long, keep the first 16 characters and hash the rest
     IF LEN(@taskHub) > 50

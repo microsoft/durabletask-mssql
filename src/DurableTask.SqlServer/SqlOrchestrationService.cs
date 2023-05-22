@@ -37,7 +37,7 @@ namespace DurableTask.SqlServer
         readonly SqlDbManager dbManager;
         readonly string lockedByValue;
         readonly string userId;
-        string? taskHubNameValue;
+        string taskHubNameValue;
 
         public SqlOrchestrationService(SqlOrchestrationServiceSettings? settings)
         {
@@ -46,6 +46,7 @@ namespace DurableTask.SqlServer
             this.dbManager = new SqlDbManager(this.settings, this.traceHelper);
             this.lockedByValue = $"{this.settings.AppName},{Process.GetCurrentProcess().Id}";
             this.userId = new SqlConnectionStringBuilder(this.settings.TaskHubConnectionString).UserID ?? string.Empty;
+            this.taskHubNameValue = settings?.TaskHubName ?? SqlOrchestrationServiceSettings.DefaultTaskHubName;
         }
 
         public override int MaxConcurrentTaskOrchestrationWorkItems => this.settings.MaxActiveOrchestrations;
@@ -97,8 +98,31 @@ namespace DurableTask.SqlServer
         SqlCommand GetFuncCommand(SqlConnection connection, string funcName, SqlDbType retType, int retSize = 0)
             => connection.GetFuncCommand(string.Concat(this.settings.SchemaName, ".", funcName), retType, retSize);
 
-        void AddTaskHubNameParameter(SqlCommand command) 
+        void AddTaskHubNameParameter(SqlCommand command)
             => command.AddTaskHubNameParameter(this.taskHubNameValue);
+
+        /// <summary>
+        /// Cache value of task hub name parameter in the TaskHubMode=0
+        /// </summary>
+        /// <remarks>
+        /// CurrentTaskHub T-SQL function compresses task hub value to fit column 
+        /// of size 50. In TaskHubMode=0 one can avoid this cost by caching result 
+        /// of the transformation. Caching makes more sense for worker, as it will 
+        /// typically issue more calls. In TaskHubMode=1 parameter name is ignored. 
+        /// </remarks>
+        async Task CacheTaskHubNameValue()
+        {
+            if (this.taskHubNameValue.Length > 50)
+            {
+                using SqlConnection connection = await this.GetAndOpenConnectionAsync(this.ShutdownToken);
+                using SqlCommand command = this.GetFuncCommand(connection, "CurrentTaskHub", SqlDbType.VarChar, 50);
+                command.AddTaskHubNameParameter(this.taskHubNameValue);
+                var taskHubName = (await command.ExecuteFuncAsync<string>(this.ShutdownToken))!;
+                // Logic in t-sql function will preserve first 16 characters.
+                if (0 == string.Compare(taskHubName, 0, this.taskHubNameValue, 0, 16, StringComparison.OrdinalIgnoreCase))
+                    this.taskHubNameValue = taskHubName;
+            }
+        }
 
         public override Task CreateAsync(bool recreateInstanceStore)
             => this.dbManager.CreateOrUpgradeSchemaAsync(recreateInstanceStore);
@@ -119,29 +143,7 @@ namespace DurableTask.SqlServer
         public override async Task StartAsync()
         {
             await base.StartAsync();
-            // We want to distinguish between task hub name inferred from user name (taskHubMode=1)
-            // and application specified name (taskHubMode=0). In case of application specified
-            // name, taskHubName is reused as parameter for each SP call. Sending and then recieving
-            // null can only happen when taskHubMode=0.
-            using SqlConnection connection = await this.GetAndOpenConnectionAsync(this.ShutdownToken);
-            this.taskHubNameValue = null;
-            var taskHubName = await CallCurrentTaskHub(null);
-            if (taskHubName == null)
-            {
-                this.taskHubNameValue = this.settings.TaskHubName;
-                // CurrentTaskHub function compresses taskHubNameValue to fit column of size 50
-                if (this.taskHubNameValue.Length > 50)
-                {
-                    this.taskHubNameValue = await CallCurrentTaskHub(this.taskHubNameValue);
-                }
-            }
-
-            Task<string?> CallCurrentTaskHub(string? value)
-            {
-                using SqlCommand command = this.GetFuncCommand(connection, "CurrentTaskHub", SqlDbType.VarChar, 50);
-                command.AddTaskHubNameParameter(value);
-                return command.ExecuteFuncAsync<string?>(this.ShutdownToken);
-            }
+            await this.CacheTaskHubNameValue();
         }
 
         public override async Task<TaskOrchestrationWorkItem?> LockNextTaskOrchestrationWorkItemAsync(
