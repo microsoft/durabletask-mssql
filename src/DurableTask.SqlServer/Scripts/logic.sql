@@ -139,7 +139,7 @@ AS
             P.[PayloadID] = I.[OutputPayloadID]) AS [OutputText]
     FROM Instances I
     -- like operator is the simplest way to keep indexed seek with conditional where
-    WHERE I.[TaskHub] LIKE ISNULL(__SchemaNamePlaceholder__._CurrentTaskHub(NULL), '%')
+    WHERE I.[TaskHub] LIKE __SchemaNamePlaceholder__._CurrentTaskHub('%')
 GO
 
 CREATE OR ALTER VIEW __SchemaNamePlaceholder__.vHistory
@@ -162,7 +162,7 @@ AS
             P.[PayloadID] = H.[DataPayloadID]) AS [Payload]
     FROM History H
     -- like operator is the simplest way to keep indexed seek with conditional where
-    WHERE H.[TaskHub] LIKE ISNULL(__SchemaNamePlaceholder__._CurrentTaskHub(NULL), '%')
+    WHERE H.[TaskHub] LIKE __SchemaNamePlaceholder__._CurrentTaskHub('%')
 GO
 
 
