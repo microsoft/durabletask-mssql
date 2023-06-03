@@ -485,9 +485,7 @@ namespace DurableTask.SqlServer
         /// <param name="retSize">Optional return type size</param>
         public static SqlCommand GetFuncCommand(this SqlConnection connection, string funcName, SqlDbType retType, int retSize = 0)
         {
-            SqlCommand command = connection.CreateCommand();
-            command.CommandType = CommandType.StoredProcedure;
-            command.CommandText = funcName;
+            SqlCommand command = connection.GetSprocCommand(funcName);
             command.Parameters.Add(new SqlParameter("@RETURN_VALUE", retType, retSize) 
             { 
                 Direction = ParameterDirection.ReturnValue, 
@@ -496,11 +494,11 @@ namespace DurableTask.SqlServer
             return command;
         }
 
-        public static async Task<T?> ExecuteFuncAsync<T>(this DbCommand command, CancellationToken cancellationToken)
+        public static async Task<T> ExecuteFuncAsync<T>(this DbCommand command, CancellationToken cancellationToken)
         {
             await command.ExecuteNonQueryAsync(cancellationToken);
             object value = command.Parameters[0].Value;
-            return value == DBNull.Value ? default : (T) value;
+            return value == DBNull.Value ? default! : (T) value;
         }
 
         public static bool IsUniqueKeyViolation(SqlException exception)

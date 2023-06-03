@@ -19,6 +19,7 @@ namespace DurableTask.SqlServer
     using DurableTask.Core.Query;
     using DurableTask.SqlServer.SqlTypes;
     using DurableTask.SqlServer.Utils;
+    using Dynamitey.DynamicObjects;
     using Microsoft.Data.SqlClient;
     using Newtonsoft.Json;
 
@@ -95,8 +96,12 @@ namespace DurableTask.SqlServer
             return command;
         }
 
-        SqlCommand GetFuncCommand(SqlConnection connection, string funcName, SqlDbType retType, int retSize = 0)
-            => connection.GetFuncCommand(string.Concat(this.settings.SchemaName, ".", funcName), retType, retSize);
+        SqlCommand GetTaskHubFuncCommand(SqlConnection connection, string funcName, SqlDbType retType, int retSize = 0)
+        {
+            SqlCommand command = connection.GetFuncCommand(string.Concat(this.settings.SchemaName, ".", funcName), retType, retSize);
+            this.AddTaskHubNameParameter(command);
+            return command;
+        }
 
         void AddTaskHubNameParameter(SqlCommand command)
             => command.AddTaskHubNameParameter(this.taskHubNameValue);
@@ -115,10 +120,10 @@ namespace DurableTask.SqlServer
             if (this.taskHubNameValue.Length > 50)
             {
                 using SqlConnection connection = await this.GetAndOpenConnectionAsync(this.ShutdownToken);
-                using SqlCommand command = this.GetFuncCommand(connection, "CurrentTaskHub", SqlDbType.VarChar, 50);
-                command.AddTaskHubNameParameter(this.taskHubNameValue);
-                var taskHubName = (await command.ExecuteFuncAsync<string>(this.ShutdownToken))!;
+                using SqlCommand command = this.GetTaskHubFuncCommand(connection, "_CurrentTaskHub", SqlDbType.VarChar, 50);
+                var taskHubName = await command.ExecuteFuncAsync<string>(this.ShutdownToken);
                 // Logic in t-sql function will preserve first 16 characters.
+                // Also, value is never null from executing db function
                 if (0 == string.Compare(taskHubName, 0, this.taskHubNameValue, 0, 16, StringComparison.OrdinalIgnoreCase))
                     this.taskHubNameValue = taskHubName;
             }
@@ -896,7 +901,7 @@ namespace DurableTask.SqlServer
         /// </summary>
         /// <remarks>
         /// <para>
-        /// This method calls the <c>dt.GetScaleRecommendation</c> SQL function and gets back a number that represents
+        /// This method calls the <c>dt._GetScaleRecommendation</c> SQL function and gets back a number that represents
         /// the recommended number of worker replicas that should be allocated to handle the current event backlog.
         /// The SQL function takes the values of <see cref="SqlOrchestrationServiceSettings.MaxConcurrentActivities"/> and
         /// <see cref="SqlOrchestrationServiceSettings.MaxActiveOrchestrations"/> as inputs.
@@ -913,13 +918,10 @@ namespace DurableTask.SqlServer
         public async Task<int> GetRecommendedReplicaCountAsync(int? currentReplicaCount = null, CancellationToken cancellationToken = default)
         {
             using SqlConnection connection = await this.GetAndOpenConnectionAsync(cancellationToken);
-            using SqlCommand command = connection.CreateCommand();
-            command.CommandText = $"SELECT {this.settings.SchemaName}.GetScaleRecommendation(@TaskHubName, @MaxConcurrentOrchestrations, @MaxConcurrentActivities)";
-            this.AddTaskHubNameParameter(command);
-            command.Parameters.Add("@MaxConcurrentOrchestrations", SqlDbType.Int).Value = this.MaxConcurrentTaskOrchestrationWorkItems;
-            command.Parameters.Add("@MaxConcurrentActivities", SqlDbType.Int).Value = this.MaxConcurrentTaskActivityWorkItems;
-
-            int recommendedReplicaCount = (int)await command.ExecuteScalarAsync(cancellationToken);
+            using SqlCommand command = this.GetTaskHubFuncCommand(connection, "_GetScaleRecommendation", SqlDbType.Int);
+            command.Parameters.Add("@MaxOrchestrationsPerWorker", SqlDbType.Int).Value = this.MaxConcurrentTaskOrchestrationWorkItems;
+            command.Parameters.Add("@MaxActivitiesPerWorker", SqlDbType.Int).Value = this.MaxConcurrentTaskActivityWorkItems;
+            int recommendedReplicaCount = await command.ExecuteFuncAsync<int>(cancellationToken);
             if (currentReplicaCount != null && currentReplicaCount != recommendedReplicaCount)
             {
                 this.traceHelper.ReplicaCountChangeRecommended(currentReplicaCount.Value, recommendedReplicaCount);

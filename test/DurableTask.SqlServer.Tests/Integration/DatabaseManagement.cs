@@ -454,8 +454,11 @@ namespace DurableTask.SqlServer.Tests.Integration
 
             var expectedFunctionNames = new HashSet<string>(StringComparer.Ordinal)
             {
+                $"{schemaName}._CurrentTaskHub",
                 $"{schemaName}.CurrentTaskHub",
+                $"{schemaName}._GetScaleMetric",
                 $"{schemaName}.GetScaleMetric",
+                $"{schemaName}._GetScaleRecommendation",
                 $"{schemaName}.GetScaleRecommendation",
             };
 

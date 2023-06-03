@@ -14,8 +14,11 @@ END
 -- database user can access data created by another database user.
 
 -- Functions 
+GRANT EXECUTE ON OBJECT::__SchemaNamePlaceholder__._GetScaleMetric TO __SchemaNamePlaceholder___runtime
 GRANT EXECUTE ON OBJECT::__SchemaNamePlaceholder__.GetScaleMetric TO __SchemaNamePlaceholder___runtime
+GRANT EXECUTE ON OBJECT::__SchemaNamePlaceholder__._GetScaleRecommendation TO __SchemaNamePlaceholder___runtime
 GRANT EXECUTE ON OBJECT::__SchemaNamePlaceholder__.GetScaleRecommendation TO __SchemaNamePlaceholder___runtime
+GRANT EXECUTE ON OBJECT::__SchemaNamePlaceholder__._CurrentTaskHub TO __SchemaNamePlaceholder___runtime
 GRANT EXECUTE ON OBJECT::__SchemaNamePlaceholder__.CurrentTaskHub TO __SchemaNamePlaceholder___runtime
 
 -- Public sprocs

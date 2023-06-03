@@ -20,12 +20,19 @@ namespace DurableTask.SqlServer
         public static readonly string DefaultTaskHubName = "default";
 
         /// <summary>
+        /// Default value for <see cref="SchemaName"/> property
+        /// </summary>
+        public static readonly string DefaultSchemaName = "dt";
+
+        /// <summary>
         /// Initializes a new instance of the <see cref="SqlOrchestrationServiceSettings"/> class.
         /// </summary>
         /// <param name="connectionString">The connection string for connecting to the database.</param>
         /// <param name="taskHubName">Optional. The name of the task hub. If not specified, a default name will be used.</param>
         /// <param name="schemaName">Optional. The name of the schema. If not specified, the default 'dt' value will be used.</param>
-        public SqlOrchestrationServiceSettings(string connectionString, string? taskHubName = null, string? schemaName = null)
+        /// <param name="connectionStringWithTaskHubName">Optional. When true task hub name is added to connection string.
+        ///  Default value is <c>true</c> to match how connection pool behaved before introdcution of this parameter.</param>
+        public SqlOrchestrationServiceSettings(string connectionString, string? taskHubName = null, string? schemaName = null, bool connectionStringWithTaskHubName = true)
         {
             if (string.IsNullOrEmpty(connectionString))
             {
@@ -33,13 +40,21 @@ namespace DurableTask.SqlServer
             }
 
             this.TaskHubName = taskHubName ?? DefaultTaskHubName;
-            this.SchemaName = schemaName ?? "dt";
+            this.SchemaName = schemaName ?? DefaultSchemaName;
 
             var builder = new SqlConnectionStringBuilder(connectionString);
 
             if (string.IsNullOrEmpty(builder.InitialCatalog))
             {
                 throw new ArgumentException("Database or Initial Catalog must be specified in the connection string.", nameof(connectionString));
+            }
+
+            if (connectionStringWithTaskHubName)
+            {
+                // We use the task hub name as the application name so that
+                // stored procedures have easy access to this information.
+                builder.ApplicationName = this.TaskHubName;
+                this.ConnectionStringHasTaskHubName = true;
             }
 
             this.DatabaseName = builder.InitialCatalog;
@@ -69,6 +84,13 @@ namespace DurableTask.SqlServer
         /// </summary>
         [JsonProperty("schemaName")]
         public string SchemaName { get; }
+
+        /// <summary>
+        /// True when connection string <see cref="SqlConnectionStringBuilder.ApplicationName"/>
+        /// property is set to the value of the <see cref="TaskHubName"/>.
+        /// </summary>
+        [JsonProperty("connectionStringHasTaskHubName ")]
+        public bool ConnectionStringHasTaskHubName { get; }
 
         /// <summary>
         /// Gets or sets the name of the app. Used as prefix of the lock owner, 
