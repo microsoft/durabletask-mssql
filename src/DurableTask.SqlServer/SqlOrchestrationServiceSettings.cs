@@ -30,9 +30,9 @@ namespace DurableTask.SqlServer
         /// <param name="connectionString">The connection string for connecting to the database.</param>
         /// <param name="taskHubName">Optional. The name of the task hub. If not specified, a default name will be used.</param>
         /// <param name="schemaName">Optional. The name of the schema. If not specified, the default 'dt' value will be used.</param>
-        /// <param name="connectionStringWithTaskHubName">Optional. When true task hub name is added to connection string.
-        ///  Default value is <c>true</c> to match how connection pool behaved before introdcution of this parameter.</param>
-        public SqlOrchestrationServiceSettings(string connectionString, string? taskHubName = null, string? schemaName = null, bool connectionStringWithTaskHubName = true)
+        /// <param name="addTaskHubToConnectionString">Optional. When true, task hub name is added to connection string.
+        ///  Default value is <c>true</c> to match behavior of connection pool before introdcution of this parameter.</param>
+        public SqlOrchestrationServiceSettings(string connectionString, string? taskHubName = null, string? schemaName = null, bool addTaskHubToConnectionString = true)
         {
             if (string.IsNullOrEmpty(connectionString))
             {
@@ -49,7 +49,7 @@ namespace DurableTask.SqlServer
                 throw new ArgumentException("Database or Initial Catalog must be specified in the connection string.", nameof(connectionString));
             }
 
-            if (connectionStringWithTaskHubName)
+            if (addTaskHubToConnectionString)
             {
                 // We use the task hub name as the application name so that
                 // stored procedures have easy access to this information.

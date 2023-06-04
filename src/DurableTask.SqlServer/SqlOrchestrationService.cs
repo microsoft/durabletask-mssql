@@ -19,7 +19,6 @@ namespace DurableTask.SqlServer
     using DurableTask.Core.Query;
     using DurableTask.SqlServer.SqlTypes;
     using DurableTask.SqlServer.Utils;
-    using Dynamitey.DynamicObjects;
     using Microsoft.Data.SqlClient;
     using Newtonsoft.Json;
 
