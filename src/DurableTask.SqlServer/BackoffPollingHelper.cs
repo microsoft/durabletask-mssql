@@ -15,9 +15,9 @@ namespace DurableTask.SqlServer
         readonly RandomizedExponentialBackoffStrategy backoffStrategy;
         readonly AsyncAutoResetEvent resetEvent;
 
-        public BackoffPollingHelper(TimeSpan minimumInterval, TimeSpan maximumInterval)
+        public BackoffPollingHelper(TimeSpan minimumInterval, TimeSpan maximumInterval, TimeSpan deltaBackoff)
         {
-            this.backoffStrategy = new RandomizedExponentialBackoffStrategy(minimumInterval, maximumInterval);
+            this.backoffStrategy = new RandomizedExponentialBackoffStrategy(minimumInterval, maximumInterval, deltaBackoff);
             this.resetEvent = new AsyncAutoResetEvent(signaled: false);
         }
 
@@ -45,11 +45,6 @@ namespace DurableTask.SqlServer
             readonly Random random;
             
             uint backoffExponent;
-
-            public RandomizedExponentialBackoffStrategy(TimeSpan minimumInterval, TimeSpan maximumInterval)
-                : this(minimumInterval, maximumInterval, minimumInterval)
-            {
-            }
 
             public RandomizedExponentialBackoffStrategy(
                 TimeSpan minimumInterval,
