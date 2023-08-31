@@ -1,10 +1,11 @@
 # Changelog
 
-## v1.1.2
+## Unreleased
 
 ### New
 
-* Support configurable backoff intervals ([#163](https://github.com/microsoft/durabletask-mssql/pull/163)) - contributed by [@tompostler](https://github.com/tompostler)
+* Support configurable max backoff intervals ([#163](https://github.com/microsoft/durabletask-mssql/pull/163)) - contributed by [@tompostler](https://github.com/tompostler)
+* Support configurable min and delta backoff intervals ([#174](https://github.com/microsoft/durabletask-mssql/pull/174)) - contributed by [@dmetzgar](https://github.com/dmetzgar)
 
 ### Updates
 
