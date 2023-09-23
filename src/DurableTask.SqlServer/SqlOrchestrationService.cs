@@ -25,15 +25,9 @@ namespace DurableTask.SqlServer
 
     public class SqlOrchestrationService : OrchestrationServiceBase
     {
-        readonly BackoffPollingHelper orchestrationBackoffHelper = new BackoffPollingHelper(
-            minimumInterval: TimeSpan.FromMilliseconds(50),
-            maximumInterval: TimeSpan.FromSeconds(3)); // TODO: Configurable
-
-        readonly BackoffPollingHelper activityBackoffHelper = new BackoffPollingHelper(
-            minimumInterval: TimeSpan.FromMilliseconds(50),
-            maximumInterval: TimeSpan.FromSeconds(3)); // TODO: Configurable
-
         readonly SqlOrchestrationServiceSettings settings;
+        readonly BackoffPollingHelper orchestrationBackoffHelper;
+        readonly BackoffPollingHelper activityBackoffHelper;
         readonly LogHelper traceHelper;
         readonly SqlDbManager dbManager;
         readonly string lockedByValue;
@@ -43,6 +37,14 @@ namespace DurableTask.SqlServer
         public SqlOrchestrationService(SqlOrchestrationServiceSettings? settings)
         {
             this.settings = ValidateSettings(settings) ?? throw new ArgumentNullException(nameof(settings));
+            this.orchestrationBackoffHelper = new BackoffPollingHelper(
+                this.settings.MinOrchestrationPollingInterval,
+                this.settings.MaxOrchestrationPollingInterval,
+                this.settings.DeltaBackoffOrchestrationPollingInterval);
+            this.activityBackoffHelper = new BackoffPollingHelper(
+                this.settings.MinActivityPollingInterval,
+                this.settings.MaxActivityPollingInterval,
+                this.settings.DeltaBackoffActivityPollingInterval);
             this.traceHelper = new LogHelper(this.settings.LoggerFactory.CreateLogger("DurableTask.SqlServer"));
             this.dbManager = new SqlDbManager(this.settings, this.traceHelper);
             this.lockedByValue = $"{this.settings.AppName},{Process.GetCurrentProcess().Id}";
