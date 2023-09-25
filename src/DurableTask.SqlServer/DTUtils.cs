@@ -5,9 +5,11 @@ namespace DurableTask.SqlServer
 {
     using System;
     using System.Diagnostics;
+    using System.IO;
     using System.Text;
     using DurableTask.Core;
     using DurableTask.Core.History;
+    using Newtonsoft.Json;
     using SemVersion;
 
     static class DTUtils
@@ -17,6 +19,13 @@ namespace DurableTask.SqlServer
 
         // DurableTask.Core has a public static variable that contains the app name
         public static readonly string AppName = DurableTask.Core.Common.Utils.AppName;
+
+        static readonly JsonSerializer DefaultJsonSerializer = JsonSerializer.Create(
+            new JsonSerializerSettings
+            {
+                TypeNameHandling = TypeNameHandling.None,
+                NullValueHandling = NullValueHandling.Ignore,
+            });
 
         static SemanticVersion GetExtensionVersion()
         {
@@ -98,18 +107,14 @@ namespace DurableTask.SqlServer
             }
         }
 
-        public static int GetPayloadSizeInBytes(TaskMessage message)
-        {
-            if (TryGetPayloadText(message.Event, out string? payloadText) && payloadText != null)
-            {
-                return Encoding.UTF8.GetByteCount(payloadText);
-            }
-
-            return -1;
-        }
-
         public static bool TryGetPayloadText(HistoryEvent e, out string? payloadText)
         {
+            if (TryGetFailureDetails(e, out FailureDetails? failureDetails) && failureDetails != null)
+            {
+                payloadText = SerializeToJson(failureDetails);
+                return true;
+            }
+
             payloadText = e.EventType switch
             {
                 EventType.ContinueAsNew => ((ContinueAsNewEvent)e).Result,
@@ -132,9 +137,24 @@ namespace DurableTask.SqlServer
             return payloadText != null;
         }
 
+        public static bool TryGetFailureDetails(HistoryEvent e, out FailureDetails? failureDetails)
+        {
+            failureDetails = e.EventType switch
+            {
+                EventType.ExecutionCompleted => ((ExecutionCompletedEvent)e).FailureDetails,
+                EventType.ExecutionFailed => ((ExecutionCompletedEvent)e).FailureDetails,
+                EventType.TaskFailed => ((TaskFailedEvent)e).FailureDetails,
+                EventType.SubOrchestrationInstanceFailed => ((SubOrchestrationInstanceFailedEvent)e).FailureDetails,
+                _ => null,
+            };
+            return failureDetails != null;
+        }
+
         public static bool HasPayload(HistoryEvent e)
         {
-            return TryGetPayloadText(e, out string? text) && !string.IsNullOrEmpty(text);
+            return
+                (TryGetPayloadText(e, out string? text) && !string.IsNullOrEmpty(text)) ||
+                (TryGetFailureDetails(e, out FailureDetails? details) && details != null);
         }
 
         public static string? GetName(HistoryEvent historyEvent)
@@ -179,6 +199,53 @@ namespace DurableTask.SqlServer
                 EventType.TaskScheduled => ((TaskScheduledEvent)historyEvent).Version,
                 _ => null,
             };
+        }
+
+        public static bool TryDeserializeFailureDetails(string jsonText, out FailureDetails? failureDetails)
+        {
+            try
+            {
+                failureDetails = DeserializeFromJson<FailureDetails>(jsonText);
+
+                // Depending on how the TaskHubWorker is configured, the text might be a FailureDetails JSON object
+                // or it might be a serialized Exception. Use the ErrorType field to distinguish. Note that we'll get a
+                // false-positive if the exception type has an ErrorType field so this is an imperfect check.
+                return failureDetails?.ErrorType != null;
+            }
+            catch (Exception)
+            {
+                failureDetails = null;
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Deserialize a JSON-string into an object of type T
+        /// This utility is resilient to end-user changes in the DefaultSettings of Newtonsoft.
+        /// </summary>
+        /// <typeparam name="T">The type to deserialize the JSON string into.</typeparam>
+        /// <param name="text">The JSON text.</param>
+        /// <returns>The deserialized value.</returns>
+        public static T DeserializeFromJson<T>(string text)
+        {
+            using var reader = new StringReader(text);
+            using var jsonReader = new JsonTextReader(reader);
+
+            return DefaultJsonSerializer.Deserialize<T>(jsonReader);
+        }
+
+        /// <summary>
+        /// Serializes an object to JSON text.
+        /// </summary>
+        /// <param name="obj">The object to serialize into JSON.</param>
+        /// <returns>The unformatted JSON text.</returns>
+        public static string SerializeToJson(object obj)
+        {
+            using var writer = new StringWriter();
+            DefaultJsonSerializer.Serialize(writer, obj);
+
+            writer.Flush();
+            return writer.ToString();
         }
     }
 }

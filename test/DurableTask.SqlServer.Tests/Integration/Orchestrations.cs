@@ -13,6 +13,7 @@ namespace DurableTask.SqlServer.Tests.Integration
     using DurableTask.SqlServer.Tests.Logging;
     using DurableTask.SqlServer.Tests.Utils;
     using Moq;
+    using Newtonsoft.Json;
     using Newtonsoft.Json.Linq;
     using Xunit;
     using Xunit.Abstractions;
@@ -254,37 +255,82 @@ namespace DurableTask.SqlServer.Tests.Integration
         }
 
         [Fact]
-        public async Task OrchestrationException()
+        public async Task UncaughtOrchestrationException()
         {
-            string errorMessage = "Kah-BOOOOOM!!!";
+            var exceptionToThrow = new ApplicationException("Kah-BOOOOOM!!!");
 
             // The exception is expected to fail the orchestration execution
             TestInstance<string> instance = await this.testService.RunOrchestration<string, string>(
                 null,
                 orchestrationName: "OrchestrationWithException",
-                implementation: (ctx, input) => throw new Exception(errorMessage));
+                implementation: (ctx, input) => throw exceptionToThrow);
 
-            await instance.WaitForCompletion(
-                timeout: TimeSpan.FromSeconds(10),
-                expectedOutput: errorMessage,
-                expectedStatus: OrchestrationStatus.Failed);
+            OrchestrationState state = await instance.WaitForCompletion(expectedStatus: OrchestrationStatus.Failed);
+            Assert.NotNull(state.FailureDetails);
+            Assert.Equal(exceptionToThrow.Message, state.FailureDetails.ErrorMessage);
+            Assert.Equal(exceptionToThrow.GetType().FullName, state.FailureDetails.ErrorType);
+            Assert.NotNull(state.FailureDetails.StackTrace);
         }
 
         [Fact]
-        public async Task ActivityException()
+        public async Task UncaughtActivityException()
         {
-            // Performs a delay and then returns the input
+            var exceptionToThrow = new ApplicationException("Kah-BOOOOOM!!!");
+
+            // Schedules a task that throws an uncaught exception
             TestInstance<string> instance = await this.testService.RunOrchestration(
                 null as string,
                 orchestrationName: "OrchestrationWithActivityFailure",
                 implementation: (ctx, input) => ctx.ScheduleTask<string>("Throw", ""),
                 activities: new[] {
-                    ("Throw", TestService.MakeActivity<string, string>((ctx, input) => throw new Exception("Kah-BOOOOOM!!!"))),
+                    ("Throw", TestService.MakeActivity<string, string>((ctx, input) => throw exceptionToThrow)),
                 });
 
-            OrchestrationState state = await instance.WaitForCompletion(
-                expectedStatus: OrchestrationStatus.Failed,
-                expectedOutputRegex: ".*(Kah-BOOOOOM!!!).*");
+            OrchestrationState state = await instance.WaitForCompletion(expectedStatus: OrchestrationStatus.Failed);
+            Assert.NotNull(state.FailureDetails);
+            Assert.Contains("Task 'Throw' (#0) failed with an unhandled exception", state.FailureDetails.ErrorMessage);
+            Assert.Equal(typeof(TaskFailedException).FullName, state.FailureDetails.ErrorType);
+            Assert.NotNull(state.FailureDetails.StackTrace);
+
+            // Ideally, the original exception message would be included in the orchestrator output.
+            // This would require a change in DurableTask.Core.
+            //// Assert.Contains(exceptionToThrow.Message, state.FailureDetails.ErrorMessage);
+        }
+
+        [Fact]
+        public async Task CatchActivityException()
+        {
+            var exceptionToThrow = new ApplicationException("Kah-BOOOOOM!!!");
+
+            // Schedules a task that throws an exception, which is then caught by the orchestration
+            TestInstance<string> instance = await this.testService.RunOrchestration(
+                null as string,
+                orchestrationName: "OrchestrationWithActivityFailure",
+                implementation: async (ctx, input) =>
+                {
+                    try
+                    {
+                        await ctx.ScheduleTask<string>("Throw", "");
+                        return null; // not expected
+                    }
+                    catch (TaskFailedException e)
+                    {
+                        return e.FailureDetails;
+                    }
+                },
+                activities: new[] {
+                    ("Throw", TestService.MakeActivity<string, string>((ctx, input) => throw exceptionToThrow)),
+                });
+
+            OrchestrationState state = await instance.WaitForCompletion();
+
+            // The output should be a FailureDetails object with information about the caught exception
+            Assert.NotNull(state.Output);
+            FailureDetails details = JsonConvert.DeserializeObject<FailureDetails>(state.Output);
+            Assert.NotNull(details);
+            Assert.Equal(exceptionToThrow.Message, details.ErrorMessage);
+            Assert.Equal(exceptionToThrow.GetType().FullName, details.ErrorType);
+            Assert.NotNull(details.StackTrace);
         }
 
         [Fact]

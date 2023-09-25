@@ -16,6 +16,7 @@ namespace DurableTask.SqlServer
     using DurableTask.Core.History;
     using Microsoft.Data.SqlClient;
     using Microsoft.Data.SqlClient.Server;
+    using Newtonsoft.Json;
     using SemVersion;
 
     static class SqlUtils
@@ -78,10 +79,18 @@ namespace DurableTask.SqlServer
                         orchestrationStatus: OrchestrationStatus.Completed);
                     break;
                 case EventType.ExecutionFailed:
+                    string? executionFailedResult = null;
+                    if (!TryGetFailureDetails(reader, out FailureDetails? executionFailedDetails))
+                    {
+                        // Fall back to the old behavior
+                        executionFailedResult = GetPayloadText(reader);
+                    }
+
                     historyEvent = new ExecutionCompletedEvent(
                         eventId,
-                        result: GetPayloadText(reader),
-                        orchestrationStatus: OrchestrationStatus.Failed);
+                        result: executionFailedResult,
+                        orchestrationStatus: OrchestrationStatus.Failed,
+                        failureDetails: executionFailedDetails);
                     break;
                 case EventType.ExecutionStarted:
                     historyEvent = new ExecutionStartedEvent(eventId, GetPayloadText(reader))
@@ -133,11 +142,21 @@ namespace DurableTask.SqlServer
                     };
                     break;
                 case EventType.SubOrchestrationInstanceFailed:
+                    string? subOrchFailedReason = null;
+                    string? subOrchFailedDetails = null;
+                    if (!TryGetFailureDetails(reader, out FailureDetails? subOrchFailureDetails))
+                    {
+                        // Fall back to the old behavior
+                        subOrchFailedReason = GetReason(reader);
+                        subOrchFailedDetails = GetPayloadText(reader);
+                    }
+
                     historyEvent = new SubOrchestrationInstanceFailedEvent(
                         eventId,
                         taskScheduledId: GetTaskId(reader),
-                        reason: GetReason(reader),
-                        details: GetPayloadText(reader));
+                        reason: subOrchFailedReason,
+                        details: subOrchFailedDetails,
+                        failureDetails: subOrchFailureDetails);
                     break;
                 case EventType.TaskCompleted:
                     historyEvent = new TaskCompletedEvent(
@@ -146,11 +165,21 @@ namespace DurableTask.SqlServer
                         result: GetPayloadText(reader));
                     break;
                 case EventType.TaskFailed:
+                    string? taskFailedReason = null;
+                    string? taskFailedDetails = null;
+                    if (!TryGetFailureDetails(reader, out FailureDetails? taskFailureDetails))
+                    {
+                        // Fall back to the old behavior
+                        taskFailedReason = GetReason(reader);
+                        taskFailedDetails = GetPayloadText(reader);
+                    }
+
                     historyEvent = new TaskFailedEvent(
                         eventId,
                         taskScheduledId: GetTaskId(reader),
-                        reason: GetReason(reader),
-                        details: GetPayloadText(reader));
+                        reason: taskFailedReason,
+                        details: taskFailedDetails,
+                        failureDetails: taskFailureDetails);
                     break;
                 case EventType.TaskScheduled:
                     historyEvent = new TaskScheduledEvent(eventId)
@@ -182,6 +211,20 @@ namespace DurableTask.SqlServer
             return historyEvent;
         }
 
+        static bool TryGetFailureDetails(DbDataReader reader, out FailureDetails? details)
+        {
+            // Failure details are expected to be in JSON format. In previous versions, it was just an error message
+            // that isn't expected to be JSON.
+            string? text = GetPayloadText(reader);
+            if (string.IsNullOrEmpty(text) || text![0] != '{')
+            {
+                details = null;
+                return false;
+            }
+
+            return DTUtils.TryDeserializeFailureDetails(text, out details);
+        }
+
         public static OrchestrationState GetOrchestrationState(this DbDataReader reader)
         {
             ParentInstance? parentInstance = null;
@@ -196,7 +239,8 @@ namespace DurableTask.SqlServer
                     }
                 };
             }
-            return new OrchestrationState
+
+            var state = new OrchestrationState
             {
                 CompletedTime = reader.GetUtcDateTimeOrNull(reader.GetOrdinal("CompletedTime")) ?? default,
                 CreatedTime = reader.GetUtcDateTimeOrNull(reader.GetOrdinal("CreatedTime")) ?? default,
@@ -210,10 +254,27 @@ namespace DurableTask.SqlServer
                     ExecutionId = GetExecutionId(reader),
                 },
                 OrchestrationStatus = GetRuntimeStatus(reader),
-                Output = GetStringOrNull(reader, reader.GetOrdinal("OutputText")),
                 Status = GetStringOrNull(reader, reader.GetOrdinal("CustomStatusText")),
                 ParentInstance = parentInstance
             };
+
+            // The OutputText column is overloaded to contain either orchestration output or failure details
+            // if the task hub worker is configured to use legacy error propagation.
+            string? rawOutput = GetStringOrNull(reader, reader.GetOrdinal("OutputText"));
+            if (rawOutput != null)
+            {
+                if (state.OrchestrationStatus == OrchestrationStatus.Failed &&
+                    DTUtils.TryDeserializeFailureDetails(rawOutput, out FailureDetails? failureDetails))
+                {
+                    state.FailureDetails = failureDetails;
+                }
+                else
+                {
+                    state.Output = rawOutput;
+                }
+            }
+
+            return state;
         }
 
         internal static DateTime? GetVisibleTime(HistoryEvent historyEvent)
