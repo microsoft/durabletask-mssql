@@ -626,7 +626,7 @@ namespace DurableTask.SqlServer
             using DbDataReader reader = await SqlUtils.ExecuteReaderAsync(command, this.traceHelper, instanceId);
 
             List<HistoryEvent> history = ReadHistoryEvents(reader, executionIdFilter);
-            return JsonConvert.SerializeObject(history);
+            return DTUtils.SerializeToJson(history);
         }
 
         static List<HistoryEvent> ReadHistoryEvents(

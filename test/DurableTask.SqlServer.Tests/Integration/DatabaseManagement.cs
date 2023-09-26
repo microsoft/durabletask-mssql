@@ -316,7 +316,6 @@ namespace DurableTask.SqlServer.Tests.Integration
         /// <summary>
         /// Verifies that CreateIfNotExistsAsync is thread-safe.
         /// </summary>
-        /// <returns></returns>
         [Theory]
         [InlineData(true)]
         [InlineData(false)]

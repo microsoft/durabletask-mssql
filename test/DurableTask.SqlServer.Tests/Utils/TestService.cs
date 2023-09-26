@@ -46,7 +46,7 @@ namespace DurableTask.SqlServer.Tests.Utils
 
         public TestLogProvider LogProvider { get; }
 
-        public async Task InitializeAsync(bool startWorker = true)
+        public async Task InitializeAsync(bool startWorker = true, bool legacyErrorPropagation = false)
         {
             // The initialization requires administrative credentials (default)
             await new SqlOrchestrationService(this.OrchestrationServiceOptions).CreateIfNotExistsAsync();
@@ -63,10 +63,21 @@ namespace DurableTask.SqlServer.Tests.Utils
 
             // A mock orchestration service allows us to stub out specific methods for testing.
             this.OrchestrationServiceMock = new Mock<SqlOrchestrationService>(this.OrchestrationServiceOptions) { CallBase = true };
-            this.worker = new TaskHubWorker(this.OrchestrationServiceMock.Object, this.loggerFactory);
+            this.worker = new TaskHubWorker(this.OrchestrationServiceMock.Object, this.loggerFactory)
+            {
+                ErrorPropagationMode = legacyErrorPropagation ?
+                    ErrorPropagationMode.SerializeExceptions :
+                    ErrorPropagationMode.UseFailureDetails,
+            };
+
             if (startWorker)
             {
                 await this.worker.StartAsync();
+
+                // Enable flowing exception information from activities to the parent orchestration code.
+                // This is the default behavior in Azure Durable Functions.
+                this.worker.TaskActivityDispatcher.IncludeDetails = true;
+                this.worker.TaskOrchestrationDispatcher.IncludeDetails = true;
             }
 
             this.client = new TaskHubClient(this.OrchestrationServiceMock.Object, loggerFactory: this.loggerFactory);
