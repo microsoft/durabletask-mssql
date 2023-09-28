@@ -743,7 +743,7 @@ namespace DurableTask.SqlServer.Tests.Integration
             Assert.Equal("TestTraceState", orchestratorSpan.TraceStateString);
             Assert.True(orchestratorSpan.StartTimeUtc >= clientSpan.StartTimeUtc);
             Assert.True(orchestratorSpan.Duration > delay * 2); // two sleeps
-            Assert.True(orchestratorSpan.StartTimeUtc + orchestratorSpan.Duration <= state.CompletedTime);
+            Assert.True(orchestratorSpan.StartTimeUtc + orchestratorSpan.Duration <= clientSpan.StartTimeUtc + clientSpan.Duration);
 
             // Validate the sub-orchestrator span, which should be a sub-set of the parent orchestration span.
             Activity subOrchestratorSpan = exportedItems.LastOrDefault(

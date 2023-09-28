@@ -18,7 +18,8 @@ namespace DurableTask.SqlServer.Tests.Utils
 
     public static class SharedTestHelpers
     {
-        private const string DefaultSchema = "dt";
+        const string DefaultSchema = "dt";
+
         public static string GetTestName(ITestOutputHelper output)
         {
             Type type = output.GetType();
@@ -64,7 +65,7 @@ namespace DurableTask.SqlServer.Tests.Utils
         public static async Task<object> ExecuteSqlAsync(string commandText, string connectionString = null)
         {
             Exception lastException = null;
-            for (int retry = 0; retry < 3; retry++)
+            for (int retry = 0; retry < 5; retry++)
             {
                 try
                 {
@@ -128,9 +129,15 @@ namespace DurableTask.SqlServer.Tests.Utils
             await ExecuteSqlAsync($"ALTER ROLE {schema}_runtime DROP MEMBER [testuser_{userId}]");
             await ExecuteSqlAsync($"DROP USER IF EXISTS [testuser_{userId}]");
 
-            // drop all the connections; otherwise, the DROP LOGIN statement will fail
-            await ExecuteSqlAsync($"DECLARE @kill varchar(max) = ''; SELECT @kill = @kill + 'KILL ' + CAST(session_id AS varchar(5)) + ';' FROM sys.dm_exec_sessions WHERE original_login_name = 'testlogin_{userId}'; EXEC(@kill);");
-            await ExecuteSqlAsync($"DROP LOGIN [testlogin_{userId}]");
+            // Drop all the connections; otherwise, the DROP LOGIN statement will fail.
+            // This is flakey, especially on slower CI machines, so it may need to be retried.
+            await ExecuteSqlAsync(string.Join(";\n", new string[]
+            {
+                $"DECLARE @kill varchar(max) = ''",
+                $"SELECT @kill = @kill + 'KILL ' + CAST(session_id AS varchar(5)) + ';' FROM sys.dm_exec_sessions WHERE original_login_name = 'testlogin_{userId}'",
+                $"EXEC(@kill)",
+                $"DROP LOGIN [testlogin_{userId}]",
+            }));
         }
 
         public static async Task EnableMultiTenancyAsync(bool multiTenancy, string schema = DefaultSchema)
