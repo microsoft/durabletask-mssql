@@ -651,7 +651,7 @@ namespace DurableTask.SqlServer.Tests.Integration
         public async Task TraceContextFlowCorrectly()
         {
             string traceSourceName = "MyTraceSource";
-            string orchestrationName = "";
+            string orchestrationName = "ParentOrchestration";
             string subOrchestrationName = "MySubOrchestration";
             string activityName = "MyActivity";
             TimeSpan delay = TimeSpan.FromMilliseconds(500);
