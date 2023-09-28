@@ -5,6 +5,7 @@ namespace DurableTask.SqlServer.Tests.Utils
 {
     using System;
     using System.Collections.Generic;
+    using System.Data;
     using System.Linq;
     using System.Threading.Tasks;
     using DurableTask.Core;
@@ -203,6 +204,14 @@ namespace DurableTask.SqlServer.Tests.Utils
         public void RegisterInlineActivity(string name, string version, TaskActivity activity)
         {
             this.worker.AddTaskActivities(new TestObjectCreator<TaskActivity>(name, version, activity));
+        }
+
+        public void RegisterInlineOrchestration<TOutput, TInput>(
+            string orchestrationName,
+            Func<OrchestrationContext, TInput, Task<TOutput>> implementation,
+            Action<OrchestrationContext, string, string> onEvent = null)
+        {
+            this.RegisterInlineOrchestration(orchestrationName, version: string.Empty, implementation, onEvent);
         }
 
         public void RegisterInlineOrchestration<TOutput, TInput>(

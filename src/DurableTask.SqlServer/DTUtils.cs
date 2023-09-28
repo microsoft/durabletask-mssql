@@ -226,7 +226,7 @@ namespace DurableTask.SqlServer
         /// <typeparam name="T">The type to deserialize the JSON string into.</typeparam>
         /// <param name="text">The JSON text.</param>
         /// <returns>The deserialized value.</returns>
-        public static T DeserializeFromJson<T>(string text)
+        public static T? DeserializeFromJson<T>(string text)
         {
             using var reader = new StringReader(text);
             using var jsonReader = new JsonTextReader(reader);

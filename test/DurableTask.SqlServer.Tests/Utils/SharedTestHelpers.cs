@@ -13,6 +13,7 @@ namespace DurableTask.SqlServer.Tests.Utils
     using System.Threading;
     using System.Threading.Tasks;
     using Microsoft.Data.SqlClient;
+    using SemVersion;
     using Xunit.Abstractions;
 
     public static class SharedTestHelpers
@@ -49,6 +50,15 @@ namespace DurableTask.SqlServer.Tests.Utils
             ////builder.DataSource = "20.190.19.170";
 
             return builder.ToString();
+        }
+
+        public static async Task<SemanticVersion> GetCurrentSchemaVersionAsync(
+            string connectionString,
+            string schema = DefaultSchema)
+        {
+            // Returns the latest version as the first result
+            string result = (string)await ExecuteSqlAsync($"EXECUTE {schema}._GetVersions", connectionString);
+            return SemanticVersion.Parse(result);
         }
 
         public static async Task<object> ExecuteSqlAsync(string commandText, string connectionString = null)
@@ -127,7 +137,7 @@ namespace DurableTask.SqlServer.Tests.Utils
         {
             if (!multiTenancy)
             {
-            await PurgeAsync(schema);
+                await PurgeAsync(schema);
             }
 
             int param = multiTenancy ? 1 : 0;
