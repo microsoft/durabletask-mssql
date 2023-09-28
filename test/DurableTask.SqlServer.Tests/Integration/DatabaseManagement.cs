@@ -102,12 +102,12 @@ namespace DurableTask.SqlServer.Tests.Integration
                     LogAssert.SprocCompleted("dt._UpdateVersion"))
                 .EndOfLog();
 
-            await ValidateDatabaseSchemaAsync(testDb);
+            await this.ValidateDatabaseSchemaAsync(testDb);
 
             // Create the DB schema again - should be a no-op since it already exists
             this.logProvider.Clear();
             await service.CreateIfNotExistsAsync();
-            await ValidateDatabaseSchemaAsync(testDb);
+            await this.ValidateDatabaseSchemaAsync(testDb);
 
             // The subsequent execution should run exactly one sproc and no scripts.
             // It's important to verify this to ensure the overhead of CreateIfNotExistsAsync is very small.
@@ -162,11 +162,11 @@ namespace DurableTask.SqlServer.Tests.Integration
                     LogAssert.SprocCompleted($"{schemaName}._UpdateVersion"))
                 .EndOfLog();
 
-            await ValidateDatabaseSchemaAsync(testDb, schemaName);
+            await this.ValidateDatabaseSchemaAsync(testDb, schemaName);
             
             this.logProvider.Clear();
             await service.CreateIfNotExistsAsync();
-            await ValidateDatabaseSchemaAsync(testDb, schemaName);
+            await this.ValidateDatabaseSchemaAsync(testDb, schemaName);
             
             LogAssert.NoWarningsOrErrors(this.logProvider);
             LogAssert.Sequence(
@@ -201,7 +201,7 @@ namespace DurableTask.SqlServer.Tests.Integration
             
             await firstService.CreateAsync(recreateInstanceStore: true);
 
-            await ValidateDatabaseSchemaAsync(testDb, firstTestSchemaName);
+            await this.ValidateDatabaseSchemaAsync(testDb, firstTestSchemaName);
 
             await secondService.CreateAsync(recreateInstanceStore: true);
             
@@ -234,11 +234,11 @@ namespace DurableTask.SqlServer.Tests.Integration
                     LogAssert.SprocCompleted($"{secondTestSchemaName}._UpdateVersion"))
                 .EndOfLog();
 
-            await ValidateDatabaseSchemaAsync(testDb, secondTestSchemaName);
+            await this.ValidateDatabaseSchemaAsync(testDb, secondTestSchemaName);
             
             this.logProvider.Clear();
             await firstService.CreateIfNotExistsAsync();
-            await ValidateDatabaseSchemaAsync(testDb, firstTestSchemaName);
+            await this.ValidateDatabaseSchemaAsync(testDb, firstTestSchemaName);
             
             LogAssert.NoWarningsOrErrors(this.logProvider);
             LogAssert.Sequence(
@@ -249,7 +249,7 @@ namespace DurableTask.SqlServer.Tests.Integration
 
             this.logProvider.Clear();
             await secondService.CreateIfNotExistsAsync();
-            await ValidateDatabaseSchemaAsync(testDb, secondTestSchemaName);
+            await this.ValidateDatabaseSchemaAsync(testDb, secondTestSchemaName);
 
             LogAssert.NoWarningsOrErrors(this.logProvider);
             LogAssert.Sequence(
@@ -317,7 +317,7 @@ namespace DurableTask.SqlServer.Tests.Integration
                     LogAssert.SprocCompleted("dt._UpdateVersion"))
                 .EndOfLog();
 
-            await ValidateDatabaseSchemaAsync(testDb);
+            await this.ValidateDatabaseSchemaAsync(testDb);
         }
 
         /// <summary>
@@ -335,7 +335,7 @@ namespace DurableTask.SqlServer.Tests.Integration
             // the same database schema. It should just work with predictable output.
             await Enumerable.Range(0, 4).ParallelForEachAsync(4, i => service.CreateIfNotExistsAsync());
 
-            await ValidateDatabaseSchemaAsync(testDb);
+            await this.ValidateDatabaseSchemaAsync(testDb);
 
             // Operations are expected to be serialized, making the log output deterministic.
             LogAssert
@@ -406,7 +406,7 @@ namespace DurableTask.SqlServer.Tests.Integration
             return new SqlOrchestrationService(options);
         }
 
-        static async Task ValidateDatabaseSchemaAsync(TestDatabase database, string schemaName = "dt")
+        async Task ValidateDatabaseSchemaAsync(TestDatabase database, string schemaName = "dt")
         {
             var expectedTableNames = new HashSet<string>(StringComparer.Ordinal)
             {
@@ -499,6 +499,7 @@ namespace DurableTask.SqlServer.Tests.Integration
             // Verify that the schema version in the database matches the expected version
             // Note that we'll need to change the expected version here whenever we introduce new schema.
             SemanticVersion currentSchemaVersion = await SharedTestHelpers.GetCurrentSchemaVersionAsync(
+                this.output,
                 database.ConnectionString,
                 schemaName);
             Assert.Equal(1, currentSchemaVersion.Major);
