@@ -140,7 +140,7 @@ namespace DurableTask.SqlServer.Tests.Utils
                 $"DECLARE @kill varchar(max) = ''",
                 $"SELECT @kill = @kill + 'KILL ' + CAST(session_id AS varchar(5)) + ';' FROM sys.dm_exec_sessions WHERE original_login_name = 'testlogin_{userId}'",
                 $"EXEC(@kill)",
-                $"DROP LOGIN [testlogin_{userId}]",
+                $"IF EXISTS (SELECT name FROM sys.sql_logins WHERE name='testlogin_{userId}') DROP LOGIN [testlogin_{userId}]",
             }));
         }
 
