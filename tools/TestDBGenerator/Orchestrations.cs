@@ -85,6 +85,8 @@ static class Orchestrations
             throw new TimeoutException($"Orchestration '{instance6.InstanceId}' hasn't yet signaled to block the activity!");
         }
 
+        // Stop the worker with several uncompleted orchestrations. At this point, a database backup can be taken.
+        // The database backup will be restored and used as the starting point for the automated upgrade tests.
         await worker.StopAsync();
     }
 
