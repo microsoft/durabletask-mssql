@@ -32,8 +32,9 @@ namespace DurableTask.SqlServer.Tests.Integration
         }
 
         // TODO: Re-enable as part of https://github.com/microsoft/durabletask-mssql/issues/152
-        ////[Theory]
-        ////[InlineData("1.0.0")]
+        // TODO: Support validation from multiple base versions
+        [Theory(Skip = "Not yet automated for CI")]
+        [InlineData("1.0.0")]
         public async Task ValidateUpgradedOrchestrations(string version)
         {
             string dbConnectionString = this.RestoreDatabaseFromBackup(version);
@@ -61,6 +62,7 @@ namespace DurableTask.SqlServer.Tests.Integration
                 .Expect(
                     LogAssert.AcquiredAppLock(statusCode: 0),
                     LogAssert.SprocCompleted("dt._GetVersions"),
+                    LogAssert.ExecutedSqlScript("schema-1.2.0.sql"),
                     LogAssert.ExecutedSqlScript("logic.sql"),
                     LogAssert.ExecutedSqlScript("permissions.sql"),
                     LogAssert.SprocCompleted("dt._UpdateVersion"))

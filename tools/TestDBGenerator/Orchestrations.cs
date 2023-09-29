@@ -1,6 +1,10 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+// IMPORTANT: The code in this file is used to generate the test data for automated upgrade tests.
+//            Any changes to the code in this file must also be reflected in those tests. In addition,
+//            the database backup file that is generated for this test data will need to be updated.
+
 namespace TestDBGenerator;
 
 using System;
