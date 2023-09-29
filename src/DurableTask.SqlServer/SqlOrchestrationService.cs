@@ -20,19 +20,13 @@ namespace DurableTask.SqlServer
     using DurableTask.SqlServer.SqlTypes;
     using DurableTask.SqlServer.Utils;
     using Microsoft.Data.SqlClient;
-    using Newtonsoft.Json;
+
 
     public class SqlOrchestrationService : OrchestrationServiceBase
     {
-        readonly BackoffPollingHelper orchestrationBackoffHelper = new BackoffPollingHelper(
-            minimumInterval: TimeSpan.FromMilliseconds(50),
-            maximumInterval: TimeSpan.FromSeconds(3)); // TODO: Configurable
-
-        readonly BackoffPollingHelper activityBackoffHelper = new BackoffPollingHelper(
-            minimumInterval: TimeSpan.FromMilliseconds(50),
-            maximumInterval: TimeSpan.FromSeconds(3)); // TODO: Configurable
-
         readonly SqlOrchestrationServiceSettings settings;
+        readonly BackoffPollingHelper orchestrationBackoffHelper;
+        readonly BackoffPollingHelper activityBackoffHelper;
         readonly LogHelper traceHelper;
         readonly SqlDbManager dbManager;
         readonly string lockedByValue;
@@ -41,6 +35,14 @@ namespace DurableTask.SqlServer
         public SqlOrchestrationService(SqlOrchestrationServiceSettings? settings)
         {
             this.settings = ValidateSettings(settings) ?? throw new ArgumentNullException(nameof(settings));
+            this.orchestrationBackoffHelper = new BackoffPollingHelper(
+                this.settings.MinOrchestrationPollingInterval,
+                this.settings.MaxOrchestrationPollingInterval,
+                this.settings.DeltaBackoffOrchestrationPollingInterval);
+            this.activityBackoffHelper = new BackoffPollingHelper(
+                this.settings.MinActivityPollingInterval,
+                this.settings.MaxActivityPollingInterval,
+                this.settings.DeltaBackoffActivityPollingInterval);
             this.traceHelper = new LogHelper(this.settings.LoggerFactory.CreateLogger("DurableTask.SqlServer"));
             this.dbManager = new SqlDbManager(this.settings, this.traceHelper);
             this.lockedByValue = $"{this.settings.AppName},{Process.GetCurrentProcess().Id}";
@@ -511,6 +513,7 @@ namespace DurableTask.SqlServer
             command.Parameters.Add("@ExecutionID", SqlDbType.VarChar, size: 50).Value = instance.ExecutionId;
             command.Parameters.Add("@InputText", SqlDbType.VarChar).Value = startEvent.Input;
             command.Parameters.Add("@StartTime", SqlDbType.DateTime2).Value = startEvent.ScheduledStartTime;
+            command.Parameters.Add("@TraceContext", SqlDbType.VarChar, size: 800).Value = SqlUtils.GetTraceContext(startEvent);
 
             if (dedupeStatuses?.Length > 0)
             {
@@ -624,7 +627,7 @@ namespace DurableTask.SqlServer
             using DbDataReader reader = await SqlUtils.ExecuteReaderAsync(command, this.traceHelper, instanceId);
 
             List<HistoryEvent> history = ReadHistoryEvents(reader, executionIdFilter);
-            return JsonConvert.SerializeObject(history);
+            return DTUtils.SerializeToJson(history);
         }
 
         static List<HistoryEvent> ReadHistoryEvents(
@@ -811,13 +814,13 @@ namespace DurableTask.SqlServer
             using SqlCommand command = this.GetSprocCommand(connection, $"{this.settings.SchemaName}._QueryManyOrchestrations");
 
             command.Parameters.Add("@PageSize", SqlDbType.SmallInt).Value = query.PageSize;
-            command.Parameters.Add("@PageNumber", SqlDbType.SmallInt).Value = query.PageNumber;
+            command.Parameters.Add("@PageNumber", SqlDbType.Int).Value = query.PageNumber;
             command.Parameters.Add("@FetchInput", SqlDbType.Bit).Value = query.FetchInput;
             command.Parameters.Add("@FetchOutput", SqlDbType.Bit).Value = query.FetchOutput;
             command.Parameters.Add("@CreatedTimeFrom", SqlDbType.DateTime2).Value = createdTimeFrom;
             command.Parameters.Add("@CreatedTimeTo", SqlDbType.DateTime2).Value = createdTimeTo;
             command.Parameters.Add("@InstanceIDPrefix", SqlDbType.VarChar, size: 100).Value = query.InstanceIdPrefix ?? SqlString.Null;
-            command.Parameters.Add("@ExcludeSubOrchestrations", SqlDbType.SmallInt).Value = query.ExcludeSubOrchestrations;
+            command.Parameters.Add("@ExcludeSubOrchestrations", SqlDbType.Bit).Value = query.ExcludeSubOrchestrations;
 
             if (query.StatusFilter?.Count > 0)
             {

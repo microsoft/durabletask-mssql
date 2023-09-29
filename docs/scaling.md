@@ -81,8 +81,6 @@ This value can be calculated automatically using either the `dt.GetScaleRecommen
 
 If you're using the Durable SQL provider with [Azure Durable Functions](https://docs.microsoft.com/azure/azure-functions/durable) running on the [Elastic Premium Plan](https://docs.microsoft.com/azure/azure-functions/functions-premium-plan), then auto-scaling the number of app instances is managed automatically if you enable runtime scale monitoring as described [here](https://docs.microsoft.com/azure/azure-functions/functions-networking-options#premium-plan-with-virtual-network-triggers). Note that this doesn't require you to configure any virtual networking features.
 
-!> The Azure Functions Consumption plan does not yet support Durable Functions apps configured with the Durable SQL provider.
-
 If you are running your app in Kubernetes and have [KEDA](https://keda.sh) installed in your cluster, you can use the [MSSQL](https://keda.sh/docs/scalers/mssql/) scaler to automatically scale your app deployment instances. The following is an example `ScaledObject` configuration that can be used.
 
 ```yml

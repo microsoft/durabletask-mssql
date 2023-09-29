@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+### New
+
+* Support configurable max backoff intervals ([#163](https://github.com/microsoft/durabletask-mssql/pull/163)) - contributed by [@tompostler](https://github.com/tompostler)
+* Support configurable min and delta backoff intervals ([#174](https://github.com/microsoft/durabletask-mssql/pull/174)) - contributed by [@dmetzgar](https://github.com/dmetzgar)
+* Distributed tracing support and v1.2.0 schema update ([#190](https://github.com/microsoft/durabletask-mssql/pull/190))
+
+### Updates
+
+* Fix integer overflow issues in GetScaleMetric and QueryManyOrchestrations ([#155](https://github.com/microsoft/durabletask-mssql/pull/155)) - contributed by [@bhugot](https://github.com/bhugot)
+* Fix error propagation to correctly expose detailed error info ([#188](https://github.com/microsoft/durabletask-mssql/pull/188))
+* Updated various nuget dependency versions as part of [#190](https://github.com/microsoft/durabletask-mssql/pull/190)
+
 ## v1.1.1
 
 ### Updates

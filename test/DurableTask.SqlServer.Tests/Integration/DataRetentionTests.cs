@@ -21,10 +21,12 @@ namespace DurableTask.SqlServer.Tests.Integration
     public class DataRetentionTests : IAsyncLifetime
     {
         readonly TestService testService;
+        readonly ITestOutputHelper output;
 
         public DataRetentionTests(ITestOutputHelper output)
         {
             this.testService = new TestService(output);
+            this.output = output;
         }
 
         Task IAsyncLifetime.InitializeAsync() => this.testService.InitializeAsync();
@@ -236,6 +238,7 @@ namespace DurableTask.SqlServer.Tests.Integration
         {
             string taskHubName = await this.testService.GetTaskHubNameAsync();
             int unprocessedEvents = (int)await SharedTestHelpers.ExecuteSqlAsync(
+                this.output,
                 $"SELECT COUNT(*) FROM dt.[NewEvents] WHERE TaskHub = '{taskHubName}'");
             return unprocessedEvents;
         }
