@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "TestDBGenerator": {
+      "commandName": "Project",
+      "environmentVariables": {
+        "SQLDB_Connection": "Server=.;Trusted_Connection=True;Encrypt=False;"
+      }
+    }
+  }
+}

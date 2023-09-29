@@ -31,7 +31,7 @@ namespace DurableTask.SqlServer.Tests.Utils
         public static string GetDefaultConnectionString(string database = "DurableDB")
         {
             // The default for local development on a Windows OS
-            string defaultConnectionString = $"Server=localhost;Database={database};Trusted_Connection=True;";
+            string defaultConnectionString = $"Server=localhost;Database={database};Trusted_Connection=True;Encrypt=False;";
             var builder = new SqlConnectionStringBuilder(defaultConnectionString);
 
             // The use of SA_PASSWORD is intended for use with the mssql docker container
@@ -140,7 +140,7 @@ namespace DurableTask.SqlServer.Tests.Utils
                 $"DECLARE @kill varchar(max) = ''",
                 $"SELECT @kill = @kill + 'KILL ' + CAST(session_id AS varchar(5)) + ';' FROM sys.dm_exec_sessions WHERE original_login_name = 'testlogin_{userId}'",
                 $"EXEC(@kill)",
-                $"DROP LOGIN [testlogin_{userId}]",
+                $"IF EXISTS (SELECT name FROM sys.sql_logins WHERE name='testlogin_{userId}') DROP LOGIN [testlogin_{userId}]",
             }));
         }
 

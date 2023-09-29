@@ -57,12 +57,21 @@ When making schema changes, some of those tests will fail and will need to be up
 * Multiple test methods (`CanCreateAndDropSchema`, `CanCreateAndDropMultipleSchemas`, `CanCreateIfNotExists`, etc.) will need to be updated to list the new `schema-x.y.z.sql` script file name.
 * The `ValidateDatabaseSchemaAsync` method will need to be updated to check for the newest schema version number.
 
-## Testing Schema Changes (TODO)
+## Testing Database Upgrades
 
-There is a test currently in another branch which is used to test schema changes. It needs to be moved to this branch and updated to work with the CI build. It works by:
+The [UpgradeTests.cs](../../../test/DurableTask.SqlServer.Tests/Integration/UpgradeTests.cs) file contains tests which validate that the database schema upgrade process works correctly.
+It works by:
 
 * Restoring a backed-up database based on the `1.0.0` schema to a local SQL Server instance.
 * Starting an app that requires a newer schema version to trigger an automatic schema upgrade.
 * Runs a mix of new and old orchestrations to ensure that the schema upgrade was successful and that no data was lost.
 
-One this test project is added to the `main` branch, this README should be updated with instructions on how to run the test and how to generate new database backup files for future schema upgrades.
+This test is critical to ensure that end-users won't be negatively impacted by schema changes.
+Unfortunately, it is not possible to run this test in CI yet until additional changes are made to support restoring database backups using Docker containers.
+However, it can be run locally on a Windows OS by following these steps:
+
+1. Install [SQL Server Express or Developer](https://www.microsoft.com/sql-server/sql-server-downloads) on your local Windows machine, if it's not already installed.
+1. Open the `UpgradeTests.cs` file and delete the `Skip` property in the `[Theory]` attribute on the `ValidateUpgradedOrchestrations` test method.
+1. Run the `ValidateUpgradedOrchestrations` test manually in Visual Studio or using `dotnet test`. The test should pass.
+
+In a future update, we will add support for running this test in CI using Docker containers.
