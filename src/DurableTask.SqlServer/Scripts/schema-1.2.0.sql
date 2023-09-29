@@ -43,7 +43,7 @@ IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('__SchemaNa
     ) [types]
 */
 
--- First, drop the rferencing stored procedures
+-- First, drop the referencing stored procedures
 IF OBJECT_ID('__SchemaNamePlaceholder__._AddOrchestrationEvents') IS NOT NULL
     DROP PROCEDURE __SchemaNamePlaceholder__._AddOrchestrationEvents
 IF OBJECT_ID('__SchemaNamePlaceholder__._CheckpointOrchestration') IS NOT NULL
