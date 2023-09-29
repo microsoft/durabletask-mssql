@@ -5,6 +5,7 @@ namespace DurableTask.SqlServer.Tests.Utils
 {
     using System;
     using System.Collections.Generic;
+    using System.Data;
     using System.Linq;
     using System.Threading.Tasks;
     using DurableTask.Core;
@@ -18,6 +19,7 @@ namespace DurableTask.SqlServer.Tests.Utils
     {
         readonly ILoggerFactory loggerFactory;
         readonly string testName;
+        readonly ITestOutputHelper output;
 
         TestCredential testCredential;
         TaskHubWorker worker;
@@ -38,6 +40,8 @@ namespace DurableTask.SqlServer.Tests.Utils
                 LoggerFactory = this.loggerFactory,
                 CreateDatabaseIfNotExists = true,
             };
+
+            this.output = output;
         }
 
         public SqlOrchestrationServiceSettings OrchestrationServiceOptions { get; private set; }
@@ -52,10 +56,10 @@ namespace DurableTask.SqlServer.Tests.Utils
             await new SqlOrchestrationService(this.OrchestrationServiceOptions).CreateIfNotExistsAsync();
 
             // Enable multitenancy to isolate each test using low-privilege credentials
-            await SharedTestHelpers.EnableMultiTenancyAsync(true);
+            await SharedTestHelpers.EnableMultiTenancyAsync(this.output, true);
 
             // The runtime will use low-privilege credentials
-            this.testCredential = await SharedTestHelpers.CreateTaskHubLoginAsync(this.testName);
+            this.testCredential = await SharedTestHelpers.CreateTaskHubLoginAsync(this.output, this.testName);
             this.OrchestrationServiceOptions = new SqlOrchestrationServiceSettings(this.testCredential.ConnectionString)
             {
                 LoggerFactory = this.loggerFactory,
@@ -97,7 +101,7 @@ namespace DurableTask.SqlServer.Tests.Utils
             await this.worker.StopAsync(isForced: true);
             this.worker.Dispose();
 
-            await SharedTestHelpers.DropTaskHubLoginAsync(this.testCredential);
+            await SharedTestHelpers.DropTaskHubLoginAsync(this.output, this.testCredential);
         }
 
         public Task<TestInstance<TInput>> RunOrchestration<TOutput, TInput>(
@@ -207,6 +211,14 @@ namespace DurableTask.SqlServer.Tests.Utils
 
         public void RegisterInlineOrchestration<TOutput, TInput>(
             string orchestrationName,
+            Func<OrchestrationContext, TInput, Task<TOutput>> implementation,
+            Action<OrchestrationContext, string, string> onEvent = null)
+        {
+            this.RegisterInlineOrchestration(orchestrationName, version: string.Empty, implementation, onEvent);
+        }
+
+        public void RegisterInlineOrchestration<TOutput, TInput>(
+            string orchestrationName,
             string version,
             Func<OrchestrationContext, TInput, Task<TOutput>> implementation,
             Action<OrchestrationContext, string, string> onEvent = null)
@@ -272,6 +284,7 @@ namespace DurableTask.SqlServer.Tests.Utils
         public async Task<string> GetTaskHubNameAsync()
         {
             return (string)await SharedTestHelpers.ExecuteSqlAsync(
+                this.output,
                 "SELECT dt.CurrentTaskHub()",
                 this.testCredential.ConnectionString);
         }

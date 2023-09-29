@@ -10,18 +10,20 @@ namespace DurableTask.SqlServer
     using System.Data.SqlTypes;
     using System.Diagnostics;
     using System.Linq;
+    using System.Text;
     using System.Threading;
     using System.Threading.Tasks;
     using DurableTask.Core;
     using DurableTask.Core.History;
+    using DurableTask.Core.Tracing;
     using Microsoft.Data.SqlClient;
     using Microsoft.Data.SqlClient.Server;
-    using Newtonsoft.Json;
     using SemVersion;
 
     static class SqlUtils
     {
         static readonly Random random = new Random();
+        static readonly char[] TraceContextSeparators = new char[] { '\n' };
 
         public static string? GetStringOrNull(this DbDataReader reader, int columnIndex)
         {
@@ -62,6 +64,7 @@ namespace DurableTask.SqlServer
                     historyEvent = new EventRaisedEvent(eventId, GetPayloadText(reader))
                     {
                         Name = GetName(reader),
+                        ParentTraceContext = GetTraceContext(reader),
                     };
                     break;
                 case EventType.EventSent:
@@ -103,6 +106,7 @@ namespace DurableTask.SqlServer
                         },
                         Tags = null, // TODO
                         Version = GetVersion(reader),
+                        ParentTraceContext = GetTraceContext(reader),
                     };
                     string? parentInstanceId = GetParentInstanceId(reader);
                     if (parentInstanceId != null)
@@ -187,6 +191,7 @@ namespace DurableTask.SqlServer
                         Input = GetPayloadText(reader),
                         Name = GetName(reader),
                         Version = GetVersion(reader),
+                        ParentTraceContext = GetTraceContext(reader),
                     };
                     break;
                 case EventType.TimerCreated:
@@ -425,6 +430,53 @@ namespace DurableTask.SqlServer
         {
             // The SQL client always assumes DateTimeKind.Unspecified. We need to modify the result so that it knows it is UTC.
             return DateTime.SpecifyKind(reader.GetDateTime(ordinal), DateTimeKind.Utc);
+        }
+
+        internal static SqlString GetTraceContext(HistoryEvent e)
+        {
+            if (e is not ISupportsDurableTraceContext eventWithTraceContext ||
+                eventWithTraceContext.ParentTraceContext == null)
+            {
+                return SqlString.Null;
+            }
+
+            DistributedTraceContext traceContext = eventWithTraceContext.ParentTraceContext;
+
+            // We prefer a simple format instead of JSON because external callers may interact with this
+            // data and we don't want to expose them to some internal JSON serialization format.
+            var sb = new StringBuilder(traceContext.TraceParent, capacity: 800);
+            if (!string.IsNullOrEmpty(traceContext.TraceState))
+            {
+                sb.Append('\n').Append(traceContext.TraceState);
+            }
+
+            return sb.ToString();
+        }
+
+        static DistributedTraceContext? GetTraceContext(DbDataReader reader)
+        {
+            int ordinal = reader.GetOrdinal("TraceContext");
+            if (reader.IsDBNull(ordinal))
+            {
+                return null;
+            }
+
+            string text = reader.GetString(ordinal);
+            if (string.IsNullOrEmpty(text))
+            {
+                return null;
+            }
+
+            string[] parts = text.Split(TraceContextSeparators, count: 2, StringSplitOptions.RemoveEmptyEntries);
+            var traceContext = new DistributedTraceContext(traceParent: parts[0]);
+
+            if (parts.Length > 1)
+            {
+                traceContext.TraceState = parts[1];
+            }
+
+            traceContext.ActivityStartTime = GetTimestamp(reader);
+            return traceContext;
         }
 
         public static SqlParameter AddInstanceIDsParameter(

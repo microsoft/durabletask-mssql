@@ -1,7 +1,7 @@
 ﻿-- Copyright (c) Microsoft Corporation.
 -- Licensed under the MIT License.
 
--- PERSISTENT SCHEMA OBJECTS (tables, indexes, types, etc.)
+-- PERSISTENT SCHEMA OBJECTS (tables, indexes, etc.)
 --
 -- The contents of this file must never be changed after
 -- being published. Any schema changes must be done in
@@ -10,79 +10,6 @@
 -- All objects must be created under the "dt" schema or under a custom schema.
 IF NOT EXISTS (SELECT 1 FROM sys.schemas WHERE name = '__SchemaNamePlaceholder__')
     EXEC('CREATE SCHEMA __SchemaNamePlaceholder__');
-
--- Create custom types
-IF TYPE_ID(N'__SchemaNamePlaceholder__.InstanceIDs') IS NULL
-    CREATE TYPE __SchemaNamePlaceholder__.InstanceIDs AS TABLE (
-        [InstanceID] varchar(100) NOT NULL
-    )
-GO
-
-IF TYPE_ID(N'__SchemaNamePlaceholder__.MessageIDs') IS NULL
-    -- WARNING: Reordering fields is a breaking change!
-    CREATE TYPE __SchemaNamePlaceholder__.MessageIDs AS TABLE (
-        [InstanceID] varchar(100) NULL,
-        [SequenceNumber] bigint NULL
-    )
-GO
-
-IF TYPE_ID(N'__SchemaNamePlaceholder__.HistoryEvents') IS NULL
-    -- WARNING: Reordering fields is a breaking change!
-    CREATE TYPE __SchemaNamePlaceholder__.HistoryEvents AS TABLE (
-        [InstanceID] varchar(100) NULL,
-        [ExecutionID] varchar(50) NULL,
-        [SequenceNumber] bigint NULL,
-        [EventType] varchar(40) NULL,
-        [Name] varchar(300) NULL,
-        [RuntimeStatus] varchar(30) NULL,
-        [TaskID] int NULL,
-        [Timestamp] datetime2 NULL,
-        [IsPlayed] bit NULL,
-        [VisibleTime] datetime2 NULL,
-        [Reason] varchar(max) NULL,
-        [PayloadText] varchar(max) NULL,
-        [PayloadID] uniqueidentifier NULL,
-        [ParentInstanceID] varchar(100) NULL,
-        [Version] varchar(100) NULL
-    )
-GO
-
-IF TYPE_ID(N'__SchemaNamePlaceholder__.OrchestrationEvents') IS NULL
-    -- WARNING: Reordering fields is a breaking change!
-    CREATE TYPE __SchemaNamePlaceholder__.OrchestrationEvents AS TABLE (
-        [InstanceID] varchar(100) NULL,
-        [ExecutionID] varchar(50) NULL,
-        [SequenceNumber] bigint NULL,
-        [EventType] varchar(40) NULL,
-        [Name] varchar(300) NULL,
-        [RuntimeStatus] varchar(30) NULL,
-        [TaskID] int NULL,
-        [VisibleTime] datetime2 NULL,
-        [Reason] varchar(max) NULL,
-        [PayloadText] varchar(max) NULL,
-        [PayloadID] uniqueidentifier NULL,
-        [ParentInstanceID] varchar(100) NULL,
-        [Version] varchar(100) NULL
-    )
-GO
-
-IF TYPE_ID(N'__SchemaNamePlaceholder__.TaskEvents') IS NULL
-    -- WARNING: Reordering fields is a breaking change!
-    CREATE TYPE __SchemaNamePlaceholder__.TaskEvents AS TABLE (
-        [InstanceID] varchar(100) NULL,
-        [ExecutionID] varchar(50) NULL,
-        [Name] varchar(300) NULL,
-        [EventType] varchar(40) NULL,
-        [TaskID] int NULL,
-        [VisibleTime] datetime2 NULL,
-        [LockedBy] varchar(100) NULL,
-        [LockExpiration] datetime2 NULL,
-        [Reason] varchar(max) NULL,
-        [PayloadText] varchar(max) NULL,
-        [PayloadID] uniqueidentifier NULL,
-        [Version] varchar(100) NULL
-    )
-GO
 
 -- Create tables
 

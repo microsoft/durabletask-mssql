@@ -20,7 +20,7 @@ namespace DurableTask.SqlServer
     using DurableTask.SqlServer.SqlTypes;
     using DurableTask.SqlServer.Utils;
     using Microsoft.Data.SqlClient;
-    using Newtonsoft.Json;
+
 
     public class SqlOrchestrationService : OrchestrationServiceBase
     {
@@ -513,6 +513,7 @@ namespace DurableTask.SqlServer
             command.Parameters.Add("@ExecutionID", SqlDbType.VarChar, size: 50).Value = instance.ExecutionId;
             command.Parameters.Add("@InputText", SqlDbType.VarChar).Value = startEvent.Input;
             command.Parameters.Add("@StartTime", SqlDbType.DateTime2).Value = startEvent.ScheduledStartTime;
+            command.Parameters.Add("@TraceContext", SqlDbType.VarChar, size: 800).Value = SqlUtils.GetTraceContext(startEvent);
 
             if (dedupeStatuses?.Length > 0)
             {
