@@ -253,10 +253,10 @@ namespace DurableTask.SqlServer
 
             var state = new OrchestrationState
             {
-                CompletedTime = reader.GetUtcDateTimeOrNull(reader.GetOrdinal("CompletedTime")) ?? default,
-                CreatedTime = reader.GetUtcDateTimeOrNull(reader.GetOrdinal("CreatedTime")) ?? default,
+                CompletedTime = GetUtcDateTime(reader, "CompletedTime"),
+                CreatedTime = GetUtcDateTime(reader, "CreatedTime"),
                 Input = reader.GetStringOrNull(reader.GetOrdinal("InputText")),
-                LastUpdatedTime = reader.GetUtcDateTimeOrNull(reader.GetOrdinal("LastUpdatedTime")) ?? default,
+                LastUpdatedTime = GetUtcDateTime(reader, "LastUpdatedTime"),
                 Name = GetName(reader),
                 Version = GetVersion(reader),
                 OrchestrationInstance = new OrchestrationInstance
@@ -417,23 +417,28 @@ namespace DurableTask.SqlServer
 
         static DateTime GetVisibleTime(DbDataReader reader)
         {
-            int ordinal = reader.GetOrdinal("VisibleTime");
-            return GetUtcDateTime(reader, ordinal);
+            return GetUtcDateTime(reader, "VisibleTime");
         }
 
         static DateTime GetTimestamp(DbDataReader reader)
         {
-            int ordinal = reader.GetOrdinal("Timestamp");
-            return GetUtcDateTime(reader, ordinal);
+            return GetUtcDateTime(reader, "Timestamp");
         }
 
-        static DateTime? GetUtcDateTimeOrNull(this DbDataReader reader, int columnIndex)
+        static DateTime GetUtcDateTime(DbDataReader reader, string columnName)
         {
-            return reader.IsDBNull(columnIndex) ? (DateTime?)null : GetUtcDateTime(reader, columnIndex);
+            int ordinal = reader.GetOrdinal(columnName);
+            return GetUtcDateTime(reader, ordinal);
         }
 
         static DateTime GetUtcDateTime(DbDataReader reader, int ordinal)
         {
+            if (reader.IsDBNull(ordinal))
+            {
+                // Note that some serializers (like protobuf) won't accept non-UTC DateTime objects.
+                return DateTime.SpecifyKind(default, DateTimeKind.Utc);
+            }
+
             // The SQL client always assumes DateTimeKind.Unspecified. We need to modify the result so that it knows it is UTC.
             return DateTime.SpecifyKind(reader.GetDateTime(ordinal), DateTimeKind.Utc);
         }
