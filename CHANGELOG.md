@@ -12,7 +12,7 @@
  
 ### Updates
 
-* SqlOrchestrationService.WaitForInstanceAsync no longer throws `TimeoutException` - only `OperationCanceledException` (previously could be either, depending on timing)
+* SqlOrchestrationService.WaitForInstanceAsync no longer throws `TimeoutException` - only `OperationCanceledException` (previously could be either, depending on timing)* Fix default DateTime values to have DateTimeKind of UTC (instead of Unspecified)
 
 ## v1.2.0
 
