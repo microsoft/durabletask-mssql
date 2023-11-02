@@ -71,9 +71,13 @@ namespace DurableTask.SqlServer.Tests.Utils
             OrchestrationStatus expectedStatus = OrchestrationStatus.Completed,
             object expectedOutput = null,
             string expectedOutputRegex = null,
-            bool continuedAsNew = false)
+            bool continuedAsNew = false,
+            bool doNotAdjustTimeout = false)
         {
-            AdjustTimeout(ref timeout);
+            if (!doNotAdjustTimeout)
+            {
+                AdjustTimeout(ref timeout);
+            }
 
             OrchestrationState state = await this.client.WaitForOrchestrationAsync(this.GetInstanceForAnyExecution(), timeout);
             Assert.NotNull(state);
@@ -156,6 +160,17 @@ namespace DurableTask.SqlServer.Tests.Utils
             this.input = newInput;
             this.startTime = DateTime.UtcNow;
             this.instance.ExecutionId = newInstance.ExecutionId;
+        }
+
+
+        internal Task SuspendAsync(string reason = null)
+        {
+            return this.client.SuspendInstanceAsync(this.instance, reason);
+        }
+
+        internal Task ResumeAsync(string reason = null)
+        {
+            return this.client.ResumeInstanceAsync(this.instance, reason);
         }
 
         static void AdjustTimeout(ref TimeSpan timeout)

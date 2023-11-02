@@ -205,6 +205,7 @@ namespace DurableTask.SqlServer
                             currentStatus = SqlUtils.GetRuntimeStatus(reader);
                             isRunning =
                                 currentStatus == OrchestrationStatus.Running ||
+                                currentStatus == OrchestrationStatus.Suspended ||
                                 currentStatus == OrchestrationStatus.Pending;
                         }
                         else
@@ -570,19 +571,7 @@ namespace DurableTask.SqlServer
                     return state;
                 }
 
-                try
-                {
-                    await Task.Delay(TimeSpan.FromSeconds(1), combinedCts.Token);
-                }
-                catch (TaskCanceledException)
-                {
-                    if (timeoutCts.Token.IsCancellationRequested)
-                    {
-                        throw new TimeoutException($"A caller-specified timeout of {timeout} has expired, but instance '{instanceId}' is still in an {state?.OrchestrationStatus.ToString() ?? "unknown"} state.");
-                    }
-
-                    throw;
-                }
+                await Task.Delay(TimeSpan.FromSeconds(1), combinedCts.Token);
             }
         }
 

@@ -630,7 +630,6 @@ BEGIN
             E.[InstanceID] = I.[InstanceID]
     WHERE
         I.TaskHub = @TaskHub AND
-        I.[RuntimeStatus] NOT IN ('Suspended') AND
 	    (I.[LockExpiration] IS NULL OR I.[LockExpiration] < @now) AND
         (E.[VisibleTime] IS NULL OR E.[VisibleTime] < @now)
 

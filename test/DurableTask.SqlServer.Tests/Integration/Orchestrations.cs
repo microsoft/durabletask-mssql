@@ -768,5 +768,62 @@ namespace DurableTask.SqlServer.Tests.Integration
             Assert.True(activitySpan.Duration > delay);
             Assert.True(activitySpan.Duration < delay * 2);
         }
+
+        [Fact]
+        public async Task SuspendAndResumeInstance()
+        {
+            TaskCompletionSource<int> tcs = null;
+
+            const int EventCount = 5;
+            string orchestrationName = "SuspendResumeOrchestration";
+
+            TestInstance<string> instance = await this.testService.RunOrchestration<int, string>(
+                null,
+                orchestrationName,
+                implementation: async (ctx, _) =>
+                {
+                    tcs = new TaskCompletionSource<int>();
+
+                    int i;
+                    for (i = 0; i < EventCount; i++)
+                    {
+                        await tcs.Task;
+                        tcs = new TaskCompletionSource<int>();
+                    }
+
+                    return i;
+                },
+                onEvent: (ctx, name, value) =>
+                {
+                    Assert.Equal("Event" + value, name);
+                    tcs.TrySetResult(int.Parse(value));
+                });
+
+            // Wait for the orchestration to finish starting
+            await instance.WaitForStart();
+
+            // Suspend the orchestration so that it won't process any new events
+            await instance.SuspendAsync();
+
+            // Raise the events, which should get buffered but not consumed
+            for (int i = 0; i < EventCount; i++)
+            {
+                await instance.RaiseEventAsync($"Event{i}", i);
+            }
+
+            // Make sure that the orchestration *doesn't* complete
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(
+                () => instance.WaitForCompletion(TimeSpan.FromSeconds(3), doNotAdjustTimeout: true));
+
+            // Confirm that the orchestration is in a suspended state
+            OrchestrationState state = await instance.GetStateAsync();
+            Assert.Equal(OrchestrationStatus.Suspended, state.OrchestrationStatus);
+
+            // Resume the orchestration
+            await instance.ResumeAsync();
+
+            // Now the orchestration should complete immediately
+            await instance.WaitForCompletion(timeout: TimeSpan.FromSeconds(3), expectedOutput: EventCount);
+        }
     }
 }

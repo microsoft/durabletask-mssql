@@ -207,6 +207,12 @@ namespace DurableTask.SqlServer
                         TimerId = GetTaskId(reader),
                     };
                     break;
+                case EventType.ExecutionSuspended:
+                    historyEvent = new ExecutionSuspendedEvent(eventId, GetPayloadText(reader));
+                    break;
+                case EventType.ExecutionResumed:
+                    historyEvent = new ExecutionResumedEvent(eventId, GetPayloadText(reader));
+                    break;
                 default:
                     throw new InvalidOperationException($"Don't know how to interpret '{eventType}'.");
             }
