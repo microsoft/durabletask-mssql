@@ -137,7 +137,7 @@ namespace DurableTask.SqlServer
                     historyEvent = new SubOrchestrationInstanceCompletedEvent(eventId: -1, GetTaskId(reader), GetPayloadText(reader));
                     break;
                 case EventType.SubOrchestrationInstanceCreated:
-                    historyEvent = new SubOrchestrationInstanceCreatedEvent(eventId: -1)
+                    historyEvent = new SubOrchestrationInstanceCreatedEvent(eventId)
                     {
                         Input = GetPayloadText(reader),
                         InstanceId = "", // Placeholder - shouldn't technically be needed (adding it requires a SQL schema change)
