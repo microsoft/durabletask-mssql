@@ -134,10 +134,10 @@ namespace DurableTask.SqlServer
                     historyEvent = new OrchestratorStartedEvent(eventId);
                     break;
                 case EventType.SubOrchestrationInstanceCompleted:
-                    historyEvent = new SubOrchestrationInstanceCompletedEvent(eventId, GetTaskId(reader), GetPayloadText(reader));
+                    historyEvent = new SubOrchestrationInstanceCompletedEvent(eventId: -1, GetTaskId(reader), GetPayloadText(reader));
                     break;
                 case EventType.SubOrchestrationInstanceCreated:
-                    historyEvent = new SubOrchestrationInstanceCreatedEvent(eventId)
+                    historyEvent = new SubOrchestrationInstanceCreatedEvent(eventId: -1)
                     {
                         Input = GetPayloadText(reader),
                         InstanceId = "", // Placeholder - shouldn't technically be needed (adding it requires a SQL schema change)
@@ -156,7 +156,7 @@ namespace DurableTask.SqlServer
                     }
 
                     historyEvent = new SubOrchestrationInstanceFailedEvent(
-                        eventId,
+                        eventId: -1,
                         taskScheduledId: GetTaskId(reader),
                         reason: subOrchFailedReason,
                         details: subOrchFailedDetails,
@@ -164,7 +164,7 @@ namespace DurableTask.SqlServer
                     break;
                 case EventType.TaskCompleted:
                     historyEvent = new TaskCompletedEvent(
-                        eventId,
+                        eventId: -1,
                         taskScheduledId: GetTaskId(reader),
                         result: GetPayloadText(reader));
                     break;
@@ -179,7 +179,7 @@ namespace DurableTask.SqlServer
                     }
 
                     historyEvent = new TaskFailedEvent(
-                        eventId,
+                        eventId: -1,
                         taskScheduledId: GetTaskId(reader),
                         reason: taskFailedReason,
                         details: taskFailedDetails,
@@ -201,7 +201,7 @@ namespace DurableTask.SqlServer
                     };
                     break;
                 case EventType.TimerFired:
-                    historyEvent = new TimerFiredEvent(eventId)
+                    historyEvent = new TimerFiredEvent(eventId: -1)
                     {
                         FireAt = GetVisibleTime(reader),
                         TimerId = GetTaskId(reader),
