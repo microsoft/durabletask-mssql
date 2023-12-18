@@ -4,6 +4,13 @@
 
 (Add new notes here)
 
+## v1.2.2
+
+### Updates
+
+* Fix for NewEvents stuck due to InvalidCastException ([#201](https://github.com/microsoft/durabletask-mssql/pull/201))
+* Fix Functions.Worker.Extensions.DurableTask.SqlServer to reference correct DurableTask.SqlServer.AzureFunctions package ([#202](https://github.com/microsoft/durabletask-mssql/pull/202))
+
 ## v1.2.1
 
 ### New
