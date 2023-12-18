@@ -753,8 +753,8 @@ namespace DurableTask.SqlServer.Tests.Integration
             Assert.NotEqual(orchestratorSpan.SpanId, subOrchestratorSpan.SpanId); // new span ID
             Assert.Equal("TestTraceState (modified!)", subOrchestratorSpan.TraceStateString);
             Assert.True(subOrchestratorSpan.StartTimeUtc > orchestratorSpan.StartTimeUtc + delay);
-            Assert.True(subOrchestratorSpan.Duration > delay);
-            Assert.True(subOrchestratorSpan.Duration < delay * 2);
+            Assert.True(subOrchestratorSpan.Duration > delay, $"Unexpected duration: {subOrchestratorSpan.Duration}");
+            Assert.True(subOrchestratorSpan.Duration < delay * 2, $"Unexpected duration: {subOrchestratorSpan.Duration}");
 
             // Validate the activity span, which should be a subset of the sub-orchestration span
             Activity activitySpan = exportedItems.LastOrDefault(
