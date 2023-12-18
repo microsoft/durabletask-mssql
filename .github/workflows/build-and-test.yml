@@ -19,19 +19,24 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+
     - name: Setup .NET 6
       uses: actions/setup-dotnet@v3
       with:
         dotnet-version: '6.0.x'
       env:
         NUGET_AUTH_TOKEN: RequiredButNotUsed
+
     - name: NuGet Restore
       run: dotnet restore -v n
+
     - name: Build
       run: dotnet build
+
     - name: Setup SQL Server container
       run: test/setup.ps1
       shell: pwsh
+
     - name: Durable framework tests
       run: dotnet test --no-build --verbosity normal --filter Category!=Stress ./test/DurableTask.SqlServer.Tests/DurableTask.SqlServer.Tests.csproj
     - name: Functions runtime tests
