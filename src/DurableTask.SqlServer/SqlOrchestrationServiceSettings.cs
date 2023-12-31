@@ -31,7 +31,7 @@ namespace DurableTask.SqlServer
         /// <param name="taskHubName">Optional. The name of the task hub. If not specified, a default name will be used.</param>
         /// <param name="schemaName">Optional. The name of the schema. If not specified, the default 'dt' value will be used.</param>
         /// <param name="addTaskHubToConnectionString">Optional. When true, task hub name is added to connection string.
-        ///  Default value is <c>true</c> to match behavior of connection pool before introdcution of this parameter.</param>
+        ///  Default value is <c>true</c> to match behavior of connection pool before introduction of this parameter.</param>
         public SqlOrchestrationServiceSettings(string connectionString, string? taskHubName = null, string? schemaName = null, bool addTaskHubToConnectionString = true)
         {
             if (string.IsNullOrEmpty(connectionString))
@@ -174,12 +174,12 @@ namespace DurableTask.SqlServer
         public bool CreateDatabaseIfNotExists { get; set; }
 
         /// <summary>
-        /// Gets or sets a flag indicating wether task hub is created for multi-tennant naming
+        /// Gets or sets a flag indicating wether task hub is created for multitenant naming
         /// (derived from sql server user name) or for application specified naming.
         /// </summary>
         /// <seealso cref="SqlOrchestrationService.CreateAsync(bool)"/>
-        [JsonProperty("createMultiTennantTaskHub ")]
-        public bool CreateMultiTennantTaskHub { get; set; } = true;
+        [JsonProperty("createMultitenantTaskHub ")]
+        public bool CreateMultitenantTaskHub { get; set; } = true;
 
         /// <summary>
         /// Gets a SQL connection string associated with the configured task hub.

@@ -123,7 +123,7 @@ namespace DurableTask.SqlServer
                 command.CommandText = $"{this.settings.SchemaName}.SetGlobalSetting";
                 command.CommandType = CommandType.StoredProcedure;
                 command.Parameters.Add("@Name", SqlDbType.VarChar, 300).Value = "TaskHubMode";
-                command.Parameters.Add("@Value", SqlDbType.Variant).Value = this.settings.CreateMultiTennantTaskHub ? 1 : 0;
+                command.Parameters.Add("@Value", SqlDbType.Variant).Value = this.settings.CreateMultitenantTaskHub ? 1 : 0;
 
                 await SqlUtils.ExecuteNonQueryAsync(command, this.traceHelper);
             }
