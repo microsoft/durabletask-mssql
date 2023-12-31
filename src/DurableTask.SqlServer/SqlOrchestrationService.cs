@@ -20,7 +20,7 @@ namespace DurableTask.SqlServer
     using DurableTask.SqlServer.SqlTypes;
     using DurableTask.SqlServer.Utils;
     using Microsoft.Data.SqlClient;
-    using Newtonsoft.Json;
+
 
     public class SqlOrchestrationService : OrchestrationServiceBase
     {
@@ -245,6 +245,7 @@ namespace DurableTask.SqlServer
                             currentStatus = SqlUtils.GetRuntimeStatus(reader);
                             isRunning =
                                 currentStatus == OrchestrationStatus.Running ||
+                                currentStatus == OrchestrationStatus.Suspended ||
                                 currentStatus == OrchestrationStatus.Pending;
                         }
                         else
@@ -551,6 +552,7 @@ namespace DurableTask.SqlServer
             command.Parameters.Add("@ExecutionID", SqlDbType.VarChar, size: 50).Value = instance.ExecutionId;
             command.Parameters.Add("@InputText", SqlDbType.VarChar).Value = startEvent.Input;
             command.Parameters.Add("@StartTime", SqlDbType.DateTime2).Value = startEvent.ScheduledStartTime;
+            command.Parameters.Add("@TraceContext", SqlDbType.VarChar, size: 800).Value = SqlUtils.GetTraceContext(startEvent);
 
             if (dedupeStatuses?.Length > 0)
             {
@@ -607,19 +609,7 @@ namespace DurableTask.SqlServer
                     return state;
                 }
 
-                try
-                {
-                    await Task.Delay(TimeSpan.FromSeconds(1), combinedCts.Token);
-                }
-                catch (TaskCanceledException)
-                {
-                    if (timeoutCts.Token.IsCancellationRequested)
-                    {
-                        throw new TimeoutException($"A caller-specified timeout of {timeout} has expired, but instance '{instanceId}' is still in an {state?.OrchestrationStatus.ToString() ?? "unknown"} state.");
-                    }
-
-                    throw;
-                }
+                await Task.Delay(TimeSpan.FromSeconds(1), combinedCts.Token);
             }
         }
 
@@ -664,7 +654,7 @@ namespace DurableTask.SqlServer
             using DbDataReader reader = await SqlUtils.ExecuteReaderAsync(command, this.traceHelper, instanceId);
 
             List<HistoryEvent> history = ReadHistoryEvents(reader, executionIdFilter);
-            return JsonConvert.SerializeObject(history);
+            return DTUtils.SerializeToJson(history);
         }
 
         static List<HistoryEvent> ReadHistoryEvents(

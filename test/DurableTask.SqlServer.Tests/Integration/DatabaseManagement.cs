@@ -17,6 +17,7 @@ namespace DurableTask.SqlServer.Tests.Integration
     using Microsoft.Extensions.Logging;
     using Microsoft.SqlServer.Management.Common;
     using Microsoft.SqlServer.Management.Smo;
+    using SemVersion;
     using Xunit;
     using Xunit.Abstractions;
 
@@ -43,6 +44,7 @@ namespace DurableTask.SqlServer.Tests.Integration
             {
                 "drop-schema.sql",
                 "schema-1.0.0.sql",
+                "schema-1.2.0.sql",
                 "logic.sql",
                 "permissions.sql",
             };
@@ -94,18 +96,19 @@ namespace DurableTask.SqlServer.Tests.Integration
                     LogAssert.AcquiredAppLock(),
                     LogAssert.ExecutedSqlScript("drop-schema.sql"),
                     LogAssert.ExecutedSqlScript("schema-1.0.0.sql"),
+                    LogAssert.ExecutedSqlScript("schema-1.2.0.sql"),
                     LogAssert.ExecutedSqlScript("logic.sql"),
                     LogAssert.ExecutedSqlScript("permissions.sql"),
                     LogAssert.SprocCompleted("dt._UpdateVersion"),
                     LogAssert.SprocCompleted("dt.SetGlobalSetting"))
                 .EndOfLog();
 
-            ValidateDatabaseSchema(testDb);
+            await this.ValidateDatabaseSchemaAsync(testDb);
 
             // Create the DB schema again - should be a no-op since it already exists
             this.logProvider.Clear();
             await service.CreateIfNotExistsAsync();
-            ValidateDatabaseSchema(testDb);
+            await this.ValidateDatabaseSchemaAsync(testDb);
 
             // The subsequent execution should run exactly one sproc and no scripts.
             // It's important to verify this to ensure the overhead of CreateIfNotExistsAsync is very small.
@@ -154,17 +157,18 @@ namespace DurableTask.SqlServer.Tests.Integration
                     LogAssert.AcquiredAppLock(),
                     LogAssert.ExecutedSqlScript("drop-schema.sql"),
                     LogAssert.ExecutedSqlScript("schema-1.0.0.sql"),
+                    LogAssert.ExecutedSqlScript("schema-1.2.0.sql"),
                     LogAssert.ExecutedSqlScript("logic.sql"),
                     LogAssert.ExecutedSqlScript("permissions.sql"),
                     LogAssert.SprocCompleted($"{schemaName}._UpdateVersion"),
                     LogAssert.SprocCompleted($"{schemaName}.SetGlobalSetting"))
                 .EndOfLog();
-            
-            ValidateDatabaseSchema(testDb, schemaName);
+
+            await this.ValidateDatabaseSchemaAsync(testDb, schemaName);
             
             this.logProvider.Clear();
             await service.CreateIfNotExistsAsync();
-            ValidateDatabaseSchema(testDb, schemaName);
+            await this.ValidateDatabaseSchemaAsync(testDb, schemaName);
             
             LogAssert.NoWarningsOrErrors(this.logProvider);
             LogAssert.Sequence(
@@ -198,8 +202,8 @@ namespace DurableTask.SqlServer.Tests.Integration
             IOrchestrationService secondService = this.CreateServiceWithTestDb(testDb, secondTestSchemaName);
             
             await firstService.CreateAsync(recreateInstanceStore: true);
-            
-            ValidateDatabaseSchema(testDb, firstTestSchemaName);
+
+            await this.ValidateDatabaseSchemaAsync(testDb, firstTestSchemaName);
 
             await secondService.CreateAsync(recreateInstanceStore: true);
             
@@ -216,6 +220,7 @@ namespace DurableTask.SqlServer.Tests.Integration
                     LogAssert.AcquiredAppLock(),
                     LogAssert.ExecutedSqlScript("drop-schema.sql"),
                     LogAssert.ExecutedSqlScript("schema-1.0.0.sql"),
+                    LogAssert.ExecutedSqlScript("schema-1.2.0.sql"),
                     LogAssert.ExecutedSqlScript("logic.sql"),
                     LogAssert.ExecutedSqlScript("permissions.sql"),
                     LogAssert.SprocCompleted($"{firstTestSchemaName}._UpdateVersion"), 
@@ -226,17 +231,18 @@ namespace DurableTask.SqlServer.Tests.Integration
                     LogAssert.AcquiredAppLock(),
                     LogAssert.ExecutedSqlScript("drop-schema.sql"),
                     LogAssert.ExecutedSqlScript("schema-1.0.0.sql"),
+                    LogAssert.ExecutedSqlScript("schema-1.2.0.sql"),
                     LogAssert.ExecutedSqlScript("logic.sql"),
                     LogAssert.ExecutedSqlScript("permissions.sql"),
                     LogAssert.SprocCompleted($"{secondTestSchemaName}._UpdateVersion"),
                     LogAssert.SprocCompleted($"{secondTestSchemaName}.SetGlobalSetting"))
                 .EndOfLog();
-            
-            ValidateDatabaseSchema(testDb, secondTestSchemaName);
+
+            await this.ValidateDatabaseSchemaAsync(testDb, secondTestSchemaName);
             
             this.logProvider.Clear();
             await firstService.CreateIfNotExistsAsync();
-            ValidateDatabaseSchema(testDb, firstTestSchemaName);
+            await this.ValidateDatabaseSchemaAsync(testDb, firstTestSchemaName);
             
             LogAssert.NoWarningsOrErrors(this.logProvider);
             LogAssert.Sequence(
@@ -247,7 +253,7 @@ namespace DurableTask.SqlServer.Tests.Integration
 
             this.logProvider.Clear();
             await secondService.CreateIfNotExistsAsync();
-            ValidateDatabaseSchema(testDb, secondTestSchemaName);
+            await this.ValidateDatabaseSchemaAsync(testDb, secondTestSchemaName);
 
             LogAssert.NoWarningsOrErrors(this.logProvider);
             LogAssert.Sequence(
@@ -309,35 +315,32 @@ namespace DurableTask.SqlServer.Tests.Integration
                     LogAssert.AcquiredAppLock(),
                     LogAssert.SprocCompleted("dt._GetVersions"),
                     LogAssert.ExecutedSqlScript("schema-1.0.0.sql"),
+                    LogAssert.ExecutedSqlScript("schema-1.2.0.sql"),
                     LogAssert.ExecutedSqlScript("logic.sql"),
                     LogAssert.ExecutedSqlScript("permissions.sql"),
                     LogAssert.SprocCompleted("dt._UpdateVersion"),
                     LogAssert.SprocCompleted("dt.SetGlobalSetting"))
                 .EndOfLog();
 
-            ValidateDatabaseSchema(testDb);
+            await this.ValidateDatabaseSchemaAsync(testDb);
         }
 
         /// <summary>
         /// Verifies that CreateIfNotExistsAsync is thread-safe.
         /// </summary>
-        /// <returns></returns>
         [Theory]
         [InlineData(true)]
         [InlineData(false)]
-        public void SchemaCreationIsSerializedAndIdempotent(bool isDatabaseMissing)
+        public async Task SchemaCreationIsSerializedAndIdempotent(bool isDatabaseMissing)
         {
             using TestDatabase testDb = this.CreateTestDb(!isDatabaseMissing);
             IOrchestrationService service = this.CreateServiceWithTestDb(testDb);
 
             // Simulate 4 workers starting up concurrently and trying to initialize
             // the same database schema. It should just work with predictable output.
-            Parallel.For(0, 4, i =>
-            {
-                service.CreateIfNotExistsAsync().GetAwaiter().GetResult();
-            });
+            await Enumerable.Range(0, 4).ParallelForEachAsync(4, i => service.CreateIfNotExistsAsync());
 
-            ValidateDatabaseSchema(testDb);
+            await this.ValidateDatabaseSchemaAsync(testDb);
 
             // Operations are expected to be serialized, making the log output deterministic.
             LogAssert
@@ -366,6 +369,7 @@ namespace DurableTask.SqlServer.Tests.Integration
                     LogAssert.AcquiredAppLock(statusCode: 0),
                     LogAssert.SprocCompleted("dt._GetVersions"),
                     LogAssert.ExecutedSqlScript("schema-1.0.0.sql"),
+                    LogAssert.ExecutedSqlScript("schema-1.2.0.sql"),
                     LogAssert.ExecutedSqlScript("logic.sql"),
                     LogAssert.ExecutedSqlScript("permissions.sql"),
                     LogAssert.SprocCompleted("dt._UpdateVersion"),
@@ -408,7 +412,7 @@ namespace DurableTask.SqlServer.Tests.Integration
             return new SqlOrchestrationService(options);
         }
 
-        static void ValidateDatabaseSchema(TestDatabase database, string schemaName = "dt")
+        async Task ValidateDatabaseSchemaAsync(TestDatabase database, string schemaName = "dt")
         {
             var expectedTableNames = new HashSet<string>(StringComparer.Ordinal)
             {
@@ -463,7 +467,7 @@ namespace DurableTask.SqlServer.Tests.Integration
             };
 
             // Ensure the schema exists
-            Assert.Contains($"{schemaName}", database.GetSchemas());
+            Assert.Contains(schemaName, database.GetSchemas());
 
             // Make sure we've accounted for all expected tables
             foreach (string tableName in database.GetTables(schemaName))
@@ -500,6 +504,16 @@ namespace DurableTask.SqlServer.Tests.Integration
             }
 
             Assert.Empty(expectedFunctionNames);
+
+            // Verify that the schema version in the database matches the expected version
+            // Note that we'll need to change the expected version here whenever we introduce new schema.
+            SemanticVersion currentSchemaVersion = await SharedTestHelpers.GetCurrentSchemaVersionAsync(
+                this.output,
+                database.ConnectionString,
+                schemaName);
+            Assert.Equal(1, currentSchemaVersion.Major);
+            Assert.Equal(2, currentSchemaVersion.Minor);
+            Assert.Equal(2, currentSchemaVersion.Patch);
         }
 
         sealed class TestDatabase : IDisposable

@@ -5,6 +5,7 @@ namespace DurableTask.SqlServer.Tests.Integration
 {
     using System;
     using System.Collections.Generic;
+    using System.Diagnostics;
     using System.Linq;
     using System.Threading;
     using System.Threading.Tasks;
@@ -13,17 +14,23 @@ namespace DurableTask.SqlServer.Tests.Integration
     using DurableTask.SqlServer.Tests.Logging;
     using DurableTask.SqlServer.Tests.Utils;
     using Moq;
+    using Newtonsoft.Json;
     using Newtonsoft.Json.Linq;
+    using OpenTelemetry;
+    using OpenTelemetry.Resources;
+    using OpenTelemetry.Trace;
     using Xunit;
     using Xunit.Abstractions;
 
     public class Orchestrations : IAsyncLifetime
     {
         readonly TestService testService;
+        readonly ITestOutputHelper outputHelper;
 
         public Orchestrations(ITestOutputHelper output)
         {
             this.testService = new TestService(output);
+            this.outputHelper = output;
         }
 
         Task IAsyncLifetime.InitializeAsync() => this.testService.InitializeAsync();
@@ -254,37 +261,82 @@ namespace DurableTask.SqlServer.Tests.Integration
         }
 
         [Fact]
-        public async Task OrchestrationException()
+        public async Task UncaughtOrchestrationException()
         {
-            string errorMessage = "Kah-BOOOOOM!!!";
+            var exceptionToThrow = new ApplicationException("Kah-BOOOOOM!!!");
 
             // The exception is expected to fail the orchestration execution
             TestInstance<string> instance = await this.testService.RunOrchestration<string, string>(
                 null,
                 orchestrationName: "OrchestrationWithException",
-                implementation: (ctx, input) => throw new Exception(errorMessage));
+                implementation: (ctx, input) => throw exceptionToThrow);
 
-            await instance.WaitForCompletion(
-                timeout: TimeSpan.FromSeconds(10),
-                expectedOutput: errorMessage,
-                expectedStatus: OrchestrationStatus.Failed);
+            OrchestrationState state = await instance.WaitForCompletion(expectedStatus: OrchestrationStatus.Failed);
+            Assert.NotNull(state.FailureDetails);
+            Assert.Equal(exceptionToThrow.Message, state.FailureDetails.ErrorMessage);
+            Assert.Equal(exceptionToThrow.GetType().FullName, state.FailureDetails.ErrorType);
+            Assert.NotNull(state.FailureDetails.StackTrace);
         }
 
         [Fact]
-        public async Task ActivityException()
+        public async Task UncaughtActivityException()
         {
-            // Performs a delay and then returns the input
+            var exceptionToThrow = new ApplicationException("Kah-BOOOOOM!!!");
+
+            // Schedules a task that throws an uncaught exception
             TestInstance<string> instance = await this.testService.RunOrchestration(
                 null as string,
                 orchestrationName: "OrchestrationWithActivityFailure",
                 implementation: (ctx, input) => ctx.ScheduleTask<string>("Throw", ""),
                 activities: new[] {
-                    ("Throw", TestService.MakeActivity<string, string>((ctx, input) => throw new Exception("Kah-BOOOOOM!!!"))),
+                    ("Throw", TestService.MakeActivity<string, string>((ctx, input) => throw exceptionToThrow)),
                 });
 
-            OrchestrationState state = await instance.WaitForCompletion(
-                expectedStatus: OrchestrationStatus.Failed,
-                expectedOutputRegex: ".*(Kah-BOOOOOM!!!).*");
+            OrchestrationState state = await instance.WaitForCompletion(expectedStatus: OrchestrationStatus.Failed);
+            Assert.NotNull(state.FailureDetails);
+            Assert.Contains("Task 'Throw' (#0) failed with an unhandled exception", state.FailureDetails.ErrorMessage);
+            Assert.Equal(typeof(TaskFailedException).FullName, state.FailureDetails.ErrorType);
+            Assert.NotNull(state.FailureDetails.StackTrace);
+
+            // Ideally, the original exception message would be included in the orchestrator output.
+            // This would require a change in DurableTask.Core.
+            //// Assert.Contains(exceptionToThrow.Message, state.FailureDetails.ErrorMessage);
+        }
+
+        [Fact]
+        public async Task CatchActivityException()
+        {
+            var exceptionToThrow = new ApplicationException("Kah-BOOOOOM!!!");
+
+            // Schedules a task that throws an exception, which is then caught by the orchestration
+            TestInstance<string> instance = await this.testService.RunOrchestration(
+                null as string,
+                orchestrationName: "OrchestrationWithActivityFailure",
+                implementation: async (ctx, input) =>
+                {
+                    try
+                    {
+                        await ctx.ScheduleTask<string>("Throw", "");
+                        return null; // not expected
+                    }
+                    catch (TaskFailedException e)
+                    {
+                        return e.FailureDetails;
+                    }
+                },
+                activities: new[] {
+                    ("Throw", TestService.MakeActivity<string, string>((ctx, input) => throw exceptionToThrow)),
+                });
+
+            OrchestrationState state = await instance.WaitForCompletion();
+
+            // The output should be a FailureDetails object with information about the caught exception
+            Assert.NotNull(state.Output);
+            FailureDetails details = JsonConvert.DeserializeObject<FailureDetails>(state.Output);
+            Assert.NotNull(details);
+            Assert.Equal(exceptionToThrow.Message, details.ErrorMessage);
+            Assert.Equal(exceptionToThrow.GetType().FullName, details.ErrorType);
+            Assert.NotNull(details.StackTrace);
         }
 
         [Fact]
@@ -463,7 +515,7 @@ namespace DurableTask.SqlServer.Tests.Integration
             IReadOnlyCollection<OrchestrationState> list = await this.testService.OrchestrationServiceMock.Object.GetManyOrchestrationsAsync(filter, CancellationToken.None);
 
             // Assert: total number of started orchestrations is 2 but we expect to have only one main orchestration.
-            Assert.Equal(1, list.Count);
+            Assert.Single(list);
         }
 
         [Fact]
@@ -585,14 +637,193 @@ namespace DurableTask.SqlServer.Tests.Integration
             await instance.WaitForStart();
 
             // Run the same instance again with the same instance ID
-            InvalidOperationException exception = Assert.Throws<OrchestrationAlreadyExistsException>(
-                () => instance.RestartAsync(input).GetAwaiter().GetResult());
+            InvalidOperationException exception = await Assert.ThrowsAsync<OrchestrationAlreadyExistsException>(
+                () => instance.RestartAsync(input));
             Assert.Contains(instanceId, exception.Message);
 
             // This time allow overwriting pending and running instances.
             string oldExecutionId = instance.ExecutionId;
             await instance.RestartAsync(input, new[] { OrchestrationStatus.Canceled });
             Assert.NotEqual(oldExecutionId, instance.ExecutionId);
+        }
+
+        [Fact]
+        public async Task TraceContextFlowCorrectly()
+        {
+            string traceSourceName = "MyTraceSource";
+            string orchestrationName = "ParentOrchestration";
+            string subOrchestrationName = "MySubOrchestration";
+            string activityName = "MyActivity";
+            TimeSpan delay = TimeSpan.FromMilliseconds(500);
+
+            // Use the OpenTelemetry SDK to collect traces from the Durable Task Framework. The in-memory
+            // exporter allows us to capture the exported traces and validate them.
+            var exportedItems = new List<Activity>();
+            using TracerProvider tracerProvider = Sdk.CreateTracerProviderBuilder()
+                .AddSource(traceSourceName, "DurableTask.Core")
+                .ConfigureResource(r => r.AddService("Test"))
+                .AddInMemoryExporter(exportedItems)
+                .Build();
+
+            using var traceSource = new ActivitySource(traceSourceName);
+            using var clientSpan = traceSource.StartActivity("TestSpan");
+            clientSpan.TraceStateString = "TestTraceState";
+
+            // Flow:
+            // [Orchestration] --> [SubOrchestration] --> [Activity]
+            this.testService.RegisterInlineOrchestration<string, string>(
+                subOrchestrationName,
+                implementation: (ctx, input) => ctx.ScheduleTask<string>(activityName, version: "", input));
+            TestInstance<string> parentInstance = await this.testService.RunOrchestration<string, string>(
+                null,
+                orchestrationName,
+                implementation: async (ctx, input) =>
+                {
+                    if (Activity.Current?.TraceStateString != null)
+                    {
+                        Activity.Current.TraceStateString += " (modified!)";
+                    }
+
+                    // Delay to test the duration of the final trace span
+                    await ctx.CreateTimer(ctx.CurrentUtcDateTime.Add(delay), "");
+
+                    return await ctx.CreateSubOrchestrationInstance<string>(subOrchestrationName, version: "", input);
+                },
+                activities: new[]
+                {
+                    (activityName, TestService.MakeActivity((TaskContext ctx, string input) =>
+                    {
+                        if (Activity.Current == null)
+                        {
+                            throw new ApplicationException("Activity.Current is null!");
+                        }
+
+                        Thread.Sleep(delay);
+                        return string.Join('\n', Activity.Current.Id, Activity.Current.TraceStateString);
+                    })),
+                });
+
+            OrchestrationState state = await parentInstance.WaitForCompletion();
+
+            // The output is expected to be the trace activity (span) ID and the trace state. These are the fields we
+            // mainly care about since those are the ones that get persisted in the database. This validation allows
+            // us to prove that the activity code has access to the correct trace activity information.
+            Assert.NotNull(state.Output);
+            string[] parts = JsonConvert.DeserializeObject<string>(state.Output).Split('\n');
+            Assert.Equal(2, parts.Length);
+
+            string traceParent = parts[0];
+            Assert.NotEqual(string.Empty, traceParent);
+            string traceState = parts[1];
+            Assert.Equal("TestTraceState (modified!)", traceState);
+
+            // Verify that the trace IDs are the same and that the spans are different (client vs. activity span)
+            ActivityContext outputSpan = ActivityContext.Parse(traceParent, traceState);
+            Assert.Equal(clientSpan.TraceId, outputSpan.TraceId);
+            Assert.NotEqual(clientSpan.SpanId, outputSpan.SpanId);
+
+            clientSpan.Stop();
+            tracerProvider.ForceFlush();
+
+            foreach (Activity span in exportedItems)
+            {
+                this.outputHelper.WriteLine(
+                    $"{span.Id}: Name={span.DisplayName}, Start={span.StartTimeUtc:o}, Duration={span.Duration}");
+            }
+
+            Assert.True(exportedItems.Count >= 4);
+
+            // Validate the orchestration trace activity/span. Specifically, the IDs and time range.
+            // We need to verify these because we use custom logic to store and retrieve this data (not serialization).
+            Activity orchestratorSpan = exportedItems.LastOrDefault(
+                span => span.OperationName == $"orchestration:{orchestrationName}");
+            Assert.NotNull(orchestratorSpan);
+            Assert.Equal(clientSpan.TraceId, orchestratorSpan.TraceId);
+            Assert.NotEqual(clientSpan.SpanId, orchestratorSpan.SpanId); // new span ID
+            Assert.Equal("TestTraceState", orchestratorSpan.TraceStateString);
+            Assert.True(orchestratorSpan.StartTimeUtc >= clientSpan.StartTimeUtc);
+            Assert.True(orchestratorSpan.Duration > delay * 2); // two sleeps
+            Assert.True(orchestratorSpan.StartTimeUtc + orchestratorSpan.Duration <= clientSpan.StartTimeUtc + clientSpan.Duration);
+
+            // Validate the sub-orchestrator span, which should be a sub-set of the parent orchestration span.
+            Activity subOrchestratorSpan = exportedItems.LastOrDefault(
+                span => span.OperationName == $"orchestration:{subOrchestrationName}");
+            Assert.NotNull(subOrchestratorSpan);
+            Assert.Equal(clientSpan.TraceId, subOrchestratorSpan.TraceId);
+            Assert.NotEqual(orchestratorSpan.SpanId, subOrchestratorSpan.SpanId); // new span ID
+            Assert.Equal("TestTraceState (modified!)", subOrchestratorSpan.TraceStateString);
+            Assert.True(subOrchestratorSpan.StartTimeUtc > orchestratorSpan.StartTimeUtc + delay);
+            Assert.True(subOrchestratorSpan.Duration > delay, $"Unexpected duration: {subOrchestratorSpan.Duration}");
+            Assert.True(subOrchestratorSpan.Duration < delay * 2, $"Unexpected duration: {subOrchestratorSpan.Duration}");
+
+            // Validate the activity span, which should be a subset of the sub-orchestration span
+            Activity activitySpan = exportedItems.LastOrDefault(
+                span => span.OperationName == $"activity:{activityName}");
+            Assert.NotNull(activitySpan);
+            Assert.Equal(clientSpan.TraceId, activitySpan.TraceId);
+            Assert.NotEqual(subOrchestratorSpan.SpanId, activitySpan.SpanId); // new span ID
+            Assert.Equal("TestTraceState (modified!)", activitySpan.TraceStateString);
+            Assert.True(activitySpan.StartTimeUtc > subOrchestratorSpan.StartTimeUtc);
+            Assert.True(activitySpan.Duration < subOrchestratorSpan.Duration);
+            Assert.True(activitySpan.Duration > delay);
+            Assert.True(activitySpan.Duration < delay * 2);
+        }
+
+        [Fact]
+        public async Task SuspendAndResumeInstance()
+        {
+            TaskCompletionSource<int> tcs = null;
+
+            const int EventCount = 5;
+            string orchestrationName = "SuspendResumeOrchestration";
+
+            TestInstance<string> instance = await this.testService.RunOrchestration<int, string>(
+                null,
+                orchestrationName,
+                implementation: async (ctx, _) =>
+                {
+                    tcs = new TaskCompletionSource<int>();
+
+                    int i;
+                    for (i = 0; i < EventCount; i++)
+                    {
+                        await tcs.Task;
+                        tcs = new TaskCompletionSource<int>();
+                    }
+
+                    return i;
+                },
+                onEvent: (ctx, name, value) =>
+                {
+                    Assert.Equal("Event" + value, name);
+                    tcs.TrySetResult(int.Parse(value));
+                });
+
+            // Wait for the orchestration to finish starting
+            await instance.WaitForStart();
+
+            // Suspend the orchestration so that it won't process any new events
+            await instance.SuspendAsync();
+
+            // Raise the events, which should get buffered but not consumed
+            for (int i = 0; i < EventCount; i++)
+            {
+                await instance.RaiseEventAsync($"Event{i}", i);
+            }
+
+            // Make sure that the orchestration *doesn't* complete
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(
+                () => instance.WaitForCompletion(TimeSpan.FromSeconds(3), doNotAdjustTimeout: true));
+
+            // Confirm that the orchestration is in a suspended state
+            OrchestrationState state = await instance.GetStateAsync();
+            Assert.Equal(OrchestrationStatus.Suspended, state.OrchestrationStatus);
+
+            // Resume the orchestration
+            await instance.ResumeAsync();
+
+            // Now the orchestration should complete immediately
+            await instance.WaitForCompletion(timeout: TimeSpan.FromSeconds(3), expectedOutput: EventCount);
         }
     }
 }

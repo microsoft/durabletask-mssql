@@ -171,7 +171,7 @@ namespace DurableTask.SqlServer.Tests.Integration
 
             // Validate the logs (there should be none)
             IReadOnlyList<LogEntry> recommendationChangeLogs = this.GetRecommendationChangeLogs();
-            Assert.Equal(0, recommendationChangeLogs.Count);
+            Assert.Empty(recommendationChangeLogs);
         }
 
         /// <summary>

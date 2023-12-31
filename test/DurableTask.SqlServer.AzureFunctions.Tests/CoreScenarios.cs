@@ -274,12 +274,12 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
             condition.ShowInput = true;
             condition.CreatedTimeFrom = sequencesFinishedTime;
             result = await client.ListInstancesAsync(condition, CancellationToken.None);
-            Assert.All(result.DurableOrchestrationState, state => Assert.NotEqual(JValue.CreateNull(), state.Input));
+            Assert.All(result.DurableOrchestrationState, state => Assert.NotEqual(string.Empty, state.Input.ToString()));
 
             condition.ShowInput = false;
             condition.CreatedTimeFrom = startTime;
             result = await client.ListInstancesAsync(condition, CancellationToken.None);
-            Assert.All(result.DurableOrchestrationState, state => Assert.Equal(JValue.CreateNull(), state.Input));
+            Assert.All(result.DurableOrchestrationState, state => Assert.Equal(string.Empty, state.Input.ToString()));
         }
 
 

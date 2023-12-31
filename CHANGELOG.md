@@ -2,14 +2,40 @@
 
 ## Unreleased
 
+(Add new notes here)
+
+## v1.2.2
+
+### Updates
+
+* Fix for NewEvents stuck due to InvalidCastException ([#201](https://github.com/microsoft/durabletask-mssql/pull/201))
+* Fix Functions.Worker.Extensions.DurableTask.SqlServer to reference correct DurableTask.SqlServer.AzureFunctions package ([#202](https://github.com/microsoft/durabletask-mssql/pull/202))
+
+## v1.2.1
+
+### New
+
+* Support suspend/resume of orchestrations
+ 
+### Updates
+
+* SqlOrchestrationService.WaitForInstanceAsync no longer throws `TimeoutException` - only `OperationCanceledException` (previously could be either, depending on timing)
+* Fix default DateTime values to have DateTimeKind of UTC (instead of Unspecified)
+
+## v1.2.0
+
 ### New
 
 * Support configurable max backoff intervals ([#163](https://github.com/microsoft/durabletask-mssql/pull/163)) - contributed by [@tompostler](https://github.com/tompostler)
 * Support configurable min and delta backoff intervals ([#174](https://github.com/microsoft/durabletask-mssql/pull/174)) - contributed by [@dmetzgar](https://github.com/dmetzgar)
+* Distributed tracing support and v1.2.0 schema update ([#190](https://github.com/microsoft/durabletask-mssql/pull/190))
+* Tools for upgrade testing ([#130](https://github.com/microsoft/durabletask-mssql/pull/130))
 
 ### Updates
 
 * Fix integer overflow issues in GetScaleMetric and QueryManyOrchestrations ([#155](https://github.com/microsoft/durabletask-mssql/pull/155)) - contributed by [@bhugot](https://github.com/bhugot)
+* Fix error propagation to correctly expose detailed error info ([#188](https://github.com/microsoft/durabletask-mssql/pull/188))
+* Updated various nuget dependency versions as part of [#190](https://github.com/microsoft/durabletask-mssql/pull/190)
 
 ## v1.1.1
 

@@ -4,4 +4,4 @@
 using Microsoft.Azure.Functions.Worker.Extensions.Abstractions;
 
 // This must be updated when updating the version of the package
-[assembly: ExtensionInformation("Microsoft.DurableTask.SqlServer.AzureFunctions", "1.1.*", true)]
+[assembly: ExtensionInformation("Microsoft.DurableTask.SqlServer.AzureFunctions", "1.2.*", true)]
