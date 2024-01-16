@@ -2,7 +2,9 @@
 
 ## Unreleased
 
-(Add new notes here)
+### Updates
+
+* Bump Microsoft.Data.SqlClient from 3.0.0 to 3.1.5 ([#204](https://github.com/microsoft/durabletask-mssql/pull/204))
 
 ## v1.2.2
 
