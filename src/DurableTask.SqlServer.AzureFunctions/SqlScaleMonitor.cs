@@ -26,7 +26,7 @@ namespace DurableTask.SqlServer.AzureFunctions
         public SqlScaleMonitor(SqlOrchestrationService service, string taskHubName)
         {
             this.service = service ?? throw new ArgumentNullException(nameof(service));
-            this.Descriptor = new ScaleMonitorDescriptor($"DurableTask-SqlServer:{taskHubName ?? "default"}");
+            this.Descriptor = new ScaleMonitorDescriptor($"DurableTask-SqlServer:{taskHubName ?? SqlOrchestrationServiceSettings.DefaultTaskHubName}");
         }
 
         /// <inheritdoc />
