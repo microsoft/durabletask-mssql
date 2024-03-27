@@ -16,6 +16,7 @@ docker pull mcr.microsoft.com/mssql/server:$tag
 
 # Start the SQL Server docker container with the specified edition
 Write-Host "Starting SQL Server $tag $sqlpid docker container on port $port" -ForegroundColor DarkYellow
+Write-Host "Command: docker run $additinalRunFlags --name mssql-server -e 'ACCEPT_EULA=Y' -e `"MSSQL_SA_PASSWORD=(redacted)`" -e `"MSSQL_PID=$sqlpid`" -p ${port}:1433 -d mcr.microsoft.com/mssql/server:$tag"
 docker run $additinalRunFlags --name mssql-server -e 'ACCEPT_EULA=Y' -e "MSSQL_SA_PASSWORD=$pw" -e "MSSQL_PID=$sqlpid" -p ${port}:1433 -d mcr.microsoft.com/mssql/server:$tag
 
 # The container needs a bit more time before it can start accepting commands
