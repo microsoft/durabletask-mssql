@@ -647,6 +647,43 @@ namespace DurableTask.SqlServer.Tests.Integration
             Assert.NotEqual(oldExecutionId, instance.ExecutionId);
         }
 
+        [Theory]
+        //[InlineData(true)] // BUG: https://github.com/microsoft/durabletask-mssql/issues/148
+        [InlineData(false)]
+        public async Task RetryFailedSubOrchestration(bool userSpecifiedInstanceId)
+        {
+            string subOrchestrationName = "FlakeySubOrchestration";
+
+            bool firstTime = true;
+            this.testService.RegisterInlineOrchestration<bool, string>(
+                subOrchestrationName, implementation: (ctx, input) =>
+                {
+                    if (firstTime)
+                    {
+                        firstTime = false;
+                        throw new ApplicationException("Kah-BOOOOOM!!!");
+                    }
+
+                    return Task.FromResult(!firstTime);
+                });
+
+            string subOrchestratorInstanceIdOrNull = userSpecifiedInstanceId ? Guid.NewGuid().ToString("N") : null;
+
+            TestInstance<string> parentInstance = await this.testService.RunOrchestration<bool, string>(
+                null,
+                "ParentOrchestration",
+                implementation: async (ctx, input) =>
+                {
+                    return await ctx.CreateSubOrchestrationInstanceWithRetry<bool>(
+                        name: subOrchestrationName,
+                        version: null,
+                        instanceId: subOrchestratorInstanceIdOrNull,
+                        new RetryOptions(TimeSpan.FromMilliseconds(1), maxNumberOfAttempts: 2),
+                        input: null);
+                });
+            await parentInstance.WaitForCompletion(expectedOutput: true);
+        }
+
         [Fact]
         public async Task TraceContextFlowCorrectly()
         {
