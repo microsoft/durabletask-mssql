@@ -1,10 +1,11 @@
 # Changelog
 
-## Unreleased
+## v1.2.3
 
 ### Updates
 
 * Bump Microsoft.Data.SqlClient from 3.0.0 to 3.1.5 ([#204](https://github.com/microsoft/durabletask-mssql/pull/204))
+* Bump Microsoft.Azure.Functions.Worker.Extensions.Abstractions from 1.1.0 to 1.3.0
 
 ## v1.2.2
 
