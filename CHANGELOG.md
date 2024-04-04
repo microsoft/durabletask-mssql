@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.3.0 (Unreleased)
+
+### Updates
+
+* Replace hardcoded version string + globs with build variables ([#213](https://github.com/microsoft/durabletask-mssql/pull/213))
+
 ## v1.2.3
 
 ### Updates
