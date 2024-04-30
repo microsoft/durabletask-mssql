@@ -16,7 +16,7 @@ namespace DurableTask.SqlServer
     using Microsoft.Data.SqlClient;
     using SemVersion;
 
-    class SqlDbManager
+    public class SqlDbManager
     {
         readonly SqlOrchestrationServiceSettings settings;
         readonly LogHelper traceHelper;

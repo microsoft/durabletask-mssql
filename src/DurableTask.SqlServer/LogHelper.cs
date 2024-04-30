@@ -10,7 +10,7 @@ namespace DurableTask.SqlServer
     using DurableTask.SqlServer.Logging;
     using Microsoft.Extensions.Logging;
 
-    class LogHelper
+    public class LogHelper
     {
         readonly ILogger log;
 

@@ -53,7 +53,7 @@ namespace DurableTask.SqlServer
 
         public override int MaxConcurrentTaskActivityWorkItems => this.settings.MaxConcurrentActivities;
 
-        static SqlOrchestrationServiceSettings? ValidateSettings(SqlOrchestrationServiceSettings? settings)
+        public static SqlOrchestrationServiceSettings? ValidateSettings(SqlOrchestrationServiceSettings? settings)
         {
             if (settings != null)
             {
