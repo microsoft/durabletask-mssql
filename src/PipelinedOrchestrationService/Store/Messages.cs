@@ -26,7 +26,7 @@ namespace PipelinedOrchestrationService
         {
             long id = tx.GetNextSequenceNumber();
 
-            base.Create(tx, id, taskMessage);
+            base.CreateNonExistingRow(tx, id, taskMessage);
 
             if (this.OnNewMessage != null)
             {
@@ -40,7 +40,7 @@ namespace PipelinedOrchestrationService
 
         public void RemoveProcessedMessage(TxContext tx, long id)
         {
-            base.Delete(tx, id);
+            base.DeleteExistingRow(tx, id);
         }
 
         protected override Task<(bool exists, TaskMessage? value)> LoadAsync(long key)

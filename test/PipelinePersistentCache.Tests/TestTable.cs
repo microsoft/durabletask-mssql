@@ -4,9 +4,6 @@
 namespace PipelinePersistentCache.Tests
 {
     using System;
-    using System.Collections.Generic;
-    using System.Linq;
-    using System.Text;
     using System.Threading.Tasks;
 
     class TestTable : Table<string, string, TestCheckpoint>
@@ -30,29 +27,29 @@ namespace PipelinePersistentCache.Tests
             return this.load(key);
         }
 
-        new public void Prefetch(TxContext tx, string key)
+        new public void PrefetchRow(TxContext tx, string key)
         {
-            base.Prefetch(tx, key);
+            base.PrefetchRow(tx, key);
         }
 
-        new public void Create(TxContext tx, string key, string value)  // this is the only operation that can be used without prefetching
+        new public void CreateNonExistingRow(TxContext tx, string key, string value)  // this is the only operation that can be used without prefetching
         {
-            base.Create(tx, key, value);
+            base.CreateNonExistingRow(tx, key, value);
         }
 
-        new public bool TryGetValue(TxContext tx, string key, out string? value)
+        new public bool TryGetRow(TxContext tx, string key, out string? value)
         {
-            return base.TryGetValue(tx, key, out value);
+            return base.TryGetRow(tx, key, out value);
         }
 
-        new public void Update(TxContext tx, string key, string value)
+        new public void UpdateExistingRow(TxContext tx, string key, string value)
         {
-            base.Update(tx, key, value);
+            base.UpdateExistingRow(tx, key, value);
         }
 
-        new public void Delete(TxContext tx, string key)
+        new public void DeleteExistingRow(TxContext tx, string key)
         {
-            base.Delete(tx, key);
+            base.DeleteExistingRow(tx, key);
         }
     }
 }

@@ -24,12 +24,12 @@ namespace PipelinedOrchestrationService
 
         public void EnsureInMemory(TxContext context, string instanceId)
         {
-            base.Prefetch(context, instanceId);
+            base.PrefetchRow(context, instanceId);
         }
 
         public HistoryEvent[] GetHistory(TxContext context, string instanceId)
         {
-            if (base.TryGetValue(context, instanceId, out var events))
+            if (base.TryGetRow(context, instanceId, out var events))
             {
                 return events!;
             }
@@ -41,12 +41,12 @@ namespace PipelinedOrchestrationService
 
         public void SetHistory(TxContext context, string instanceId, IList<HistoryEvent> events)
         {
-            base.Update(context, instanceId, events.ToArray());
+            base.UpdateExistingRow(context, instanceId, events.ToArray());
         }
 
         public void AppendHistory(TxContext context, string instanceId, int position, IList<HistoryEvent> events)
         {
-            bool exists = base.TryGetValue(context, instanceId, out HistoryEvent[]? current);
+            bool exists = base.TryGetRow(context, instanceId, out HistoryEvent[]? current);
             Debug.Assert(exists && current!.Length == position);
             var combined = new HistoryEvent[position + events.Count];
             for(int i = 0; i < position; i++)
@@ -57,12 +57,12 @@ namespace PipelinedOrchestrationService
             {
                 combined[position + i] = events[i];
             }
-            base.Update(context, instanceId, combined);
+            base.UpdateExistingRow(context, instanceId, combined);
         }
 
         public void DeleteHistory( TxContext context, string instanceId)
         {
-            base.Delete(context, instanceId);
+            base.DeleteExistingRow(context, instanceId);
         }
 
         protected override Task<(bool exists, HistoryEvent[]? value)> LoadAsync(string key)

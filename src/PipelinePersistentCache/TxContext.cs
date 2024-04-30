@@ -83,7 +83,6 @@ namespace PipelinePersistentCache
             }
         }
 
-
         public async ValueTask CompletePrefetchesAsync()
         {
             if (this.phase > Phase.Prefetch)

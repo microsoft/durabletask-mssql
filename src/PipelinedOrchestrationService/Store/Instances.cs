@@ -35,12 +35,12 @@ namespace PipelinedOrchestrationService
 
         public void EnsureInMemory(TxContext tx, string instanceId)
         {
-            base.Prefetch(tx, instanceId);
+            base.PrefetchRow(tx, instanceId);
         }
 
         public OrchestrationState? GetState(TxContext tx, string instanceId)
         {
-            if (base.TryGetValue(tx, instanceId, out var info))
+            if (base.TryGetRow(tx, instanceId, out var info))
             {
                 return new OrchestrationState()
                 {                    
@@ -63,12 +63,12 @@ namespace PipelinedOrchestrationService
 
         public bool Exists(TxContext tx, string instanceId)
         {
-            return base.TryGetValue(tx, instanceId, out _);
+            return base.TryGetRow(tx, instanceId, out _);
         }
 
         public void SetState(TxContext tx, string instanceId, OrchestrationState state)
         {
-            base.Update(tx, instanceId, new Info()
+            base.UpdateExistingRow(tx, instanceId, new Info()
             {
                 // TODO some stuff is missing here, requires some more care before finalizing
                 CreatedTime = state.CreatedTime,
@@ -85,7 +85,7 @@ namespace PipelinedOrchestrationService
 
         public void DeleteState(TxContext tx, string instanceId)
         {
-            base.Delete(tx, instanceId);
+            base.DeleteExistingRow(tx, instanceId);
         }
 
         protected override Task<(bool exists, Info value)> LoadAsync(string key)

@@ -57,7 +57,7 @@ namespace PipelinePersistentCache
         // subclasses override this to create deltas for writing back to storage.
         protected abstract void AddDeltaToCheckpointCommand(TCommand command, Writeback writeback, TKey key, TValue? Current);
 
-        protected void Prefetch(TxContext tx, TKey key)
+        protected void PrefetchRow(TxContext tx, TKey key)
         {
             tx.EnsurePrefetchPhase();
 
@@ -86,7 +86,7 @@ namespace PipelinePersistentCache
             }
         }
 
-        protected void Create(TxContext tx, TKey key, TValue value)  // this is the only operation that can be used without prefetching
+        protected void CreateNonExistingRow(TxContext tx, TKey key, TValue value)  // this is the only operation that can be used without prefetching
         {
             tx.EnsureExecutionPhase();
 
@@ -117,12 +117,15 @@ namespace PipelinePersistentCache
             }
             else
             {
+                if (info.Writeback == Writeback.None)
+                {
+                    tx.Cache.AddWriteback(info);
+                }
                 info.Writeback = Writeback.Created;
-                tx.Cache.AddWriteback(info);
             }
         }
 
-        protected bool TryGetValue(TxContext tx, TKey key, out TValue? value)
+        protected bool TryGetRow(TxContext tx, TKey key, out TValue? value)
         {
             tx.EnsureExecutionPhase();
 
@@ -142,7 +145,7 @@ namespace PipelinePersistentCache
             }
         }
 
-        protected void Update(TxContext tx, TKey key, TValue value)
+        protected void UpdateExistingRow(TxContext tx, TKey key, TValue value)
         {
             tx.EnsureExecutionPhase();
 
@@ -167,11 +170,16 @@ namespace PipelinePersistentCache
             }
             else
             {
+                if (info.Writeback == Writeback.None)
+                {
+                    tx.Cache.AddWriteback(info);
+                }
+
                 info.Writeback = Writeback.Updated;
             }
         }
 
-        protected void Delete(TxContext tx, TKey key)
+        protected void DeleteExistingRow(TxContext tx, TKey key)
         {
             tx.EnsureExecutionPhase();
 
@@ -193,8 +201,13 @@ namespace PipelinePersistentCache
                 info.Writeback = Writeback.None;
                 tx.Cache.RemoveWriteback(info);
             }
-            else
+            else 
             {
+                if (info.Writeback == Writeback.None)
+                {
+                    tx.Cache.AddWriteback(info);
+                }
+
                 info.Writeback = Writeback.Deleted;
             }
         }
