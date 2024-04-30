@@ -43,7 +43,7 @@ namespace PipelinePersistentCache
 
         public void Commit()
         {
-            if (this.phase < Phase.Completed)
+            if (this.phase == Phase.Completed)
             {
                 throw new InvalidOperationException("must not commit twice");
             }

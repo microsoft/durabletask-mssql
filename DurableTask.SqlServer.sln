@@ -43,6 +43,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "PipelinedOrchestrationServi
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "PipelinePersistentCache", "src\PipelinePersistentCache\PipelinePersistentCache.csproj", "{70F7B2D4-2EF7-49CD-AED6-EB5BC6855309}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PipelinePersistentCache.Tests", "test\PipelinePersistentCache.Tests\PipelinePersistentCache.Tests.csproj", "{0129603E-EAC1-4E51-8F02-FFFD47B07776}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -85,6 +87,10 @@ Global
 		{70F7B2D4-2EF7-49CD-AED6-EB5BC6855309}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{70F7B2D4-2EF7-49CD-AED6-EB5BC6855309}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{70F7B2D4-2EF7-49CD-AED6-EB5BC6855309}.Release|Any CPU.Build.0 = Release|Any CPU
+		{0129603E-EAC1-4E51-8F02-FFFD47B07776}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0129603E-EAC1-4E51-8F02-FFFD47B07776}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0129603E-EAC1-4E51-8F02-FFFD47B07776}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0129603E-EAC1-4E51-8F02-FFFD47B07776}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -99,6 +105,7 @@ Global
 		{307C5A62-9943-48B8-8513-BBCDF0FBC3D0} = {D33AB157-04B9-4BAD-B580-C3C87C17828C}
 		{0A2D04DB-C176-4793-82E6-A5CDCDE87F8F} = {D33AB157-04B9-4BAD-B580-C3C87C17828C}
 		{70F7B2D4-2EF7-49CD-AED6-EB5BC6855309} = {D33AB157-04B9-4BAD-B580-C3C87C17828C}
+		{0129603E-EAC1-4E51-8F02-FFFD47B07776} = {4A7226CF-57BF-4CA3-A4AC-91A398A1D84B}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {238A9613-5411-41CF-BDEC-168CCD5C03FB}

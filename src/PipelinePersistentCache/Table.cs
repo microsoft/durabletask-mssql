@@ -108,6 +108,7 @@ namespace PipelinePersistentCache
             }
 
             info.Current = value;
+            info.Exists = true;
             info.LastUse = tx.TxId;
 
             if (info.Writeback == Writeback.Deleted)
