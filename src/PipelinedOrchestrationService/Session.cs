@@ -17,6 +17,7 @@ namespace PipelinedOrchestrationService
     class Session
     {
         readonly BasicOrchestrationService service;
+        readonly int partitionId;
         readonly string instanceId;
 
         List<TaskMessage> waiting;
@@ -24,22 +25,26 @@ namespace PipelinedOrchestrationService
 
         InstanceConnection? connection;   
 
-        public Session(BasicOrchestrationService service, string instanceId)
+        public Session(BasicOrchestrationService service, int partitionId, string instanceId)
         {
             this.service = service;
+            this.partitionId = partitionId;
             this.instanceId = instanceId;
             this.waiting = new List<TaskMessage>();
         }
 
         public string InstanceId => this.instanceId;
 
+        public int PartitionId => this.partitionId;
+
+        public (int, string) Key => (this.partitionId, this.instanceId);
+
         public bool SessionIsStopping { get; set; }
 
         public bool ResultPending { get; set; }
 
         public List<TaskMessage> WaitingMessages => this.waiting;
-
-
+        
         public void AddMessage(TaskMessage taskMessage)
         {
             this.waiting.Add(taskMessage);

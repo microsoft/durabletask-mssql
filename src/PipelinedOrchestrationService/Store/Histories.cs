@@ -13,7 +13,7 @@ namespace PipelinedOrchestrationService
     using DurableTask.Core.History;
     using PipelinePersistentCache;
 
-    class Histories : Table<string, HistoryEvent[], SqlCheckpointCommand>
+    class Histories : PartitionedTable<string, HistoryEvent[], SqlCheckpointCommand>
     {
         readonly SqlStore store;
 
@@ -71,7 +71,7 @@ namespace PipelinedOrchestrationService
             throw new NotImplementedException();
         }
 
-        protected override void AddDeltaToCheckpointCommand(SqlCheckpointCommand command, Writeback writeback, string key, HistoryEvent[]? Current)
+        protected override void AddDeltaToCheckpointCommand(SqlCheckpointCommand command, Writeback writeback, int partitionId, string key, HistoryEvent[]? Current)
         {
             //TODO
             throw new NotImplementedException();

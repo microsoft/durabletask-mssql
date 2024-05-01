@@ -13,24 +13,24 @@ namespace PipelinePersistentCache
     using System.Text;
     using System.Threading.Tasks;
 
-    public abstract class Table<TKey, TValue, TCommand> 
+    public abstract class PartitionedTable<TKey, TValue, TCommand> 
         where TKey : notnull
         where TCommand : CheckpointCommand
     {
         readonly Dictionary<TKey, Info> rows;
 
-        protected Table()
+        protected PartitionedTable()
         {
             this.rows = new();
         }
 
         class Info : CachePartition.Tracked
         {
-            readonly Table<TKey, TValue, TCommand> table;
+            readonly PartitionedTable<TKey, TValue, TCommand> table;
             readonly int partitionId;
             readonly TKey key;
 
-            public Info(Table<TKey,TValue, TCommand> table, int partitionId, TKey key)
+            public Info(PartitionedTable<TKey,TValue, TCommand> table, int partitionId, TKey key)
             {
                 this.table = table;
                 this.partitionId = partitionId;
@@ -50,7 +50,7 @@ namespace PipelinePersistentCache
                 {
                     lock (command)
                     {
-                        this.table.AddDeltaToCheckpointCommand((TCommand)command, this.partitionId, this.Writeback, this.key, this.Current);
+                        this.table.AddDeltaToCheckpointCommand((TCommand)command, this.Writeback, this.partitionId, this.key, this.Current);
                     }
                 }
             }
@@ -60,7 +60,7 @@ namespace PipelinePersistentCache
         protected abstract Task<(bool exists, TValue? value)> LoadAsync(TKey key);
 
         // subclasses override this to create deltas for writing back to storage.
-        protected abstract void AddDeltaToCheckpointCommand(TCommand command, int partitionId, Writeback writeback, TKey key, TValue? Current);
+        protected abstract void AddDeltaToCheckpointCommand(TCommand command, Writeback writeback, int partitionId, TKey key, TValue? Current);
 
         protected void PrefetchRow(TxContext tx, TKey key)
         {

@@ -93,10 +93,10 @@ namespace PipelinePersistentCache
         }
 
 
-        public async Task CollectNextCheckpointAsync<TCommand>(TCommand command)
+        public async ValueTask CollectNextCheckpointAsync<TCommand>(TCommand command, CancellationToken cancellation)
            where TCommand : CheckpointCommand
         {
-            await this.executionLock.WaitAsync(); // we must collect deltas under the lock so see a consistent state
+            await this.executionLock.WaitAsync(cancellation); // we must collect deltas under the lock so see a consistent state
 
             //  TODO make more robust if command implementation should throw
 

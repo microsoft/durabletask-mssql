@@ -44,15 +44,11 @@ namespace PipelinedOrchestrationService
             this.userId = new SqlConnectionStringBuilder(this.settings.TaskHubConnectionString).UserID ?? string.Empty;
 
             this.checkpointWorker = new CheckpointWorker(this, shutdownToken);
-            cache.OnTransactionCompleted += this.Notify;
-        }
-      
-        void Notify(long txId)
-        {
-            // the checkpoint worker starts when notified, runs one checkpoint at a time, 
-            // and continues running checkpoints until it does not receive a notification while still running.
-            // when notified again, it starts running again.
-            this.checkpointWorker.Notify();
+
+            foreach(int partitionId in cache.OwnedPartitions)
+            {
+                cache.AddTransactionCompletionListener(partitionId, (long txId) => this.checkpointWorker.Notify());
+            }
         }
         
         class CheckpointWorker: BatchWorker<object>

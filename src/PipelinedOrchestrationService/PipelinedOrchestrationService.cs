@@ -22,7 +22,7 @@ namespace PipelinedOrchestrationService
         readonly PipelinePersistentCache cache;
         readonly BasicOrchestrationService basic;
 
-        public PipelinedOrchestrationService(SqlOrchestrationServiceSettings settings)
+        public PipelinedOrchestrationService(SqlOrchestrationServiceSettings settings, int totalPartitions, IEnumerable<int> ownedPartition)
         {
             this.settings = settings;
             this.cache = new PipelinePersistentCache();

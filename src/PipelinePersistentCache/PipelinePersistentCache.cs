@@ -16,51 +16,64 @@ namespace PipelinePersistentCache
     /// </summary>
     public class PipelinePersistentCache
     {
-        readonly CachePartition[] txManagers;
+        readonly CachePartition[] cachePartitions;
 
         public PipelinePersistentCache(int totalPartitions, IEnumerable<PartitionMetaData> ownedPartitions)
         {
-            this.txManagers = new CachePartition[totalPartitions];
+            this.cachePartitions = new CachePartition[totalPartitions];
 
             foreach (var partitionMetaData in ownedPartitions)
             {
-                this.txManagers[partitionMetaData.PartitionId] = new CachePartition(this, partitionMetaData);
+                this.cachePartitions[partitionMetaData.PartitionId] = new CachePartition(this, partitionMetaData);
             }
         }
 
         public PipelinePersistentCache(int totalPartitions = 1)
         {
-            this.txManagers = new CachePartition[totalPartitions];
+            this.cachePartitions = new CachePartition[totalPartitions];
 
             for (int i = 0; i < totalPartitions; i++)
             {
-                this.txManagers[i] = new CachePartition(this, PartitionMetaData.GetInitialState(i, totalPartitions));
+                this.cachePartitions[i] = new CachePartition(this, PartitionMetaData.GetInitialState(i, totalPartitions));
             }
         }
          
         public delegate void TransactionCompleted(long txId);
 
+        public int TotalPartitions => this.cachePartitions.Length;
+
+        public IEnumerable<int> OwnedPartitions => this.cachePartitions
+            .Select((partition, index) => partition != null ? index : -1)
+            .Where(index => index != -1);
+
+        CachePartition GetPartition(int partitionId)
+        {
+            var cachePartition = this.cachePartitions[partitionId];
+            if (cachePartition == null)
+            {
+                throw new ArgumentOutOfRangeException(nameof(partitionId), "partition is not owned by this cache");
+            }
+            return cachePartition;
+        }
+
         public void AddTransactionCompletionListener(int partitionId, TransactionCompleted listener)
         {
-            this.txManagers[partitionId].OnTransactionCompleted += listener;
+            this.GetPartition(partitionId).OnTransactionCompleted += listener;
         }
         public void RemoveTransactionCompletionListener(int partitionId, TransactionCompleted listener)
         {
-            this.txManagers[partitionId].OnTransactionCompleted -= listener;
+            this.GetPartition(partitionId).OnTransactionCompleted -= listener;
         }
 
         public Task<TxContext> StartTransactionAsync(int partitionId, CancellationToken token)
         {
-            return this.txManagers[partitionId].StartTransactionAsync(token);
+            return this.GetPartition(partitionId).StartTransactionAsync(token);
         }
 
-        public Task CollectNextCheckpointAsync<TCommand>(TCommand command, int partitionId = 0)
+        public Task CollectNextCheckpointAsync<TCommand>(TCommand command)
             where TCommand : CheckpointCommand
         {
-            // TODO once we shortcut cross-partition communcation we can no longer checkpoint partitions individually
-
-            var txManager = this.txManagers[partitionId];
-            return txManager.CollectNextCheckpointAsync(command);
+            return Parallel.ForEachAsync(this.cachePartitions, (partition, cancellation) => partition?.CollectNextCheckpointAsync(command, cancellation) ?? default);
         }
 
         public void EvictLeastRecentlyUsed()

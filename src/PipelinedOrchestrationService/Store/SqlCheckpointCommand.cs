@@ -13,28 +13,28 @@ namespace PipelinedOrchestrationService
     class SqlCheckpointCommand : PipelinePersistentCache.CheckpointCommand
     {
         readonly SqlStore store;
+        readonly List<PipelinePersistentCache.PartitionMetaData> partitionMetaData;
+        readonly List<Action> postCheckpointActions;
 
         internal SqlCommand Command { get; }
 
-        long sequenceCounter;
-
-        List<Action>? postCheckpointActions;
 
         public SqlCheckpointCommand(SqlStore store)
         {
             this.store = store;
             this.Command = new SqlCommand(); // TODO
+            this.partitionMetaData = new();
+            this.postCheckpointActions = new();
         }
 
         public override void AddPostCheckpointActions(IEnumerable<Action> actions)
         {
-            this.postCheckpointActions ??= new List<Action>();
             this.postCheckpointActions.AddRange(actions);
         }
 
-        public override void SetSequenceCounter(long sequenceCounter)
+        public override void SetPartitionMetaData(PipelinePersistentCache.PartitionMetaData partitionMetaData)
         {
-            this.sequenceCounter = sequenceCounter;
+            this.partitionMetaData.Add(partitionMetaData);
         }
 
         public async Task WriteToStorageAsync()
@@ -50,12 +50,9 @@ namespace PipelinedOrchestrationService
 
         public void ExecutePostPersistenceActions()
         {
-            if (this.postCheckpointActions != null)
+            foreach (var action in this.postCheckpointActions)
             {
-                foreach (var action in this.postCheckpointActions)
-                {
-                    action();
-                }
+                action();
             }
         }
     }

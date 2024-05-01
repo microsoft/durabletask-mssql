@@ -7,6 +7,7 @@ namespace PipelinedOrchestrationService
     using System.Collections.Concurrent;
     using System.Collections.Generic;
     using System.Diagnostics;
+    using System.Diagnostics.CodeAnalysis;
     using System.Linq;
     using System.Text;
     using System.Threading.Tasks;
@@ -18,20 +19,23 @@ namespace PipelinedOrchestrationService
 
     class BasicOrchestrationService
     {
-        readonly PipelinePersistentCache cache;
         readonly SqlStore store;
         readonly Activities activities;
         readonly Histories histories;
         readonly Instances instances;
         readonly Messages messages;
+        readonly uint totalPartitions;
 
-        readonly ConcurrentDictionary<string, Session> sessions;
-        
+        readonly PipelinePersistentCache cache;
+
+        readonly ConcurrentDictionary<(int,string), Session> sessions;
+
         readonly WorkItemQueue<TaskActivityWorkItem> activityWorkItemQueue;
         readonly WorkItemQueue<TaskOrchestrationWorkItem> orchestrationWorkItemQueue;
 
         readonly CancellationToken shutdownToken;
 
+        
         public BasicOrchestrationService(PipelinePersistentCache cache, SqlStore store, CancellationToken shutdownToken)
         {
             this.cache = cache;
@@ -40,10 +44,12 @@ namespace PipelinedOrchestrationService
             this.histories = new Histories(store);   
             this.instances = new Instances(store);
             this.messages = new Messages(store); 
-            this.sessions = new ConcurrentDictionary<string, Session>();
+            this.sessions = new();
             this.activityWorkItemQueue = new WorkItemQueue<TaskActivityWorkItem>();
             this.orchestrationWorkItemQueue = new WorkItemQueue<TaskOrchestrationWorkItem>();
             this.shutdownToken = shutdownToken;
+
+            this.totalPartitions = (uint) cache.TotalPartitions;
 
             // we hook up callbacks to be invoked whenever messages or activities arrive
             // these same callbacks are also called while 
@@ -51,11 +57,13 @@ namespace PipelinedOrchestrationService
             this.activities.OnActivity += this.OnNewActivity;
         }
 
+       
         public async Task CreateTaskOrchestrationAsync(TaskMessage creationMessage, OrchestrationStatus[] dedupeStatuses, CancellationToken cancellationToken)
         {
             string instanceId = creationMessage.OrchestrationInstance.InstanceId;
-
-            using TxContext tx = await this.cache.StartTransactionAsync(cancellationToken);
+            var partitionId = (int) PartitionHash.GetPartitionId(instanceId, this.totalPartitions);
+ 
+            using TxContext tx = await this.cache.StartTransactionAsync(partitionId, cancellationToken);
 
             // we must bring the instance state into memory prior to doing the transaction
             this.instances.EnsureInMemory(tx, instanceId);
@@ -83,21 +91,22 @@ namespace PipelinedOrchestrationService
         void OnNewMessage(TaskMessage taskMessage)
         {
             string instanceId = taskMessage.OrchestrationInstance.InstanceId;
+            var partitionId = (int)PartitionHash.GetPartitionId(instanceId, this.totalPartitions);
 
-            this.sessions.AddOrUpdate(instanceId, CreateSession, UpdateSession);
+            this.sessions.AddOrUpdate((partitionId, instanceId), CreateSession, UpdateSession);
 
             // the functions below are executed under the implicit "lock" of the concurrent dictionary    
             // which serves as our concurrency control on modifying the state on a session
 
-            Session CreateSession(string instanceId)
+            Session CreateSession((int, string) _)
             {
-                var session = new Session(this, instanceId);
+                var session = new Session(this, partitionId, instanceId);
                 session.AddMessage(taskMessage);
                 session.ContinueIfNotAlreadyPending();
                 return session;
             }
 
-            Session UpdateSession(string instanceId, Session session)
+            Session UpdateSession((int, string) _, Session session)
             {
                 if (!session.SessionIsStopping)
                 {
@@ -109,7 +118,7 @@ namespace PipelinedOrchestrationService
                 {
                     // we are just one step ahead of a racing TryRemove operation. 
                     // To keep things correct we change the session so the TryRemove will become a no-op.
-                    session = new Session(this, instanceId);
+                    session = new Session(this, partitionId, instanceId);
                     session.AddMessage(taskMessage);
                     session.ContinueIfNotAlreadyPending();
                     return session;
@@ -129,18 +138,18 @@ namespace PipelinedOrchestrationService
 
         void ContinueSessionAfterReceivingResult(Session session, IEnumerable<TaskMessage>? requeue = null)
         {
-            this.sessions.AddOrUpdate(session.InstanceId, CreateSession, UpdateSession);
+            this.sessions.AddOrUpdate(session.Key, CreateSession, UpdateSession);
 
             // the functions below are executed under the implicit "lock" of the concurrent dictionary    
             // which serves as our concurrency control on modifying the state on a session 
 
-            Session CreateSession(string instanceId)
+            Session CreateSession((int, string) _)
             {
                 // we don't remove sessoins while they have pending requests
                 throw new InvalidOperationException("internal error - session was removed");              
             }
 
-            Session UpdateSession(string instanceId, Session session1)
+            Session UpdateSession((int, string) _, Session session1)
             {
                 Debug.Assert(session == session1);
                 session.CompletePendingAndContinue(requeue);
@@ -170,7 +179,7 @@ namespace PipelinedOrchestrationService
 
             // --- otherwise, we process the completion result by transactionally updating all relevant state
 
-            using TxContext tx = await this.cache.StartTransactionAsync(this.shutdownToken);
+            using TxContext tx = await this.cache.StartTransactionAsync(session.PartitionId, this.shutdownToken);
             this.instances.EnsureInMemory(tx, instanceId);
             this.histories.EnsureInMemory(tx, instanceId);
             await tx.CompletePrefetchesAsync();
@@ -221,7 +230,8 @@ namespace PipelinedOrchestrationService
 
         public async Task<OrchestrationState?> GetOrchestrationStateAsync(string instanceId, string? executionId, CancellationToken cancellation)
         {
-            using TxContext tx = await this.cache.StartTransactionAsync(cancellation);
+            var partitionId = (int)PartitionHash.GetPartitionId(instanceId, this.totalPartitions);
+            using TxContext tx = await this.cache.StartTransactionAsync(partitionId, cancellation);
             this.instances.EnsureInMemory(tx, instanceId);
             await tx.CompletePrefetchesAsync();
             OrchestrationState? instanceState = this.instances.GetState(tx, instanceId);
@@ -231,7 +241,8 @@ namespace PipelinedOrchestrationService
 
         internal async Task<IList<HistoryEvent>?> LoadHistoryAsync(string instanceId)
         {
-            using TxContext tx = await this.cache.StartTransactionAsync(this.shutdownToken);
+            var partitionId = (int)PartitionHash.GetPartitionId(instanceId, this.totalPartitions);
+            using TxContext tx = await this.cache.StartTransactionAsync(partitionId, this.shutdownToken);
             this.histories.EnsureInMemory(tx, instanceId);
             await tx.CompletePrefetchesAsync().ConfigureAwait(false);
             var history = this.histories.GetHistory(tx, instanceId);
@@ -246,14 +257,16 @@ namespace PipelinedOrchestrationService
 
         public async Task SendTaskOrchestrationMessageAsync(TaskMessage message, CancellationToken cancellationToken)
         {
-            using TxContext tx = await this.cache.StartTransactionAsync(cancellationToken);
+            var partitionId = (int)PartitionHash.GetPartitionId(message.OrchestrationInstance.InstanceId, this.totalPartitions);
+            using TxContext tx = await this.cache.StartTransactionAsync(partitionId, cancellationToken);
             this.messages.AddNewMessageToBeProcessed(tx, message);
             tx.Commit();
         }
 
         public async Task<PurgeResult> PurgeInstanceStateAsync(string instanceId, CancellationToken cancellationToken)
         {
-            using TxContext tx = await this.cache.StartTransactionAsync(cancellationToken);
+            var partitionId = (int)PartitionHash.GetPartitionId(instanceId, this.totalPartitions);
+            using TxContext tx = await this.cache.StartTransactionAsync(partitionId, cancellationToken);
             this.instances.EnsureInMemory(tx, instanceId);
             this.histories.EnsureInMemory(tx, instanceId);
             await tx.CompletePrefetchesAsync();
@@ -281,10 +294,22 @@ namespace PipelinedOrchestrationService
             return this.orchestrationWorkItemQueue.GetNext(receiveTimeout, cancellationToken);
         }
 
+        string GetActivityWorkItemId(int partition, long sequenceNumber)
+        {
+            return $"A{sequenceNumber}P{partition}";
+        }
+        void ParseActivityWorkItemId(string id, out int partition, out long sequenceNumber)
+        {
+            int pos = id.LastIndexOf('P');
+            sequenceNumber = long.Parse(id.Substring(1, pos - 1));
+            partition = int.Parse(id.Substring(pos + 1)); 
+        }
+
         public async Task CompleteTaskActivityWorkItemAsync(TaskActivityWorkItem workItem, TaskMessage responseMessage, CancellationToken cancellationToken)
         {
-            using TxContext tx = await this.cache.StartTransactionAsync(cancellationToken);
-            this.activities.RemoveProcessedActivity(tx, long.Parse(workItem.Id));
+            this.ParseActivityWorkItemId(workItem.Id, out int partitionId, out long sequenceNumber);
+            using TxContext tx = await this.cache.StartTransactionAsync(partitionId, cancellationToken);
+            this.activities.RemoveProcessedActivity(tx, sequenceNumber);
             this.messages.AddNewMessageToBeProcessed(tx, responseMessage);
             tx.Commit();
         }

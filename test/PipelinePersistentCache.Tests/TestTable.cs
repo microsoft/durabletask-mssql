@@ -6,7 +6,7 @@ namespace PipelinePersistentCache.Tests
     using System;
     using System.Threading.Tasks;
 
-    class TestTable : Table<string, string, TestCheckpoint>
+    class TestTable : PartitionedTable<string, string, TestCheckpoint>
     {
         readonly string name;
         readonly Func<string, Task<(bool exists, string? value)>> load;
@@ -17,7 +17,7 @@ namespace PipelinePersistentCache.Tests
             this.load = load;
         }
 
-        protected override void AddDeltaToCheckpointCommand(TestCheckpoint command, int partitionId, Writeback writeback, string key, string? Current)
+        protected override void AddDeltaToCheckpointCommand(TestCheckpoint command, Writeback writeback, int partitionId, string key, string? Current)
         {
             command.AddDelta(this.name, partitionId, key, Current, writeback);
         }

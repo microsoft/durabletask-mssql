@@ -11,7 +11,7 @@ namespace PipelinedOrchestrationService
     using DurableTask.Core;
     using PipelinePersistentCache;
 
-    class Messages : Table<long, TaskMessage, SqlCheckpointCommand>
+    class Messages : PartitionedTable<long, TaskMessage, SqlCheckpointCommand>
     {
         readonly SqlStore store;
 
@@ -49,7 +49,7 @@ namespace PipelinedOrchestrationService
             throw new NotImplementedException();
         }
 
-        protected override void AddDeltaToCheckpointCommand(SqlCheckpointCommand command, Writeback writeback, long key, TaskMessage? Current)
+        protected override void AddDeltaToCheckpointCommand(SqlCheckpointCommand command, Writeback writeback, int partitionId, long key, TaskMessage? Current)
         {
             // TODO
             throw new NotImplementedException();
