@@ -12,23 +12,23 @@ namespace PipelinePersistentCache.Tests
 
     class TestCheckpoint : CheckpointCommand
     {        
-        public long? Seqno;
         public List<Action> Actions = new();
-        public Dictionary<(string,string), (string? value, Writeback writeback)> Deltas = new();
+        public Dictionary<(string,int,string), (string? value, Writeback writeback)> Deltas = new();
+        public Dictionary<int, PartitionMetaData> PartitionMetaDatas = new();
 
         public override void AddPostCheckpointActions(IEnumerable<Action> actions)
         {
             this.Actions.AddRange(actions);
         }
 
-        public override void SetSequenceCounter(long sequenceCounter)
+        public override void SetPartitionMetaData(PartitionMetaData partitionMetaData)
         {
-            this.Seqno = sequenceCounter;
+            this.PartitionMetaDatas[partitionMetaData.PartitionId] = partitionMetaData;
         }
 
-        public void AddDelta(string table, string key, string? value, Writeback writeback)
+        public void AddDelta(string table, int partitionId, string key, string? value, Writeback writeback)
         {
-            if (this.Deltas.ContainsKey((table,key)))
+            if (this.Deltas.ContainsKey((table,partitionId,key)))
             {
                 throw new Exception("more than one delta per key");
             }
@@ -41,16 +41,16 @@ namespace PipelinePersistentCache.Tests
                 throw new Exception("value must be provided for created or updated");
             }
 
-            this.Deltas.Add((table, key), (value, writeback));
+            this.Deltas.Add((table, partitionId, key), (value, writeback));
 
             Console.WriteLine($"Delta: {table}.{key} = {value} {writeback}");
         }
 
-        public IEnumerable<(string key, string? value, Writeback writeback)> GetDeltas(string table)
+        public IEnumerable<(string key, string? value, Writeback writeback)> GetDeltas(string table, int partitionId)
         {
             return this.Deltas
-               .Where(kvp => kvp.Key.Item1 == table)
-               .Select(kvp => (kvp.Key.Item2, kvp.Value.value, kvp.Value.writeback))
+               .Where(kvp => kvp.Key.Item1 == table && kvp.Key.Item2 == partitionId)
+               .Select(kvp => (kvp.Key.Item3, kvp.Value.value, kvp.Value.writeback))
                .OrderBy(tuple => tuple.Item1)
                .ToList();
         }

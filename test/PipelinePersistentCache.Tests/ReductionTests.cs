@@ -22,7 +22,7 @@ namespace PipelinePersistentCache.Tests
                 return default;
             });
 
-            TxContext tx = await cache.StartTransactionAsync(CancellationToken.None);
+            TxContext tx = await cache.StartTransactionAsync(0, CancellationToken.None);
             Debug.Assert(tx.TxId == 1);
             table.CreateNonExistingRow(tx, "a", "1");
             table.CreateNonExistingRow(tx, "b", "2");
@@ -34,7 +34,7 @@ namespace PipelinePersistentCache.Tests
             tx.Commit();
 
 
-            tx = await cache.StartTransactionAsync(CancellationToken.None);
+            tx = await cache.StartTransactionAsync(0, CancellationToken.None);
             Debug.Assert(tx.TxId == 2);
             Assert.True(table.TryGetRow(tx, "a", out var value)); Assert.Equal("1", value);
             Assert.False(table.TryGetRow(tx, "b", out value));
@@ -42,7 +42,7 @@ namespace PipelinePersistentCache.Tests
             Assert.True(table.TryGetRow(tx, "d", out value)); Assert.Equal("44", value);
             tx.Commit();
 
-            tx = await cache.StartTransactionAsync(CancellationToken.None);
+            tx = await cache.StartTransactionAsync(0, CancellationToken.None);
             Debug.Assert(tx.TxId == 3);
             table.UpdateExistingRow(tx, "d", "444");
             tx.Commit();
@@ -50,20 +50,20 @@ namespace PipelinePersistentCache.Tests
             var checkpoint = new TestCheckpoint();
             await cache.CollectNextCheckpointAsync(checkpoint);
 
-            tx = await cache.StartTransactionAsync(CancellationToken.None);
+            tx = await cache.StartTransactionAsync(0, CancellationToken.None);
             Debug.Assert(tx.TxId == 5);
             table.UpdateExistingRow(tx, "d", "4444");
             tx.Commit();
 
-            Assert.Equal(4, checkpoint.Seqno);
+            Assert.Equal(4, checkpoint.PartitionMetaDatas[0].LastCheckpointId);
             Assert.Empty(checkpoint.Actions);
 
-            Assert.Collection(checkpoint.GetDeltas("A"),
+            Assert.Collection(checkpoint.GetDeltas("A", 0),
                 delta => Assert.Equal(("a", "1", Writeback.Created), delta),
                 delta => Assert.Equal(("c", "33", Writeback.Created), delta),
                 delta => Assert.Equal(("d", "444", Writeback.Created), delta));
 
-            tx = await cache.StartTransactionAsync(CancellationToken.None);
+            tx = await cache.StartTransactionAsync(0, CancellationToken.None);
             Assert.True(table.TryGetRow(tx, "a", out value)); Assert.Equal("1", value);
             Assert.False(table.TryGetRow(tx, "b", out value));
             Assert.True(table.TryGetRow(tx, "c", out value)); Assert.Equal("33", value);
@@ -88,7 +88,7 @@ namespace PipelinePersistentCache.Tests
                 }
             });
 
-            TxContext tx = await cache.StartTransactionAsync(CancellationToken.None);
+            TxContext tx = await cache.StartTransactionAsync(0, CancellationToken.None);
             Debug.Assert(tx.TxId == 1);
             table.PrefetchRow(tx, "a");
             table.PrefetchRow(tx, "b");
@@ -106,7 +106,7 @@ namespace PipelinePersistentCache.Tests
             table.UpdateExistingRow(tx, "d", "44");
             tx.Commit();
 
-            tx = await cache.StartTransactionAsync(CancellationToken.None);
+            tx = await cache.StartTransactionAsync(0, CancellationToken.None);
             Debug.Assert(tx.TxId == 2);
             Assert.True(table.TryGetRow(tx, "a", out value)); Assert.Equal("1", value);
             Assert.False(table.TryGetRow(tx, "b", out value));
@@ -115,7 +115,7 @@ namespace PipelinePersistentCache.Tests
             Assert.False(table.TryGetRow(tx, "e", out value));
             tx.Commit();
 
-            tx = await cache.StartTransactionAsync(CancellationToken.None);
+            tx = await cache.StartTransactionAsync(0, CancellationToken.None);
             Debug.Assert(tx.TxId == 3);
             table.UpdateExistingRow(tx, "d", "444");
             tx.Commit();
@@ -123,20 +123,20 @@ namespace PipelinePersistentCache.Tests
             var checkpoint = new TestCheckpoint();
             await cache.CollectNextCheckpointAsync(checkpoint);
 
-            tx = await cache.StartTransactionAsync(CancellationToken.None);
+            tx = await cache.StartTransactionAsync(0, CancellationToken.None);
             Debug.Assert(tx.TxId == 5);
             table.UpdateExistingRow(tx, "d", "4444");
             tx.Commit();
 
-            Assert.Equal(4, checkpoint.Seqno);
+            Assert.Equal(4, checkpoint.PartitionMetaDatas[0].LastCheckpointId);
             Assert.Empty(checkpoint.Actions);
 
-            Assert.Collection(checkpoint.GetDeltas("A"),
+            Assert.Collection(checkpoint.GetDeltas("A", 0),
                 delta => Assert.Equal(("b", default, Writeback.Deleted), delta),
                 delta => Assert.Equal(("c", "33", Writeback.Updated), delta),
                 delta => Assert.Equal(("d", "444", Writeback.Updated), delta));
 
-            tx = await cache.StartTransactionAsync(CancellationToken.None);
+            tx = await cache.StartTransactionAsync(0, CancellationToken.None);
             Assert.True(table.TryGetRow(tx, "a", out value)); Assert.Equal("1", value);
             Assert.False(table.TryGetRow(tx, "b", out value));
             Assert.True(table.TryGetRow(tx, "c", out value)); Assert.Equal("33", value);

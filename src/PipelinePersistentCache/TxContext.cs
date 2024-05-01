@@ -12,8 +12,9 @@ namespace PipelinePersistentCache
 
     public class TxContext : IDisposable
     {
-        readonly PipelinePersistentCache cache;
+        readonly CachePartition cachePartition;
         readonly long txId;
+        readonly int partitionId;
 
         Phase phase;
 
@@ -30,13 +31,16 @@ namespace PipelinePersistentCache
             Completed,
         }
 
-        public PipelinePersistentCache Cache => this.cache;
+        internal CachePartition CachePartition => this.cachePartition;
 
         public long TxId => this.txId;
 
-        internal TxContext(PipelinePersistentCache cache, long txId)
+        public int PartitionId => this.partitionId;
+
+        internal TxContext(CachePartition cachePartition, long txId)
         {
-            this.cache = cache;
+            this.cachePartition = cachePartition;
+            this.partitionId = cachePartition.PartitionId;
             this.txId = txId;
             this.phase = Phase.Prefetch;
         }
@@ -55,12 +59,12 @@ namespace PipelinePersistentCache
 
             if (this.whenPersisted != null)
             {
-                this.cache.AddPersistenceActions(this.whenPersisted);
+                this.cachePartition.AddPersistenceActions(this.whenPersisted);
             }
 
             this.phase = Phase.Completed;
 
-            this.cache.Release(this.txId, notify: true);
+            this.cachePartition.Release(this.txId, notify: true);
 
             if (this.whenCompleted != null)
             {
@@ -96,11 +100,11 @@ namespace PipelinePersistentCache
 
                 this.phase = Phase.WaitForPrefetch;
 
-                this.cache.Release(this.txId);
+                this.cachePartition.Release(this.txId);
 
                 await Task.WhenAll(this.prefetchTasks);
 
-                await this.cache.ReAcquireAsync(this.txId);
+                await this.cachePartition.ReAcquireAsync(this.txId);
             }
 
             this.EnterExecutionPhase();
@@ -149,7 +153,7 @@ namespace PipelinePersistentCache
         public long GetNextSequenceNumber()
         {
             this.EnsureExecutionPhase();
-            return this.cache.GetNextSequenceNumber();
+            return this.cachePartition.GetNextSequenceNumber();
         }
 
         public void WhenCompleted(Action action)

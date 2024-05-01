@@ -17,9 +17,9 @@ namespace PipelinePersistentCache.Tests
             this.load = load;
         }
 
-        protected override void AddDeltaToCheckpointCommand(TestCheckpoint command, Writeback writeback, string key, string? Current)
+        protected override void AddDeltaToCheckpointCommand(TestCheckpoint command, int partitionId, Writeback writeback, string key, string? Current)
         {
-            command.AddDelta(this.name, key, Current, writeback);
+            command.AddDelta(this.name, partitionId, key, Current, writeback);
         }
 
         protected override Task<(bool exists, string? value)> LoadAsync(string key)

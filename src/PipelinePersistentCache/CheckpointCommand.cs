@@ -14,14 +14,18 @@ namespace PipelinePersistentCache
 
     /// <summary>
     /// Abstractly represents an implementation of a command that writes back a batch of changes (a checkpoint) to the underlying store.
+    /// A checkpoint can modify one or more owned partitions. Concurrent checkpoints will never conflict unless they modify the same partition, 
+    /// which does not happend under normal operation (because partitions are uniquely owned by service hosts). However, in rare split-brain scenarios,
+    /// if two service hosts think they own the same partitions, checkpoints may indeed conflict - and in fact, are *guaranteed* to conflict because they both
+    /// write to the same partition, triggering a write-write conflict in the underlying store. This makes it possible to recover correctly from split-brain scenarios.
     /// </summary>
     public abstract class CheckpointCommand
     {
         /// <summary>
-        /// The sequence counter to be persisted for this checkpoint. The sequence counter is monotonically increasing and can be used to compare the order of two checkpoints.
+        /// How to update the partition meta data for this checkpoint.
         /// </summary>
         /// <param name="sequenceCounter"></param>
-        public abstract void SetSequenceCounter(long sequenceCounter);
+        public abstract void SetPartitionMetaData(PartitionMetaData partitionMetaData);
 
         /// <summary>
         /// Adds actions that should be performed after the checkpoint is persisted.

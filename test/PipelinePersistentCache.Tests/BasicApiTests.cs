@@ -16,11 +16,11 @@ namespace PipelinePersistentCache.Tests
             var checkpoint = new TestCheckpoint();
 
             await cache.CollectNextCheckpointAsync(checkpoint);
-            Assert.Equal(1, checkpoint.Seqno);
+            Assert.Equal(1, checkpoint.PartitionMetaDatas[0].LastCheckpointId);
             Assert.Empty(checkpoint.Actions);
 
             await cache.CollectNextCheckpointAsync(checkpoint);
-            Assert.Equal(2, checkpoint.Seqno);
+            Assert.Equal(2, checkpoint.PartitionMetaDatas[0].LastCheckpointId);
             Assert.Empty(checkpoint.Actions);
         }
 
@@ -29,13 +29,13 @@ namespace PipelinePersistentCache.Tests
         {
             var cache = new PipelinePersistentCache();
 
-            TxContext tx = await cache.StartTransactionAsync(CancellationToken.None);
+            TxContext tx = await cache.StartTransactionAsync(0, CancellationToken.None);
             Assert.Equal(1, tx.TxId);
             tx.Commit();
 
             var checkpoint = new TestCheckpoint();
             await cache.CollectNextCheckpointAsync(checkpoint);
-            Assert.Equal(2, checkpoint.Seqno);
+            Assert.Equal(2, checkpoint.PartitionMetaDatas[0].LastCheckpointId);
             Assert.Empty(checkpoint.Actions);
         }
 
@@ -50,7 +50,7 @@ namespace PipelinePersistentCache.Tests
             Action whenCompleted = () => completed.TrySetResult();
             Action whenPersisted = () => persisted.TrySetResult();
 
-            TxContext tx = await cache.StartTransactionAsync(CancellationToken.None);
+            TxContext tx = await cache.StartTransactionAsync(0, CancellationToken.None);
             Assert.Equal(1, tx.TxId);
             tx.WhenCompleted(whenCompleted);
             tx.WhenPersisted(whenPersisted);
@@ -66,7 +66,7 @@ namespace PipelinePersistentCache.Tests
 
             var checkpoint = new TestCheckpoint();
             await cache.CollectNextCheckpointAsync(checkpoint);
-            Assert.Equal(2, checkpoint.Seqno);
+            Assert.Equal(2, checkpoint.PartitionMetaDatas[0].LastCheckpointId);
             Assert.Collection(checkpoint.Actions, (action) => whenPersisted.Equals(action));
 
             Assert.False(persisted.Task.IsCompleted);
@@ -78,9 +78,9 @@ namespace PipelinePersistentCache.Tests
             var cache = new PipelinePersistentCache();
 
             TaskCompletionSource<long> completed = new();
-            cache.OnTransactionCompleted += (id) => completed.TrySetResult(id);
+            cache.AddTransactionCompletionListener(0, id => completed.TrySetResult(id));
 
-            TxContext tx = await cache.StartTransactionAsync(CancellationToken.None);
+            TxContext tx = await cache.StartTransactionAsync(0, CancellationToken.None);
             Assert.Equal(1, tx.TxId);
 
             Assert.False(completed.Task.IsCompleted);

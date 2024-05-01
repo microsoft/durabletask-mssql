@@ -24,14 +24,16 @@ namespace PipelinePersistentCache
             this.rows = new();
         }
 
-        class Info : PipelinePersistentCache.Tracked
+        class Info : CachePartition.Tracked
         {
             readonly Table<TKey, TValue, TCommand> table;
+            readonly int partitionId;
             readonly TKey key;
 
-            public Info(Table<TKey,TValue, TCommand> table, TKey key)
+            public Info(Table<TKey,TValue, TCommand> table, int partitionId, TKey key)
             {
                 this.table = table;
+                this.partitionId = partitionId;
                 this.key = key;
             }
 
@@ -46,7 +48,10 @@ namespace PipelinePersistentCache
             {
                 if (this.Writeback != Writeback.None)
                 {
-                    this.table.AddDeltaToCheckpointCommand((TCommand)command, this.Writeback, this.key, this.Current);
+                    lock (command)
+                    {
+                        this.table.AddDeltaToCheckpointCommand((TCommand)command, this.partitionId, this.Writeback, this.key, this.Current);
+                    }
                 }
             }
         }
@@ -55,7 +60,7 @@ namespace PipelinePersistentCache
         protected abstract Task<(bool exists, TValue? value)> LoadAsync(TKey key);
 
         // subclasses override this to create deltas for writing back to storage.
-        protected abstract void AddDeltaToCheckpointCommand(TCommand command, Writeback writeback, TKey key, TValue? Current);
+        protected abstract void AddDeltaToCheckpointCommand(TCommand command, int partitionId, Writeback writeback, TKey key, TValue? Current);
 
         protected void PrefetchRow(TxContext tx, TKey key)
         {
@@ -67,7 +72,7 @@ namespace PipelinePersistentCache
             }
             else
             {
-                info = new Info(this, key) { RefCount = 1 };
+                info = new Info(this, tx.PartitionId, key) { RefCount = 1 };
 
                 info.Pending = Task.Run(async () =>
                 {
@@ -104,7 +109,7 @@ namespace PipelinePersistentCache
             }
             else
             {
-                this.rows.Add(key, info = new Info(this, key));
+                this.rows.Add(key, info = new Info(this, tx.PartitionId, key));
             }
 
             info.Current = value;
@@ -119,7 +124,7 @@ namespace PipelinePersistentCache
             {
                 if (info.Writeback == Writeback.None)
                 {
-                    tx.Cache.AddWriteback(info);
+                    tx.CachePartition.AddWriteback(info);
                 }
                 info.Writeback = Writeback.Created;
             }
@@ -172,7 +177,7 @@ namespace PipelinePersistentCache
             {
                 if (info.Writeback == Writeback.None)
                 {
-                    tx.Cache.AddWriteback(info);
+                    tx.CachePartition.AddWriteback(info);
                 }
 
                 info.Writeback = Writeback.Updated;
@@ -199,13 +204,13 @@ namespace PipelinePersistentCache
             if (info.Writeback == Writeback.Created)
             {
                 info.Writeback = Writeback.None;
-                tx.Cache.RemoveWriteback(info);
+                tx.CachePartition.RemoveWriteback(info);
             }
             else 
             {
                 if (info.Writeback == Writeback.None)
                 {
-                    tx.Cache.AddWriteback(info);
+                    tx.CachePartition.AddWriteback(info);
                 }
 
                 info.Writeback = Writeback.Deleted;
