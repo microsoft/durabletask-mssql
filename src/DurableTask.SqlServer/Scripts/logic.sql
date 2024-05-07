@@ -420,7 +420,10 @@ BEGIN
 
         -- The instance ID is not auto-start and doesn't already exist, so we fail.
         IF @@ROWCOUNT = 0
-            THROW 50000, 'The instance does not exist.', 1; 
+        BEGIN
+          ROLLBACK TRANSACTION;
+          THROW 50000, 'The instance does not exist.', 1; 
+        END
     END
 
     -- Payloads are stored separately from the events
@@ -473,8 +476,10 @@ BEGIN
     )
 
     IF @existingStatus IS NULL
+    BEGIN
+        ROLLBACK TRANSACTION;
         THROW 50000, 'The instance does not exist.', 1;
-
+    END
     -- If the instance is already completed, no need to terminate it.
     IF @existingStatus IN ('Pending', 'Running')
     BEGIN
@@ -835,8 +840,10 @@ BEGIN
     WHERE [TaskHub] = @TaskHub and [InstanceID] = @InstanceID
 
     IF @@ROWCOUNT = 0
+    BEGIN
+        ROLLBACK TRANSACTION;
         THROW 50000, 'The instance does not exist.', 1;
-
+    END
     -- External event messages can create new instances
     -- NOTE: There is a chance this could result in deadlocks if two 
     --       instances are sending events to each other at the same time
@@ -1079,7 +1086,10 @@ BEGIN
         -- Ignore PK violations here, which can happen when multiple clients
         -- try to add messages at the same time for the same instance
         IF ERROR_NUMBER() <> 2627  -- 2627 is PK violation
-            THROW
+        BEGIN
+          ROLLBACK TRANSACTION;
+          THROW;
+        END
     END CATCH
 
     -- Insert new event data payloads into the Payloads table in batches.
@@ -1368,8 +1378,10 @@ BEGIN
     -- This can happen if the message was completed by another worker, in which
     -- case we don't want any of the side-effects to persist.
     IF @@ROWCOUNT <> (SELECT COUNT(*) FROM @CompletedTasks)
+    BEGIN
+        ROLLBACK TRANSACTION;
         THROW 50002, N'Failed to delete the completed task events(s). They may have been deleted by another worker, in which case the current execution is likely a duplicate. Any results or pending side-effects of this task activity execution will be discarded.', 1;
-
+    END
     COMMIT TRANSACTION
 END
 GO
