@@ -5,6 +5,7 @@
 ### Updates
 
 * Replace hardcoded version string + globs with build variables ([#213](https://github.com/microsoft/durabletask-mssql/pull/213))
+* Fix deadlock issue on orchestration creation ([#218](https://github.com/microsoft/durabletask-mssql/pull/218)) - contributed by [@microrama](https://github.com/microrama)
 
 ## v1.2.3
 
