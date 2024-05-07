@@ -6,6 +6,7 @@
 
 * Replace hardcoded version string + globs with build variables ([#213](https://github.com/microsoft/durabletask-mssql/pull/213))
 * Fix deadlock issue on orchestration creation ([#218](https://github.com/microsoft/durabletask-mssql/pull/218)) - contributed by [@microrama](https://github.com/microrama)
+* Add missing transaction rollbacks in sprocs ([#219](https://github.com/microsoft/durabletask-mssql/pull/219)) - contributed by [@bhugot](https://github.com/bhugot)
 
 ## v1.2.3
 
