@@ -16,31 +16,54 @@ namespace PipelinePersistentCache
     /// </summary>
     public class PipelinePersistentCache
     {
-        readonly CachePartition[] cachePartitions;
+        readonly CachePartition?[] cachePartitions;
 
-        public PipelinePersistentCache(int totalPartitions, IEnumerable<PartitionMetaData> ownedPartitions)
+        /// <summary>
+        /// Constructs a pipeline persistent cache with one statically owned partition.
+        /// </summary>
+        public PipelinePersistentCache() : this(1)
         {
-            this.cachePartitions = new CachePartition[totalPartitions];
-
-            foreach (var partitionMetaData in ownedPartitions)
-            {
-                this.cachePartitions[partitionMetaData.PartitionId] = new CachePartition(this, partitionMetaData);
-            }
+            this.AddPartition(PartitionMetaData.GetInitialState(0, 1));
         }
 
-        public PipelinePersistentCache(int totalPartitions = 1)
+        /// <summary>
+        /// Constructs a pipeline persistent cache with the given number of dynamically owned partitions.
+        /// </summary>
+        /// <param name="totalPartitions"></param>
+        public PipelinePersistentCache(int totalPartitions)
         {
             this.cachePartitions = new CachePartition[totalPartitions];
-
-            for (int i = 0; i < totalPartitions; i++)
-            {
-                this.cachePartitions[i] = new CachePartition(this, PartitionMetaData.GetInitialState(i, totalPartitions));
-            }
         }
          
         public delegate void TransactionCompleted(long txId);
 
         public int TotalPartitions => this.cachePartitions.Length;
+
+        /// <summary>
+        /// Add the given partition to the set of partitions owned by this cache.
+        /// </summary>
+        /// <param name="partitionMetaData"></param>
+        public void AddPartition(PartitionMetaData partitionMetaData)
+        {
+            if (this.cachePartitions[partitionMetaData.PartitionId] != null)
+            {
+                throw new InvalidOperationException("Partition already owned by cache");
+            }   
+            this.cachePartitions[partitionMetaData.PartitionId] = new CachePartition(this, partitionMetaData);
+        }
+
+        /// <summary>
+        /// Removes the given partition from the set of partitions owned by this cache.
+        /// </summary>
+        /// <param name="partitionMetaData"></param>
+        public void RemovePartition(int partitionId)
+        {
+            if (this.cachePartitions[partitionId] == null)
+            {
+                throw new InvalidOperationException("Partition not owned by cache");
+            }
+            this.cachePartitions[partitionId] = null;
+        }
 
         public IEnumerable<int> OwnedPartitions => this.cachePartitions
             .Select((partition, index) => partition != null ? index : -1)
