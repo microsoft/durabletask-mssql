@@ -186,7 +186,8 @@ namespace PipelinePersistentCache
         public async ValueTask CollectNextCheckpointAsync<TCommand>(TCommand command, CancellationToken cancellation)
            where TCommand : CheckpointCommand
         {
-            long checkpointId = await this.StartCheckpointAsync(); // we must collect deltas under the lock so see a consistent state
+            // acquire the partition lock and get a checkpoint id
+            long checkpointId = await this.StartCheckpointAsync().ConfigureAwait(false); 
 
             try
             {

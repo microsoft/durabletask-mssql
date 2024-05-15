@@ -102,9 +102,9 @@ namespace PipelinePersistentCache
 
                 this.cachePartition.Release(this.txId, isCompletedTransaction: false);
 
-                await Task.WhenAll(this.prefetchTasks);
+                await Task.WhenAll(this.prefetchTasks).ConfigureAwait(false);
 
-                await this.cachePartition.ContinueTransactionAsync(this.txId);
+                await this.cachePartition.ContinueTransactionAsync(this.txId).ConfigureAwait(false);
             }
 
             this.EnterExecutionPhase();

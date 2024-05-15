@@ -76,7 +76,7 @@ namespace PipelinePersistentCache
 
                 info.Pending = Task.Run(async () =>
                 {
-                    (info.Exists, info.Current) = await this.LoadAsync(key); 
+                    (info.Exists, info.Current) = await this.LoadAsync(key).ConfigureAwait(false); 
                     info.Writeback = Writeback.None;
                 });
 
