@@ -65,9 +65,9 @@ namespace PipelinePersistentCache
             this.GetPartition(partitionId).OnTransactionCompleted -= listener;
         }
 
-        public Task<TxContext> StartTransactionAsync(int partitionId, CancellationToken token)
+        public ValueTask<TxContext> StartTransactionAsync(int partitionId)
         {
-            return this.GetPartition(partitionId).StartTransactionAsync(token);
+            return this.GetPartition(partitionId).StartTransactionAsync();
         }
 
         public Task CollectNextCheckpointAsync<TCommand>(TCommand command)

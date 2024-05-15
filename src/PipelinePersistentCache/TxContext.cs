@@ -64,7 +64,7 @@ namespace PipelinePersistentCache
 
             this.phase = Phase.Completed;
 
-            this.cachePartition.Release(this.txId, notify: true);
+            this.cachePartition.Release(this.txId, isCompletedTransaction: true);
 
             if (this.whenCompleted != null)
             {
@@ -100,11 +100,11 @@ namespace PipelinePersistentCache
 
                 this.phase = Phase.WaitForPrefetch;
 
-                this.cachePartition.Release(this.txId);
+                this.cachePartition.Release(this.txId, isCompletedTransaction: false);
 
                 await Task.WhenAll(this.prefetchTasks);
 
-                await this.cachePartition.ReAcquireAsync(this.txId);
+                await this.cachePartition.ContinueTransactionAsync(this.txId);
             }
 
             this.EnterExecutionPhase();

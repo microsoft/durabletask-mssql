@@ -13,11 +13,6 @@ namespace PipelinedOrchestrationService
     {
         public static int GetPartitionId(string instanceId, uint totalPartitions)
         {
-            if (totalPartitions == 1)
-            {
-                return 0;
-            }
-
             int placementSeparatorPosition = instanceId.LastIndexOf('!');
 
             // if the instance id ends with !nnn, where nnn is an unsigned number, it indicates explicit partition placement

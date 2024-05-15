@@ -29,7 +29,7 @@ namespace PipelinePersistentCache.Tests
         {
             var cache = new PipelinePersistentCache();
 
-            TxContext tx = await cache.StartTransactionAsync(0, CancellationToken.None);
+            TxContext tx = await cache.StartTransactionAsync(0);
             Assert.Equal(1, tx.TxId);
             tx.Commit();
 
@@ -50,7 +50,7 @@ namespace PipelinePersistentCache.Tests
             Action whenCompleted = () => completed.TrySetResult();
             Action whenPersisted = () => persisted.TrySetResult();
 
-            TxContext tx = await cache.StartTransactionAsync(0, CancellationToken.None);
+            TxContext tx = await cache.StartTransactionAsync(0);
             Assert.Equal(1, tx.TxId);
             tx.WhenCompleted(whenCompleted);
             tx.WhenPersisted(whenPersisted);
@@ -80,7 +80,7 @@ namespace PipelinePersistentCache.Tests
             TaskCompletionSource<long> completed = new();
             cache.AddTransactionCompletionListener(0, id => completed.TrySetResult(id));
 
-            TxContext tx = await cache.StartTransactionAsync(0, CancellationToken.None);
+            TxContext tx = await cache.StartTransactionAsync(0);
             Assert.Equal(1, tx.TxId);
 
             Assert.False(completed.Task.IsCompleted);

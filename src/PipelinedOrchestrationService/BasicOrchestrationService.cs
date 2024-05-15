@@ -63,7 +63,7 @@ namespace PipelinedOrchestrationService
             string instanceId = creationMessage.OrchestrationInstance.InstanceId;
             var partitionId = (int) PartitionHash.GetPartitionId(instanceId, this.totalPartitions);
  
-            using TxContext tx = await this.cache.StartTransactionAsync(partitionId, cancellationToken);
+            using TxContext tx = await this.cache.StartTransactionAsync(partitionId);
 
             // we must bring the instance state into memory prior to doing the transaction
             this.instances.EnsureInMemory(tx, instanceId);
@@ -179,7 +179,7 @@ namespace PipelinedOrchestrationService
 
             // --- otherwise, we process the completion result by transactionally updating all relevant state
 
-            using TxContext tx = await this.cache.StartTransactionAsync(session.PartitionId, this.shutdownToken);
+            using TxContext tx = await this.cache.StartTransactionAsync(session.PartitionId);
             this.instances.EnsureInMemory(tx, instanceId);
             this.histories.EnsureInMemory(tx, instanceId);
             await tx.CompletePrefetchesAsync();
@@ -231,7 +231,7 @@ namespace PipelinedOrchestrationService
         public async Task<OrchestrationState?> GetOrchestrationStateAsync(string instanceId, string? executionId, CancellationToken cancellation)
         {
             var partitionId = (int)PartitionHash.GetPartitionId(instanceId, this.totalPartitions);
-            using TxContext tx = await this.cache.StartTransactionAsync(partitionId, cancellation);
+            using TxContext tx = await this.cache.StartTransactionAsync(partitionId);
             this.instances.EnsureInMemory(tx, instanceId);
             await tx.CompletePrefetchesAsync();
             OrchestrationState? instanceState = this.instances.GetState(tx, instanceId);
@@ -242,7 +242,7 @@ namespace PipelinedOrchestrationService
         internal async Task<IList<HistoryEvent>?> LoadHistoryAsync(string instanceId)
         {
             var partitionId = (int)PartitionHash.GetPartitionId(instanceId, this.totalPartitions);
-            using TxContext tx = await this.cache.StartTransactionAsync(partitionId, this.shutdownToken);
+            using TxContext tx = await this.cache.StartTransactionAsync(partitionId);
             this.histories.EnsureInMemory(tx, instanceId);
             await tx.CompletePrefetchesAsync().ConfigureAwait(false);
             var history = this.histories.GetHistory(tx, instanceId);
@@ -258,7 +258,7 @@ namespace PipelinedOrchestrationService
         public async Task SendTaskOrchestrationMessageAsync(TaskMessage message, CancellationToken cancellationToken)
         {
             var partitionId = (int)PartitionHash.GetPartitionId(message.OrchestrationInstance.InstanceId, this.totalPartitions);
-            using TxContext tx = await this.cache.StartTransactionAsync(partitionId, cancellationToken);
+            using TxContext tx = await this.cache.StartTransactionAsync(partitionId);
             this.messages.AddNewMessageToBeProcessed(tx, message);
             tx.Commit();
         }
@@ -266,7 +266,7 @@ namespace PipelinedOrchestrationService
         public async Task<PurgeResult> PurgeInstanceStateAsync(string instanceId, CancellationToken cancellationToken)
         {
             var partitionId = (int)PartitionHash.GetPartitionId(instanceId, this.totalPartitions);
-            using TxContext tx = await this.cache.StartTransactionAsync(partitionId, cancellationToken);
+            using TxContext tx = await this.cache.StartTransactionAsync(partitionId);
             this.instances.EnsureInMemory(tx, instanceId);
             this.histories.EnsureInMemory(tx, instanceId);
             await tx.CompletePrefetchesAsync();
@@ -308,7 +308,7 @@ namespace PipelinedOrchestrationService
         public async Task CompleteTaskActivityWorkItemAsync(TaskActivityWorkItem workItem, TaskMessage responseMessage, CancellationToken cancellationToken)
         {
             this.ParseActivityWorkItemId(workItem.Id, out int partitionId, out long sequenceNumber);
-            using TxContext tx = await this.cache.StartTransactionAsync(partitionId, cancellationToken);
+            using TxContext tx = await this.cache.StartTransactionAsync(partitionId);
             this.activities.RemoveProcessedActivity(tx, sequenceNumber);
             this.messages.AddNewMessageToBeProcessed(tx, responseMessage);
             tx.Commit();
