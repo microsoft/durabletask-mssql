@@ -26,7 +26,7 @@ namespace PipelinedOrchestrationService
         {         
             long id = tx.GetNextSequenceNumber();
 
-            base.CreateNonExistingRow(tx, id, taskMessage);
+            base.CreateFreshRow(tx, id, taskMessage);
 
             if (this.OnActivity != null)
             {

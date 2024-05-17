@@ -108,6 +108,11 @@ namespace PipelinePersistentCache
                     this.Exists = this.rollbackInfo.Exists;
                 }
             }
+
+            public override void DecrementReferenceCount()
+            {
+                this.RefCount--;
+            }
         }
 
         // subclasses override this to load the current value of a row from storage
@@ -116,12 +121,20 @@ namespace PipelinePersistentCache
         // subclasses override this to create deltas for writing back to storage.
         protected abstract void AddRowDeltaToCheckpointCommand(TCommand command, Writeback writeback, int partitionId, TKey key, TValue? Current);
 
-        protected void PrefetchRow(TxContext tx, TKey key)
+        /// <summary>
+        /// Ensures that the row information for the given key is present in memory. If the row exists, its value is also stored in memory.
+        /// If the row does not exist, a placeholder is created in memory, and the row is marked as non-existent.
+        /// </summary>
+        /// <param name="tx">The transaction context.</param>
+        /// <param name="key">The row key.</param>
+        protected void EnsureInMemory(TxContext tx, TKey key)
         {
             tx.EnsurePrefetchPhase();
 
             if (this.rows.TryGetValue(key, out var info))
             {
+                // we don't have to prefetch, but we still have to increment the ref count
+                // to ensure the row stays in memory until the transaction is done.
                 info.RefCount++;
             }
             else
@@ -137,7 +150,7 @@ namespace PipelinePersistentCache
                 this.rows.Add(key, info);
             }
 
-            tx.WhenCompleted(() => info.RefCount--);
+            tx.AddPrefetchedRow(info);
 
             if (info.Pending != null)
             {
@@ -145,7 +158,7 @@ namespace PipelinePersistentCache
             }
         }
 
-        protected void CreateNonExistingRow(TxContext tx, TKey key, TValue value)  // this is the only operation that can be used without prefetching
+        protected void CreateFreshRow(TxContext tx, TKey key, TValue value)  // this is the only operation that can be used without prefetching
         {
             tx.EnsureExecutionPhase();
 
@@ -153,11 +166,11 @@ namespace PipelinePersistentCache
             {
                 if (info.Pending?.IsCompleted == false)
                 {
-                    throw new InvalidOperationException("Table.Create must wait for entry to be fetched from storage");
+                    throw new InvalidOperationException("Must wait for prefetch to complete.");
                 }
                 if (info.Exists)
                 {
-                    throw new InvalidOperationException("Table.Create must not be called for an already existing row");
+                    throw new InvalidOperationException("Row already exists.");
                 }
             }
             else
@@ -192,13 +205,13 @@ namespace PipelinePersistentCache
 
             if (!this.rows.TryGetValue(key, out var info))
             {
-                throw new InvalidOperationException("Table.TryGetValue must only be used for in-memory entries. Did you forget to prefetch?");
+                throw new InvalidOperationException("Row information not found in memory. Did you forget to prefetch?");
             }
             else
             {
                 if (info.Pending?.IsCompleted == false)
                 {
-                    throw new InvalidOperationException("Table.TryGetValue must wait for entry to be fetched from storage");
+                    throw new InvalidOperationException("Must wait for prefetch to complete.");
                 }
                 info.LastUse = tx.TxId;
                 value = info.Current;
@@ -212,15 +225,15 @@ namespace PipelinePersistentCache
 
             if (!this.rows.TryGetValue(key, out var info))
             {
-                throw new InvalidOperationException("Table.Update must update an existing row. Did you forget to prefetch?");
+                throw new InvalidOperationException("Row information not found in memory. Did you forget to prefetch?");
             }
             if (info.Pending?.IsCompleted == false)
             {
-                throw new InvalidOperationException("Table.Update must wait for entry to be fetched from storage");
+                throw new InvalidOperationException("Must wait for prefetch to complete.");
             }
             if (!info.Exists)
             {
-                throw new InvalidOperationException("Table.Update must update an existing row");
+                throw new InvalidOperationException("Row does not exist.");
             }
 
             info.CaptureRollbackInformation(tx.CachePartition);
@@ -248,13 +261,17 @@ namespace PipelinePersistentCache
         {
             tx.EnsureExecutionPhase();
 
-            if (!this.rows.TryGetValue(key, out var info) || !info.Exists)
+            if (!this.rows.TryGetValue(key, out var info))
             {
-                throw new InvalidOperationException("Table.Delete must delete an existing row. Did you forget to prefetch?");
+                throw new InvalidOperationException("Row information not found in memory. Did you forget to prefetch?");
             }
             if (info.Pending?.IsCompleted == false)
             {
-                throw new InvalidOperationException("Table.Delete must wait for entry to be fetched from storage");
+                throw new InvalidOperationException("Must wait for row information to finish loading from storage.");
+            }
+            if (!info.Exists)
+            {
+                throw new InvalidOperationException("Row does not exist.");
             }
 
             info.CaptureRollbackInformation(tx.CachePartition);

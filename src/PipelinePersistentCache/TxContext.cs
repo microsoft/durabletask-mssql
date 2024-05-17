@@ -20,6 +20,7 @@ namespace PipelinePersistentCache
         List<Task>? prefetchTasks;
         List<Action>? whenCompleted;
         List<Action>? whenPersisted;
+        List<TrackedRow>? prefetchedRows;
 
         enum Phase
         {
@@ -74,6 +75,14 @@ namespace PipelinePersistentCache
 
             this.cachePartition.Release(this.txId, isCompletedTransaction: true);
 
+            if (this.prefetchedRows != null)
+            {
+                foreach (TrackedRow row in this.prefetchedRows)
+                {
+                    row.DecrementReferenceCount();
+                }
+            }
+
             if (this.whenCompleted != null)
             {
                 foreach (Action a in this.whenCompleted)
@@ -92,7 +101,7 @@ namespace PipelinePersistentCache
 
             if (this.phase == Phase.Completed)
             {
-                throw new InvalidOperationException("transaction is already committed");
+                throw new InvalidOperationException("transaction is already completed");
             }
 
             this.cachePartition.Rollback();
@@ -104,9 +113,9 @@ namespace PipelinePersistentCache
 
         public void Dispose()
         {
-            if (this.phase < Phase.Completed)
+            if (this.phase <= Phase.Execution)
             {
-                // transaction did not commit before going out of scope - perhaps due to an unhandled exception
+                // transaction did not commit or abort before going out of scope - perhaps due to an unhandled exception
                 // or some programmer error. Either way, we abort the transaction, to roll back all changes. 
                 this.Abort();
             }
@@ -157,6 +166,8 @@ namespace PipelinePersistentCache
                     return;
                 case Phase.Completed:
                     throw new InvalidOperationException("transaction has already completed execution");
+                case Phase.Aborted:
+                    throw new InvalidOperationException("transaction was already aborted");
             }
         }
 
@@ -172,6 +183,8 @@ namespace PipelinePersistentCache
                     throw new InvalidOperationException("cannot prefetch after entering execution phase");
                 case Phase.Completed:
                     throw new InvalidOperationException("transaction has already completed execution");
+                case Phase.Aborted:
+                    throw new InvalidOperationException("transaction was already aborted");
             }
         }
 
@@ -201,12 +214,12 @@ namespace PipelinePersistentCache
 
         internal void AddPrefetchTask(Task task)
         {
-            if (this.phase > Phase.Prefetch)
-            {
-                throw new InvalidOperationException("cannot register a prefetch task after a transaction has already exited the prefetch phase");
-            }
             (this.prefetchTasks ??= new List<Task>()).Add(task);
         }
 
+        internal void AddPrefetchedRow(TrackedRow row)
+        {
+            (this.prefetchedRows ??= new List<TrackedRow>()).Add(row);
+        }
     }
 }

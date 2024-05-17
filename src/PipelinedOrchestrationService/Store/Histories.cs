@@ -22,9 +22,9 @@ namespace PipelinedOrchestrationService
             this.store = store;
         }
 
-        public void EnsureInMemory(TxContext context, string instanceId)
+        public new void EnsureInMemory(TxContext context, string instanceId)
         {
-            base.PrefetchRow(context, instanceId);
+            base.EnsureInMemory(context, instanceId);
         }
 
         public HistoryEvent[] GetHistory(TxContext context, string instanceId)

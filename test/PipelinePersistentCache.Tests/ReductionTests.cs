@@ -90,11 +90,11 @@ namespace PipelinePersistentCache.Tests
 
             TxContext tx = await cache.StartTransactionAsync(0);
             Debug.Assert(tx.TxId == 1);
-            table.PrefetchRow(tx, "a");
-            table.PrefetchRow(tx, "b");
-            table.PrefetchRow(tx, "c");
-            table.PrefetchRow(tx, "d");
-            table.PrefetchRow(tx, "e");
+            table.EnsureInMemory(tx, "a");
+            table.EnsureInMemory(tx, "b");
+            table.EnsureInMemory(tx, "c");
+            table.EnsureInMemory(tx, "d");
+            table.EnsureInMemory(tx, "e");
             await tx.CompletePrefetchesAsync();
             Assert.True(table.TryGetRow(tx, "a", out var value)); Assert.Equal("1", value);
             Assert.True(table.TryGetRow(tx, "b", out value)); Assert.Equal("2", value);

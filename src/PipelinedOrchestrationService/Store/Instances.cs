@@ -33,9 +33,9 @@ namespace PipelinedOrchestrationService
             DateTime CreatedTime); 
 
 
-        public void EnsureInMemory(TxContext tx, string instanceId)
+        public new void EnsureInMemory(TxContext tx, string instanceId)
         {
-            base.PrefetchRow(tx, instanceId);
+            base.EnsureInMemory(tx, instanceId);
         }
 
         public OrchestrationState? GetState(TxContext tx, string instanceId)

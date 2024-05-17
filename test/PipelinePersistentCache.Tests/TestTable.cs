@@ -27,14 +27,14 @@ namespace PipelinePersistentCache.Tests
             return this.load(key);
         }
 
-        new public void PrefetchRow(TxContext tx, string key)
+        new public void EnsureInMemory(TxContext tx, string key)
         {
-            base.PrefetchRow(tx, key);
+            base.EnsureInMemory(tx, key);
         }
 
         new public void CreateNonExistingRow(TxContext tx, string key, string value)  // this is the only operation that can be used without prefetching
         {
-            base.CreateNonExistingRow(tx, key, value);
+            base.CreateFreshRow(tx, key, value);
         }
 
         new public bool TryGetRow(TxContext tx, string key, out string? value)

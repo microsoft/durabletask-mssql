@@ -13,5 +13,7 @@ namespace PipelinePersistentCache
         public abstract void DiscardRollbackInformation();
 
         public abstract void Rollback();
+
+        public abstract void DecrementReferenceCount();
     }
 }
