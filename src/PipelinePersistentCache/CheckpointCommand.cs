@@ -28,9 +28,9 @@ namespace PipelinePersistentCache
         public abstract void SetPartitionMetaData(PartitionMetaData partitionMetaData);
 
         /// <summary>
-        /// Adds actions that should be performed after the checkpoint is persisted.
+        /// Adds an action that should be performed after the checkpoint is persisted.
         /// </summary>
         /// <param name="actions"></param>
-        public abstract void AddPostCheckpointActions(IEnumerable<Action> actions);
+        public abstract void AddPostCheckpointAction(Action actions);
     }
 }

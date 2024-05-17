@@ -15,7 +15,6 @@ namespace PipelinePersistentCache
         readonly CachePartition cachePartition;
         readonly long txId;
         readonly int partitionId;
-
         Phase phase;
 
         List<Task>? prefetchTasks;
@@ -29,6 +28,7 @@ namespace PipelinePersistentCache
             WaitForPrefetch,
             Execution,
             Completed,
+            Aborted,
         }
 
         internal CachePartition CachePartition => this.cachePartition;
@@ -52,6 +52,11 @@ namespace PipelinePersistentCache
                 throw new InvalidOperationException("must not commit twice");
             }
 
+            if (this.phase == Phase.Aborted)
+            {
+                throw new InvalidOperationException("transaction is already aborted");
+            }
+
             if (this.phase == Phase.Prefetch && this.prefetchTasks != null)
             {
                 throw new InvalidOperationException("must not commit before completing prefetches");
@@ -59,7 +64,10 @@ namespace PipelinePersistentCache
 
             if (this.whenPersisted != null)
             {
-                this.cachePartition.AddPersistenceActions(this.whenPersisted);
+                foreach(Action a in this.whenPersisted)
+                {
+                    this.cachePartition.AddPersistenceAction(a);
+                }
             }
 
             this.phase = Phase.Completed;
@@ -75,15 +83,32 @@ namespace PipelinePersistentCache
             }
         }
 
+        public void Abort()
+        {
+            if (this.phase == Phase.Aborted)
+            {
+                throw new InvalidOperationException("must not abort twice");
+            }
+
+            if (this.phase == Phase.Completed)
+            {
+                throw new InvalidOperationException("transaction is already committed");
+            }
+
+            this.cachePartition.Rollback();
+
+            this.phase = Phase.Aborted;
+
+            this.cachePartition.Release(this.txId, isCompletedTransaction: true);
+        }
+
         public void Dispose()
         {
             if (this.phase < Phase.Completed)
             {
-                // TODO consider aborting and rolling back for robustness
-                // currently we have no reason to WANT to roll back under normal circumstances but what if there are exceptions etc.
-                // it may be nice to implement rollback just to make things robust
-
-                throw new InvalidOperationException("did not commit transaction before exiting scope");
+                // transaction did not commit before going out of scope - perhaps due to an unhandled exception
+                // or some programmer error. Either way, we abort the transaction, to roll back all changes. 
+                this.Abort();
             }
         }
 

@@ -14,10 +14,10 @@ namespace PipelinePersistentCache
     {
         readonly int partitionId;
         readonly PipelinePersistentCache cache;
-        readonly HashSet<Tracked> Writebacks;
+        readonly HashSet<TrackedRow> writebacks; // the rows that were modified since the last checkpoint
+        readonly List<TrackedRow> rollbacks; // the rows that were modified by the current transaction
         readonly List<Action> postCheckpointActions;
         readonly long[] deduplicationVector;
-
         readonly object partitionLockLock; // protects the following fields
         long? partitionLockHolder;  // the ID of the transaction or checkpoint that currently holds the global partition lock, or null if not held
         Queue<TaskCompletionSource>? partitionLockWaiters;  // the queue of tasks waiting for the global partition lock
@@ -29,7 +29,8 @@ namespace PipelinePersistentCache
         {
             this.partitionId = partitionMetaData.PartitionId;
             this.cache = cache;
-            this.Writebacks = new();
+            this.writebacks = new();
+            this.rollbacks = new();
             this.postCheckpointActions = new();
             this.deduplicationVector = partitionMetaData.DeduplicationVector;
             this.partitionLockLock = new();
@@ -138,6 +139,16 @@ namespace PipelinePersistentCache
         {
             TaskCompletionSource? next = null;
 
+            if (isCompletedTransaction)
+            {
+                foreach(var row in this.rollbacks)
+                {
+                    row.DiscardRollbackInformation();
+                }
+
+                this.rollbacks.Clear();
+            }
+
             lock (this.partitionLockLock)
             {
                 Debug.Assert(this.partitionLockHolder == id);
@@ -161,28 +172,37 @@ namespace PipelinePersistentCache
             }
         }
 
-        internal void AddWriteback(Tracked tracked)
+        public void AddRollback(TrackedRow row)
         {
-            bool success = this.Writebacks.Add(tracked);
+            this.rollbacks.Add(row);
+        }
+
+        public void Rollback()
+        {
+            foreach (var row in this.rollbacks)
+            {
+                row.Rollback();
+            }
+        }
+
+        internal void AddWriteback(TrackedRow tracked)
+        {
+            bool success = this.writebacks.Add(tracked);
             Debug.Assert(success);
         }
 
-        internal void RemoveWriteback(Tracked tracked)
+        internal void RemoveWriteback(TrackedRow tracked)
         {
-            bool success = this.Writebacks.Remove(tracked);
+            bool success = this.writebacks.Remove(tracked);
             Debug.Assert(success);
         }
 
-        internal void AddPersistenceActions(IEnumerable<Action> action)
+        internal void AddPersistenceAction(Action action)
         {
-            this.postCheckpointActions.AddRange(action);
+            this.postCheckpointActions.Add(action);
         }
 
-        internal abstract class Tracked
-        {
-            public abstract void AddWriteback(object command);
-        }
-
+      
         public async ValueTask CollectNextCheckpointAsync<TCommand>(TCommand command, CancellationToken cancellation)
            where TCommand : CheckpointCommand
         {
@@ -200,16 +220,19 @@ namespace PipelinePersistentCache
                 }
 
                 // collect and clear all the deltas
-                foreach (var tracked in this.Writebacks)
+                foreach (var tracked in this.writebacks)
                 {
-                    tracked.AddWriteback(command);
+                    tracked.AddChangesToCheckpointCommand(command);
                 }
-                this.Writebacks.Clear();
+                this.writebacks.Clear();
 
                 // collect and clear all the post-checkpoint actions
                 lock (command)
                 {
-                    command.AddPostCheckpointActions(this.postCheckpointActions);
+                    foreach(Action a in this.postCheckpointActions)
+                    {
+                        command.AddPostCheckpointAction(a);
+                    }   
                 }
                 this.postCheckpointActions.Clear();
             }

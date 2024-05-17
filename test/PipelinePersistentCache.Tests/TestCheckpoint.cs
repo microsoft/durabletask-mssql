@@ -16,9 +16,9 @@ namespace PipelinePersistentCache.Tests
         public Dictionary<(string,int,string), (string? value, Writeback writeback)> Deltas = new();
         public Dictionary<int, PartitionMetaData> PartitionMetaDatas = new();
 
-        public override void AddPostCheckpointActions(IEnumerable<Action> actions)
+        public override void AddPostCheckpointAction(Action action)
         {
-            this.Actions.AddRange(actions);
+            this.Actions.Add(action);
         }
 
         public override void SetPartitionMetaData(PartitionMetaData partitionMetaData)

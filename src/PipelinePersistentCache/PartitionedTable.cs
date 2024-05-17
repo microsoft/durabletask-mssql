@@ -13,24 +13,41 @@ namespace PipelinePersistentCache
     using System.Text;
     using System.Threading.Tasks;
 
-    public abstract class PartitionedTable<TKey, TValue, TCommand> 
+
+    /// <summary>
+    /// A partitioned table that stores rows that can be created, deleted, and updated within transactions.
+    /// </summary>
+    public abstract class PartitionedTable
+    {
+        
+    }
+
+    /// <summary>
+    /// A partitioned table with specific types for keys, values, and checkpoint commands.
+    /// </summary>
+    /// <typeparam name="TKey">The type representing all the primary key columns.</typeparam>
+    /// <typeparam name="TValue">The type representing all other columns.</typeparam>
+    /// <typeparam name="TCommand">The type of the checkpoint command for writing back changes to the store.</typeparam>
+    public abstract class PartitionedTable<TKey, TValue, TCommand> : PartitionedTable
         where TKey : notnull
         where TCommand : CheckpointCommand
     {
-        readonly Dictionary<TKey, Info> rows;
+        readonly Dictionary<TKey, RowInfo> rows;
 
         protected PartitionedTable()
         {
             this.rows = new();
         }
 
-        class Info : CachePartition.Tracked
+        internal class RowInfo : TrackedRow
         {
             readonly PartitionedTable<TKey, TValue, TCommand> table;
             readonly int partitionId;
             readonly TKey key;
 
-            public Info(PartitionedTable<TKey,TValue, TCommand> table, int partitionId, TKey key)
+            RollbackInfo rollbackInfo;
+
+            public RowInfo(PartitionedTable<TKey, TValue, TCommand> table, int partitionId, TKey key)
             {
                 this.table = table;
                 this.partitionId = partitionId;
@@ -38,13 +55,15 @@ namespace PipelinePersistentCache
             }
 
             public TValue? Current;
-            public long LastUse;
             public bool Exists;
-            public int RefCount;
-            public Task? Pending;
             public Writeback Writeback;
 
-            public override void AddWriteback(object command)
+            public long LastUse;
+            public int RefCount;
+            public Task? Pending;
+
+
+            public override void AddChangesToCheckpointCommand(object command)
             {
                 if (this.Writeback != Writeback.None)
                 {
@@ -54,10 +73,42 @@ namespace PipelinePersistentCache
                     }
                 }
             }
-        }
 
-        // subclasses override this to recover the state of this table from storage. This may involve loading some rows into the cache.
-        protected abstract Task RecoverAsync(PartitionMetaData partitionMetaData);
+            public struct RollbackInfo
+            {
+                public bool HasRollbackInfo;
+                public TValue? Current;
+                public bool Exists;
+                public Writeback Writeback;
+            }
+
+            public void CaptureRollbackInformation(CachePartition cachePartition)
+            {
+                if (!this.rollbackInfo.HasRollbackInfo)
+                {
+                    this.rollbackInfo.HasRollbackInfo = true;
+                    this.rollbackInfo.Writeback = this.Writeback;
+                    this.rollbackInfo.Current = this.Current;
+                    this.rollbackInfo.Exists = this.Exists;
+                    cachePartition.AddRollback(this);
+                }
+            }
+
+            public override void DiscardRollbackInformation()
+            {
+                this.rollbackInfo = default; 
+            }
+
+            public override void Rollback()
+            {
+                if (this.rollbackInfo.HasRollbackInfo)
+                {
+                    this.Writeback = this.rollbackInfo.Writeback;
+                    this.Current = this.rollbackInfo.Current;
+                    this.Exists = this.rollbackInfo.Exists;
+                }
+            }
+        }
 
         // subclasses override this to load the current value of a row from storage
         protected abstract Task<(bool exists, TValue? value)> LoadRowAsync(TKey key);
@@ -75,7 +126,7 @@ namespace PipelinePersistentCache
             }
             else
             {
-                info = new Info(this, tx.PartitionId, key) { RefCount = 1 };
+                info = new RowInfo(this, tx.PartitionId, key) { RefCount = 1 };
 
                 info.Pending = Task.Run(async () =>
                 {
@@ -108,16 +159,16 @@ namespace PipelinePersistentCache
                 {
                     throw new InvalidOperationException("Table.Create must not be called for an already existing row");
                 }
-                info.Exists = true;
             }
             else
             {
-                this.rows.Add(key, info = new Info(this, tx.PartitionId, key));
+                this.rows.Add(key, info = new RowInfo(this, tx.PartitionId, key));
             }
+
+            info.CaptureRollbackInformation(tx.CachePartition);
 
             info.Current = value;
             info.Exists = true;
-            info.LastUse = tx.TxId;
 
             if (info.Writeback == Writeback.Deleted)
             {
@@ -131,6 +182,8 @@ namespace PipelinePersistentCache
                 }
                 info.Writeback = Writeback.Created;
             }
+
+            info.LastUse = tx.TxId;
         }
 
         protected bool TryGetRow(TxContext tx, TKey key, out TValue? value)
@@ -169,9 +222,11 @@ namespace PipelinePersistentCache
             {
                 throw new InvalidOperationException("Table.Update must update an existing row");
             }
-            info.Current = value;
-            info.LastUse = tx.TxId;
 
+            info.CaptureRollbackInformation(tx.CachePartition);
+
+            info.Current = value;
+            
             if (info.Writeback == Writeback.Created)
             {
                 info.Writeback = Writeback.Created;
@@ -185,6 +240,8 @@ namespace PipelinePersistentCache
 
                 info.Writeback = Writeback.Updated;
             }
+
+            info.LastUse = tx.TxId;
         }
 
         protected void DeleteExistingRow(TxContext tx, TKey key)
@@ -200,9 +257,10 @@ namespace PipelinePersistentCache
                 throw new InvalidOperationException("Table.Delete must wait for entry to be fetched from storage");
             }
 
+            info.CaptureRollbackInformation(tx.CachePartition);
+
             info.Current = default;
             info.Exists = false;
-            info.LastUse = tx.TxId;
 
             if (info.Writeback == Writeback.Created)
             {
@@ -218,6 +276,8 @@ namespace PipelinePersistentCache
 
                 info.Writeback = Writeback.Deleted;
             }
+
+            info.LastUse = tx.TxId;
         }
     }
 }

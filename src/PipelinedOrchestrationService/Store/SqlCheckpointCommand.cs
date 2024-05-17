@@ -27,9 +27,9 @@ namespace PipelinedOrchestrationService
             this.postCheckpointActions = new();
         }
 
-        public override void AddPostCheckpointActions(IEnumerable<Action> actions)
+        public override void AddPostCheckpointAction(Action action)
         {
-            this.postCheckpointActions.AddRange(actions);
+            this.postCheckpointActions.Add(action);
         }
 
         public override void SetPartitionMetaData(PipelinePersistentCache.PartitionMetaData partitionMetaData)
