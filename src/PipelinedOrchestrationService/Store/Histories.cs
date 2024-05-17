@@ -65,13 +65,13 @@ namespace PipelinedOrchestrationService
             base.DeleteExistingRow(context, instanceId);
         }
 
-        protected override Task<(bool exists, HistoryEvent[]? value)> LoadAsync(string key)
+        protected override Task<(bool exists, HistoryEvent[]? value)> LoadRowAsync(string key)
         {
             //TODO
             throw new NotImplementedException();
         }
 
-        protected override void AddDeltaToCheckpointCommand(SqlCheckpointCommand command, Writeback writeback, int partitionId, string key, HistoryEvent[]? Current)
+        protected override void AddRowDeltaToCheckpointCommand(SqlCheckpointCommand command, Writeback writeback, int partitionId, string key, HistoryEvent[]? Current)
         {
             //TODO
             throw new NotImplementedException();

@@ -50,17 +50,20 @@ namespace PipelinePersistentCache
                 {
                     lock (command)
                     {
-                        this.table.AddDeltaToCheckpointCommand((TCommand)command, this.Writeback, this.partitionId, this.key, this.Current);
+                        this.table.AddRowDeltaToCheckpointCommand((TCommand)command, this.Writeback, this.partitionId, this.key, this.Current);
                     }
                 }
             }
         }
 
-        // subclasses override this to load the current value from storage
-        protected abstract Task<(bool exists, TValue? value)> LoadAsync(TKey key);
+        // subclasses override this to recover the state of this table from storage. This may involve loading some rows into the cache.
+        protected abstract Task RecoverAsync(PartitionMetaData partitionMetaData);
+
+        // subclasses override this to load the current value of a row from storage
+        protected abstract Task<(bool exists, TValue? value)> LoadRowAsync(TKey key);
 
         // subclasses override this to create deltas for writing back to storage.
-        protected abstract void AddDeltaToCheckpointCommand(TCommand command, Writeback writeback, int partitionId, TKey key, TValue? Current);
+        protected abstract void AddRowDeltaToCheckpointCommand(TCommand command, Writeback writeback, int partitionId, TKey key, TValue? Current);
 
         protected void PrefetchRow(TxContext tx, TKey key)
         {
@@ -76,7 +79,7 @@ namespace PipelinePersistentCache
 
                 info.Pending = Task.Run(async () =>
                 {
-                    (info.Exists, info.Current) = await this.LoadAsync(key).ConfigureAwait(false); 
+                    (info.Exists, info.Current) = await this.LoadRowAsync(key).ConfigureAwait(false); 
                     info.Writeback = Writeback.None;
                 });
 

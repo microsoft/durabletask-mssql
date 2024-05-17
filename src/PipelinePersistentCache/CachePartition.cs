@@ -60,11 +60,11 @@ namespace PipelinePersistentCache
                 }
                 else
                 {
-                    return new ValueTask<TxContext>(SlowPath());
+                    return SlowPath();
                 }
             }
 
-            async Task<TxContext> SlowPath()
+            async ValueTask<TxContext> SlowPath()
             {
                 // the transaction lock is currently held, so in order to wait for it, we add ourselves to the queue of waiters.
                 var tcs = new TaskCompletionSource();
@@ -89,11 +89,11 @@ namespace PipelinePersistentCache
                 }
                 else
                 {
-                    return new ValueTask(SlowPath());
+                    return SlowPath();
                 }
             }
 
-            async Task SlowPath()
+            async ValueTask SlowPath()
             {
                 // the transaction lock is currently held, so in order to wait for it, we add ourselves to the queue of waiters.
                 var tcs = new TaskCompletionSource();
@@ -118,11 +118,11 @@ namespace PipelinePersistentCache
                 }
                 else
                 {
-                    return new ValueTask<long>(SlowPath());
+                    return SlowPath();
                 }
             }
 
-            async Task<long> SlowPath()
+            async ValueTask<long> SlowPath()
             {
                 // the transaction lock is currently held, so in order to wait for it, we add ourselves to the queue of waiters.
                 var tcs = new TaskCompletionSource();
