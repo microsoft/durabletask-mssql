@@ -18,24 +18,19 @@ namespace PipelinedOrchestrationService
         public Activities(SqlStore store)
         {
             this.store = store;
+            this.OnNewOrRecoveredRow += (key, value) =>
+            {
+                 this.OnActivity?.Invoke(value);
+            };
         }
 
         public event Action<TaskMessage>? OnActivity;
 
         public void AddNewActivityToBeProcessed(TxContext tx, TaskMessage taskMessage)
-        {         
+        {
             long id = tx.GetNextSequenceNumber();
-
+            taskMessage.SequenceNumber = id;
             base.CreateFreshRow(tx, id, taskMessage);
-
-            if (this.OnActivity != null)
-            {
-                tx.WhenCompleted(() =>
-                {
-                    taskMessage.SequenceNumber = id;
-                    this.OnActivity(taskMessage);
-                });
-            }
         }
 
         public void RemoveProcessedActivity(TxContext tx, long id)

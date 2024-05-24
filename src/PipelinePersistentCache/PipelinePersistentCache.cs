@@ -4,6 +4,7 @@
 namespace PipelinePersistentCache
 {
     using System;
+    using System.Collections.Concurrent;
     using System.Collections.Generic;
     using System.Diagnostics;
     using System.Linq;
@@ -17,22 +18,15 @@ namespace PipelinePersistentCache
     public class PipelinePersistentCache
     {
         readonly CachePartition?[] cachePartitions;
+        readonly PartitionedTable[] tables;
 
         /// <summary>
-        /// Constructs a pipeline persistent cache with one statically owned partition.
+        /// Constructs a pipeline persistent cache with the given number of partitions.
         /// </summary>
-        public PipelinePersistentCache() : this(1)
+        /// <param name="partitionCount"></param>
+        public PipelinePersistentCache(int partitionCount, IEnumerable<PartitionedTable> tables)
         {
-            this.AddPartition(PartitionMetaData.GetInitialState(0, 1));
-        }
-
-        /// <summary>
-        /// Constructs a pipeline persistent cache with the given number of dynamically owned partitions.
-        /// </summary>
-        /// <param name="totalPartitions"></param>
-        public PipelinePersistentCache(int totalPartitions)
-        {
-            this.cachePartitions = new CachePartition[totalPartitions];
+            this.cachePartitions = new CachePartition[partitionCount];
         }
          
         public delegate void TransactionCompleted(long txId);
@@ -43,13 +37,27 @@ namespace PipelinePersistentCache
         /// Add the given partition to the set of partitions owned by this cache.
         /// </summary>
         /// <param name="partitionMetaData"></param>
-        public void AddPartition(PartitionMetaData partitionMetaData)
+        public async Task ActivatePartitionAsync(PartitionMetaData partitionMetaData)
         {
             if (this.cachePartitions[partitionMetaData.PartitionId] != null)
             {
-                throw new InvalidOperationException("Partition already owned by cache");
+                throw new InvalidOperationException("Partition already activated");
             }   
-            this.cachePartitions[partitionMetaData.PartitionId] = new CachePartition(this, partitionMetaData);
+
+            var cachePartition = new CachePartition(this, partitionMetaData);
+
+            ConcurrentBag<TrackedRow> rowRecoveredNotifications = new ConcurrentBag<TrackedRow>();
+
+            await Parallel.ForEachAsync(this.tables, (table, cancellation) => table.RecoverRowsAsync(partitionMetaData.PartitionId, rowRecoveredNotifications));
+
+            // add the partition to the array. From this point on, it will be included in checkpoint operations.
+            this.cachePartitions[partitionMetaData.PartitionId] = cachePartition;
+
+            // run the row recovered notifications, which will restart tasks that were in progress when the partition shut down.
+            foreach (var row in rowRecoveredNotifications)
+            {
+                row.NotifyRecovered();
+            }
         }
 
         /// <summary>

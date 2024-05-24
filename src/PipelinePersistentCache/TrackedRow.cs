@@ -15,5 +15,7 @@ namespace PipelinePersistentCache
         public abstract void Rollback();
 
         public abstract void DecrementReferenceCount();
+
+        public abstract void NotifyRecovered();
     }
 }

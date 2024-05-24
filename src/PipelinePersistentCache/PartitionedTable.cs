@@ -19,7 +19,8 @@ namespace PipelinePersistentCache
     /// </summary>
     public abstract class PartitionedTable
     {
-        
+        // called when a partition is being activated
+        internal abstract ValueTask RecoverRowsAsync(int partitionId, ConcurrentBag<TrackedRow> rowRecoveredNotifications);
     }
 
     /// <summary>
@@ -52,6 +53,12 @@ namespace PipelinePersistentCache
                 this.table = table;
                 this.partitionId = partitionId;
                 this.key = key;
+            }
+            public RowInfo(PartitionedTable<TKey, TValue, TCommand> table, int partitionId, TKey key, TValue value)
+                :this(table, partitionId, key)
+            {
+                this.Current = value;
+                this.Exists = true;
             }
 
             public TValue? Current;
@@ -113,6 +120,11 @@ namespace PipelinePersistentCache
             {
                 this.RefCount--;
             }
+
+            public override void NotifyRecovered()
+            {
+                this.table.OnNewOrRecoveredRow?.Invoke(this.key, this.Current!);
+            }
         }
 
         // subclasses override this to load the current value of a row from storage
@@ -120,6 +132,27 @@ namespace PipelinePersistentCache
 
         // subclasses override this to create deltas for writing back to storage.
         protected abstract void AddRowDeltaToCheckpointCommand(TCommand command, Writeback writeback, int partitionId, TKey key, TValue? Current);
+
+        // called while a partition is being activated, to recover rows that need to be in memory before the partition starts
+        protected abstract IAsyncEnumerable<(TKey, TValue)> RecoverRowsAsync(int partitionId);
+
+        // an event that is raised when a new row is created or an existing row is recovered
+        public event RowListener? OnNewOrRecoveredRow;
+
+        public delegate void RowListener(TKey key, TValue value);
+
+        internal override async ValueTask RecoverRowsAsync(int partitionId, ConcurrentBag<TrackedRow> rowRecoveredNotifications)
+        {
+            await foreach ((TKey key, TValue value) in this.RecoverRowsAsync(partitionId))
+            {
+                var rowInfo = new RowInfo(this, partitionId, key, value);
+                this.rows.Add(key, rowInfo);
+                if (this.OnNewOrRecoveredRow != null)
+                {
+                    rowRecoveredNotifications.Add(rowInfo);
+                }
+            }
+        }
 
         /// <summary>
         /// Ensures that the row information for the given key is present in memory. If the row exists, its value is also stored in memory.
@@ -197,6 +230,11 @@ namespace PipelinePersistentCache
             }
 
             info.LastUse = tx.TxId;
+
+            if (this.OnNewOrRecoveredRow != null)
+            {
+                tx.WhenCompleted(() => this.OnNewOrRecoveredRow(key, value));
+            }     
         }
 
         protected bool TryGetRow(TxContext tx, TKey key, out TValue? value)
