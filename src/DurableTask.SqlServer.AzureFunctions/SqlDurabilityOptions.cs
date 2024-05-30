@@ -42,6 +42,16 @@ namespace DurableTask.SqlServer.AzureFunctions
                 throw new ArgumentNullException(nameof(connectionStringResolver));
             }
 
+            // If SchemaName is wrapped in `%`, then it is an environment variable to be resolved
+            if (this.SchemaName != null && this.SchemaName.StartsWith("%") && this.SchemaName.EndsWith("%"))
+            {
+                // remove surrounding `%` characters
+                this.SchemaName = this.SchemaName.Substring(1, this.SchemaName.Length - 2);
+
+                // resolve the environment variable
+                this.SchemaName = connectionStringResolver.Resolve(this.SchemaName)?.Value;
+            }
+
             IConfigurationSection connectionStringSection = connectionStringResolver.Resolve(this.ConnectionStringName);
             if (connectionStringSection == null || string.IsNullOrEmpty(connectionStringSection.Value))
             {
