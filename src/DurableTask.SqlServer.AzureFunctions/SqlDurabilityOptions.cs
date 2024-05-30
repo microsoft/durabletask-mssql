@@ -49,7 +49,7 @@ namespace DurableTask.SqlServer.AzureFunctions
                 this.SchemaName = this.SchemaName.Substring(1, this.SchemaName.Length - 2);
 
                 // resolve the environment variable
-                this.SchemaName = connectionStringResolver.Resolve(this.SchemaName)?.Value;
+                // this.SchemaName = connectionStringResolver.Resolve(this.SchemaName)?.Value;
             }
 
             IConfigurationSection connectionStringSection = connectionStringResolver.Resolve(this.ConnectionStringName);
