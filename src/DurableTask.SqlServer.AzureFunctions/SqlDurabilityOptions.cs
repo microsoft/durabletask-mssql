@@ -46,10 +46,10 @@ namespace DurableTask.SqlServer.AzureFunctions
             if (this.SchemaName != null && this.SchemaName.StartsWith("%") && this.SchemaName.EndsWith("%"))
             {
                 // remove surrounding `%` characters
-                // this.SchemaName = this.SchemaName.Substring(1, this.SchemaName.Length - 2);
+                this.SchemaName = this.SchemaName.Substring(1, this.SchemaName.Length - 2);
 
                 // resolve the environment variable
-                // this.SchemaName = connectionStringResolver.Resolve(this.SchemaName)?.Value;
+                this.SchemaName = connectionStringResolver.Resolve(this.SchemaName)?.Value;
             }
 
             IConfigurationSection connectionStringSection = connectionStringResolver.Resolve(this.ConnectionStringName);
