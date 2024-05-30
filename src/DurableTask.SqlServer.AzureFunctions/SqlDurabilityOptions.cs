@@ -4,7 +4,9 @@
 namespace DurableTask.SqlServer.AzureFunctions
 {
     using System;
+    using Microsoft.Azure.WebJobs;
     using Microsoft.Azure.WebJobs.Extensions.DurableTask;
+    using Microsoft.Azure.WebJobs.Host;
     using Microsoft.Data.SqlClient;
     using Microsoft.Extensions.Configuration;
     using Microsoft.Extensions.Logging;
@@ -35,7 +37,8 @@ namespace DurableTask.SqlServer.AzureFunctions
         
         internal SqlOrchestrationServiceSettings GetOrchestrationServiceSettings(
             DurableTaskOptions extensionOptions,
-            IConnectionInfoResolver connectionStringResolver)
+            IConnectionInfoResolver connectionStringResolver,
+            INameResolver nameResolver)
         {
             if (connectionStringResolver == null)
             {
@@ -59,7 +62,9 @@ namespace DurableTask.SqlServer.AzureFunctions
                 throw new ArgumentException("The provided connection string is invalid.", e);
             }
 
-            var settings = new SqlOrchestrationServiceSettings(connectionStringSection.Value, this.TaskHubName, this.SchemaName)
+            string? resolvedSchemaName = this.SchemaName != null ? nameResolver.ResolveWholeString(this.SchemaName) : null;
+
+            var settings = new SqlOrchestrationServiceSettings(connectionStringSection.Value, this.TaskHubName, resolvedSchemaName)
             {
                 CreateDatabaseIfNotExists = this.CreateDatabaseIfNotExists,
                 LoggerFactory = this.LoggerFactory,

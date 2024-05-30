@@ -5,6 +5,7 @@ namespace DurableTask.SqlServer.AzureFunctions
 {
     using System;
     using System.Collections.Generic;
+    using Microsoft.Azure.WebJobs;
     using Microsoft.Azure.WebJobs.Extensions.DurableTask;
     using Microsoft.Extensions.Logging;
     using Microsoft.Extensions.Options;
@@ -21,6 +22,7 @@ namespace DurableTask.SqlServer.AzureFunctions
         readonly DurableTaskOptions extensionOptions;
         readonly ILoggerFactory loggerFactory;
         readonly IConnectionInfoResolver connectionInfoResolver;
+        readonly INameResolver nameResolver;
 
         SqlDurabilityOptions? defaultOptions;
         SqlDurabilityProvider? defaultProvider;
@@ -37,11 +39,13 @@ namespace DurableTask.SqlServer.AzureFunctions
         public SqlDurabilityProviderFactory(
             IOptions<DurableTaskOptions> extensionOptions,
             ILoggerFactory loggerFactory,
-            IConnectionInfoResolver connectionInfoResolver)
+            IConnectionInfoResolver connectionInfoResolver,
+            INameResolver nameResolver)
         {
             this.extensionOptions = extensionOptions?.Value ?? throw new ArgumentNullException(nameof(extensionOptions));
             this.loggerFactory = loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));
             this.connectionInfoResolver = connectionInfoResolver ?? throw new ArgumentNullException(nameof(connectionInfoResolver));
+            this.nameResolver = nameResolver ?? throw new ArgumentNullException(nameof(nameResolver));
         }
 
         // Called by the Durable trigger binding infrastructure
@@ -85,9 +89,10 @@ namespace DurableTask.SqlServer.AzureFunctions
 
         SqlOrchestrationService GetOrchestrationService(SqlDurabilityOptions clientOptions)
         {
-            return new (clientOptions.GetOrchestrationServiceSettings(
+            return new SqlOrchestrationService(clientOptions.GetOrchestrationServiceSettings(
                 this.extensionOptions,
-                this.connectionInfoResolver));
+                this.connectionInfoResolver,
+                this.nameResolver));
         }
 
         static string GetDurabilityProviderKey(DurableClientAttribute attribute)
