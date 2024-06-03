@@ -1,6 +1,12 @@
 # Changelog
 
-## v1.3.0 (Unreleased)
+## v1.3.1 (Unreleased)
+
+### Updates
+
+* Fix SQL retry logic to open a new connection if a previous failure closed the connection ([#221](https://github.com/microsoft/durabletask-mssql/pull/221)) - contributed by [@microrama](https://github.com/microrama)
+
+## v1.3.0
 
 ### Updates
 
