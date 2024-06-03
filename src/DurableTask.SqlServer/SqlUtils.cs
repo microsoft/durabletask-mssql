@@ -29,7 +29,7 @@ namespace DurableTask.SqlServer
         {
             return reader.IsDBNull(columnIndex) ? null : reader.GetString(columnIndex);
         }
-        
+
         public static TaskMessage GetTaskMessage(this DbDataReader reader)
         {
             return new TaskMessage
@@ -560,7 +560,7 @@ namespace DurableTask.SqlServer
             var context = new SprocExecutionContext();
             try
             {
-                return await WithRetry(() => executor(command), context, traceHelper, instanceId);
+                return await WithRetry(command, executor, context, traceHelper, instanceId);
             }
             finally
             {
@@ -610,7 +610,7 @@ namespace DurableTask.SqlServer
             }
         }
 
-        static async Task<T> WithRetry<T>(Func<Task<T>> func, SprocExecutionContext context, LogHelper traceHelper, string? instanceId, int maxRetries = 5)
+        static async Task<T> WithRetry<T>(DbCommand command, Func<DbCommand, Task<T>> executor, SprocExecutionContext context, LogHelper traceHelper, string? instanceId, int maxRetries = 5)
         {
             context.RetryCount = 0;
 
@@ -618,7 +618,12 @@ namespace DurableTask.SqlServer
             {
                 try
                 {
-                    return await func();
+                    // Open connection if network blip caused it to close on a previous attempt
+                    if (command.Connection.State != ConnectionState.Open)
+                    {
+                        await command.Connection.OpenAsync();
+                    }
+                    return await executor(command);
                 }
                 catch (Exception e)
                 {
