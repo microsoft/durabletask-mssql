@@ -15,7 +15,7 @@ jobs:
 
     runs-on: ubuntu-latest
     env:
-      SA_PASSWORD: PLACEHOLDER # The 'PLACEHOLDER' value tells the credscanner to dismiss this local secret
+      SA_PASSWORD: NotASecret!12 # The 'PLACEHOLDER' value tells the credscanner to dismiss this local secret
 
     steps:
     - uses: actions/checkout@v4
