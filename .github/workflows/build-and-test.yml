@@ -15,7 +15,7 @@ jobs:
 
     runs-on: ubuntu-latest
     env:
-      SA_PASSWORD: NotASecret!12
+      SA_PASSWORD: NotASecret!12 # ([SuppressMessage\("Microsoft.Security", "CS001:SecretInline", Justification="This isn't a real prod secret, it is a local DB instance instantiated on demand."\)]
 
     steps:
     - uses: actions/checkout@v4
