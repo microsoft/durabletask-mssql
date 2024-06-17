@@ -1,0 +1,63 @@
+jobs:
+    - job: Build
+
+      templateContext:
+          outputs:
+              - output: pipelineArtifact
+                path: $(build.artifactStagingDirectory)
+                artifact: drop
+                sbomBuildDropPath: $(System.DefaultWorkingDirectory)
+                sbomPackageName: 'DurableTask-MSSQL SBOM'
+
+      steps:
+        - task: UseDotNet@2
+          displayName: 'Use the .NET 6 SDK'
+          inputs:
+            packageType: 'sdk'
+            version: '6.0.x'
+
+        # Start by restoring all the dependencies. This needs to be its own task
+        # from what I can tell.
+        - task: DotNetCoreCLI@2
+          displayName: 'Restore nuget dependencies'
+          inputs:
+            command: restore
+            verbosityRestore: Minimal
+            projects: '**/*.csproj'
+
+        # Build the entire solution. This will also build all the tests, which
+        # isn't strictly necessary...
+        - task: VSBuild@1
+          displayName: 'Build'
+          inputs:
+            solution: '**/*.sln'
+            vsVersion: 'latest'
+            logFileVerbosity: minimal
+            configuration: Release
+            msbuildArgs: /p:FileVersionRevision=$(Build.BuildId) /p:ContinuousIntegrationBuild=true
+
+        - template: ci/sign-files.yml@eng
+          parameters:
+              displayName: Sign assemblies
+              folderPath: src
+              pattern: DurableTask.*.dll
+              signType: dll
+
+        # Packaging needs to be a separate step from build.
+        # This will automatically pick up the signed DLLs.
+        - task: DotNetCoreCLI@2
+          displayName: Generate nuget packages
+          inputs:
+            command: pack
+            verbosityPack: Minimal
+            configuration: Release
+            nobuild: true
+            packDirectory: $(build.artifactStagingDirectory)
+            packagesToPack: 'src/**/*.csproj'
+
+        - template: ci/sign-files.yml@eng
+          parameters:
+              displayName: Sign NugetPackages
+              folderPath: $(build.artifactStagingDirectory)
+              pattern: '*.nupkg'
+              signType: nuget
