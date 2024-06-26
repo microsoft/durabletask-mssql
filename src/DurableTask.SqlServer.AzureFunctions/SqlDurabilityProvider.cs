@@ -197,8 +197,24 @@ namespace DurableTask.SqlServer.AzureFunctions
             string storageConnectionString,
             out IScaleMonitor scaleMonitor)
         {
-            scaleMonitor = this.scaleMonitor ??= new SqlScaleMonitor(this.service, hubName);
+            SqlMetricsProvider sqlMetricsProvider = new SqlMetricsProvider(this.service);
+            scaleMonitor = this.scaleMonitor ??= new SqlScaleMonitor(this.service, hubName, sqlMetricsProvider);
             return true;
         }
+
+#if NETCOREAPP
+        public override bool TryGetTargetScaler(
+            string functionId,
+            string functionName,
+            string hubName,
+            string connectionName,
+            out ITargetScaler targetScaler)
+        {
+            SqlMetricsProvider sqlMetricsProvider = new SqlMetricsProvider(this.service);
+            targetScaler = new SqlTargetScaler(functionId, sqlMetricsProvider);
+
+            return true;
+        }
+#endif
     }
 }
