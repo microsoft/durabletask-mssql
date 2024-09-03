@@ -25,7 +25,7 @@ For Durable Functions apps, explicit task hub names are configured in the `exten
     "durableTask": {
       "hubName": "MyTaskHub",
       "storageProvider": {
-        "type": "MicrosoftSQL",
+        "type": "mssql",
         "connectionStringName": "SQLDB_Connection"
       }
     }
