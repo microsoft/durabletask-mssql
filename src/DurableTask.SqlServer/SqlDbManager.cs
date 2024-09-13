@@ -179,8 +179,21 @@ namespace DurableTask.SqlServer
         {
             // Note that we may not be able to connect to the DB, let alone obtain the lock,
             // if the database does not exist yet. So we obtain a connection to the 'master' database for now.
+            // If the current connection doesn't have permission to access the master database, this will fail
+            // with a "Login failed for user ..." error, in which case we log and return.
             using SqlConnection connection = this.settings.CreateConnection("master");
-            await connection.OpenAsync();
+            try
+            {
+                await connection.OpenAsync();
+            }
+            catch (SqlException e) when (e.Number == 18456 /* LOGON_FAILED */)
+            {
+                this.traceHelper.GenericInfoEvent(
+                    "Failed to connect to the master database. The user may not have permission to access the " + 
+                    "master database. Skipping database exists check.",
+                    instanceId: null);
+                return;
+            }
 
             if (!await this.DoesDatabaseExistAsync(this.settings.DatabaseName, connection))
             {
