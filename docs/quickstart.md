@@ -164,7 +164,7 @@ docker run --name mssql-server \
 # wait a few seconds for the container to start...
 
 # create the database with strict binary collation
-docker exec -d mssql-server /opt/mssql-tools/bin/sqlcmd \
+docker exec -d mssql-server /opt/mssql-tools18/bin/sqlcmd \
     -S . \
     -U sa \
     -P "$pw" \
