@@ -30,4 +30,4 @@ docker ps
 
 # Create the database with strict binary collation
 Write-Host "Creating '$dbname' database with '$collation' collation" -ForegroundColor DarkYellow
-docker exec -d mssql-server /opt/mssql-tools/bin/sqlcmd -S . -U sa -P "$pw" -Q "CREATE DATABASE [$dbname] COLLATE $collation"
+docker exec -d mssql-server /opt/mssql-tools18/bin/sqlcmd -S . -U sa -P "$pw" -Q "CREATE DATABASE [$dbname] COLLATE $collation"
