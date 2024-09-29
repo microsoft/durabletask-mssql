@@ -99,7 +99,8 @@ namespace DurableTask.SqlServer.Tests.Integration
                     LogAssert.ExecutedSqlScript("schema-1.2.0.sql"),
                     LogAssert.ExecutedSqlScript("logic.sql"),
                     LogAssert.ExecutedSqlScript("permissions.sql"),
-                    LogAssert.SprocCompleted("dt._UpdateVersion"))
+                    LogAssert.SprocCompleted("dt._UpdateVersion"),
+                    LogAssert.SprocCompleted("dt.SetGlobalSetting"))
                 .EndOfLog();
 
             await this.ValidateDatabaseSchemaAsync(testDb);
@@ -159,7 +160,8 @@ namespace DurableTask.SqlServer.Tests.Integration
                     LogAssert.ExecutedSqlScript("schema-1.2.0.sql"),
                     LogAssert.ExecutedSqlScript("logic.sql"),
                     LogAssert.ExecutedSqlScript("permissions.sql"),
-                    LogAssert.SprocCompleted($"{schemaName}._UpdateVersion"))
+                    LogAssert.SprocCompleted($"{schemaName}._UpdateVersion"),
+                    LogAssert.SprocCompleted($"{schemaName}.SetGlobalSetting"))
                 .EndOfLog();
 
             await this.ValidateDatabaseSchemaAsync(testDb, schemaName);
@@ -221,7 +223,8 @@ namespace DurableTask.SqlServer.Tests.Integration
                     LogAssert.ExecutedSqlScript("schema-1.2.0.sql"),
                     LogAssert.ExecutedSqlScript("logic.sql"),
                     LogAssert.ExecutedSqlScript("permissions.sql"),
-                    LogAssert.SprocCompleted($"{firstTestSchemaName}._UpdateVersion"))
+                    LogAssert.SprocCompleted($"{firstTestSchemaName}._UpdateVersion"), 
+                    LogAssert.SprocCompleted($"{firstTestSchemaName}.SetGlobalSetting"))
                 .Expect(
                     LogAssert.CheckedDatabase())
                 .Expect(
@@ -231,7 +234,8 @@ namespace DurableTask.SqlServer.Tests.Integration
                     LogAssert.ExecutedSqlScript("schema-1.2.0.sql"),
                     LogAssert.ExecutedSqlScript("logic.sql"),
                     LogAssert.ExecutedSqlScript("permissions.sql"),
-                    LogAssert.SprocCompleted($"{secondTestSchemaName}._UpdateVersion"))
+                    LogAssert.SprocCompleted($"{secondTestSchemaName}._UpdateVersion"),
+                    LogAssert.SprocCompleted($"{secondTestSchemaName}.SetGlobalSetting"))
                 .EndOfLog();
 
             await this.ValidateDatabaseSchemaAsync(testDb, secondTestSchemaName);
@@ -314,7 +318,8 @@ namespace DurableTask.SqlServer.Tests.Integration
                     LogAssert.ExecutedSqlScript("schema-1.2.0.sql"),
                     LogAssert.ExecutedSqlScript("logic.sql"),
                     LogAssert.ExecutedSqlScript("permissions.sql"),
-                    LogAssert.SprocCompleted("dt._UpdateVersion"))
+                    LogAssert.SprocCompleted("dt._UpdateVersion"),
+                    LogAssert.SprocCompleted("dt.SetGlobalSetting"))
                 .EndOfLog();
 
             await this.ValidateDatabaseSchemaAsync(testDb);
@@ -368,6 +373,7 @@ namespace DurableTask.SqlServer.Tests.Integration
                     LogAssert.ExecutedSqlScript("logic.sql"),
                     LogAssert.ExecutedSqlScript("permissions.sql"),
                     LogAssert.SprocCompleted("dt._UpdateVersion"),
+                    LogAssert.SprocCompleted("dt.SetGlobalSetting"),
                     // 2nd
                     LogAssert.AcquiredAppLock(),
                     LogAssert.SprocCompleted("dt._GetVersions"),
@@ -452,8 +458,11 @@ namespace DurableTask.SqlServer.Tests.Integration
 
             var expectedFunctionNames = new HashSet<string>(StringComparer.Ordinal)
             {
+                $"{schemaName}._CurrentTaskHub",
                 $"{schemaName}.CurrentTaskHub",
+                $"{schemaName}._GetScaleMetric",
                 $"{schemaName}.GetScaleMetric",
+                $"{schemaName}._GetScaleRecommendation",
                 $"{schemaName}.GetScaleRecommendation",
             };
 

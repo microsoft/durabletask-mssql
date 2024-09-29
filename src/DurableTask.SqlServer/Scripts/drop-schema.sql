@@ -2,8 +2,11 @@
 -- Licensed under the MIT License.
 
 -- Functions
+DROP FUNCTION IF EXISTS __SchemaNamePlaceholder__._CurrentTaskHub
 DROP FUNCTION IF EXISTS __SchemaNamePlaceholder__.CurrentTaskHub
+DROP FUNCTION IF EXISTS __SchemaNamePlaceholder__._GetScaleMetric
 DROP FUNCTION IF EXISTS __SchemaNamePlaceholder__.GetScaleMetric
+DROP FUNCTION IF EXISTS __SchemaNamePlaceholder__._GetScaleRecommendation
 DROP FUNCTION IF EXISTS __SchemaNamePlaceholder__.GetScaleRecommendation
 
 -- Views

@@ -80,7 +80,7 @@ IF TYPE_ID(N'__SchemaNamePlaceholder__.TaskEvents') IS NULL
 GO
 
 
-CREATE OR ALTER FUNCTION __SchemaNamePlaceholder__.CurrentTaskHub()
+CREATE OR ALTER FUNCTION __SchemaNamePlaceholder__._CurrentTaskHub(@TaskHubName varchar(150))
     RETURNS varchar(50)
     WITH EXECUTE AS CALLER
 AS
@@ -90,31 +90,38 @@ BEGIN
     -- 1: Task hub names are inferred from the user credential
     DECLARE @taskHubMode sql_variant = (SELECT TOP 1 [Value] FROM GlobalSettings WHERE [Name] = 'TaskHubMode');
 
-    DECLARE @taskHub varchar(150)
+    DECLARE @taskHub varchar(150);
 
-    IF @taskHubMode = 0
-        SET @taskHub = APP_NAME()
-    IF @taskHubMode = 1
-        SET @taskHub = USER_NAME()
-
-    IF @taskHub IS NULL
-        SET @taskHub = 'default'
-
+    IF @taskHubMode = 1 
+        SET @taskHub = USER_NAME();
+    ELSE IF @TaskHubName is NULL
+        SET @taskHub = APP_NAME();
+    ELSE
+        SET @taskHub = @TaskHubName;
+    
     -- if the name is too long, keep the first 16 characters and hash the rest
     IF LEN(@taskHub) > 50
-        SET @taskHub = CONVERT(varchar(16), @taskHub) + '__' + CONVERT(varchar(32), HASHBYTES('MD5', @taskHub), 2)
+        SET @taskHub = CONVERT(varchar(16), @taskHub) + '__' + CONVERT(varchar(32), HASHBYTES('MD5', @taskHub), 2);
 
-    RETURN @taskHub
+    RETURN @taskHub;
 END
 GO
 
-
-CREATE OR ALTER FUNCTION __SchemaNamePlaceholder__.GetScaleMetric()
+CREATE OR ALTER FUNCTION __SchemaNamePlaceholder__.CurrentTaskHub()
+    RETURNS varchar(50)
+    WITH EXECUTE AS CALLER
+AS
+BEGIN    
+    RETURN __SchemaNamePlaceholder__._CurrentTaskHub(null);
+END
+GO
+    
+CREATE OR ALTER FUNCTION __SchemaNamePlaceholder__._GetScaleMetric(@TaskHubName varchar(150))
     RETURNS INT
     WITH EXECUTE AS CALLER
 AS
 BEGIN
-    DECLARE @taskHub varchar(50) = __SchemaNamePlaceholder__.CurrentTaskHub()
+    DECLARE @taskHub varchar(50) = __SchemaNamePlaceholder__._CurrentTaskHub(@TaskHubName)
     DECLARE @now datetime2 = SYSUTCDATETIME()
 
     DECLARE @liveInstances bigint = 0
@@ -135,13 +142,21 @@ BEGIN
 END
 GO
 
+CREATE OR ALTER FUNCTION __SchemaNamePlaceholder__.GetScaleMetric()
+    RETURNS INT
+    WITH EXECUTE AS CALLER
+AS
+BEGIN 
+    RETURN __SchemaNamePlaceholder__._GetScaleMetric(null); 
+END
+GO
 
-CREATE OR ALTER FUNCTION __SchemaNamePlaceholder__.GetScaleRecommendation(@MaxOrchestrationsPerWorker real, @MaxActivitiesPerWorker real)
+CREATE OR ALTER FUNCTION __SchemaNamePlaceholder__._GetScaleRecommendation(@MaxOrchestrationsPerWorker real, @MaxActivitiesPerWorker real, @TaskHubName varchar(150))
     RETURNS INT
     WITH EXECUTE AS CALLER
 AS
 BEGIN
-    DECLARE @taskHub varchar(50) = __SchemaNamePlaceholder__.CurrentTaskHub()
+    DECLARE @taskHub varchar(50) = __SchemaNamePlaceholder__._CurrentTaskHub(@TaskHubName)
     DECLARE @now datetime2 = SYSUTCDATETIME()
 
     DECLARE @liveInstances bigint = 0
@@ -168,6 +183,14 @@ BEGIN
 END
 GO
 
+CREATE OR ALTER FUNCTION __SchemaNamePlaceholder__.GetScaleRecommendation(@MaxOrchestrationsPerWorker real, @MaxActivitiesPerWorker real)
+    RETURNS INT
+    WITH EXECUTE AS CALLER
+AS
+BEGIN
+    RETURN __SchemaNamePlaceholder__.GetScaleRecommendation(@MaxOrchestrationsPerWorker, @MaxActivitiesPerWorker, NULL);
+END
+GO
 
 CREATE OR ALTER VIEW __SchemaNamePlaceholder__.vInstances
 AS
@@ -183,21 +206,21 @@ AS
         I.[RuntimeStatus],
         I.[TraceContext],
         (SELECT TOP 1 [Text] FROM Payloads P WHERE
-            P.[TaskHub] = __SchemaNamePlaceholder__.CurrentTaskHub() AND
+            P.[TaskHub] = I.[TaskHub] AND
             P.[InstanceID] = I.[InstanceID] AND
             P.[PayloadID] = I.[CustomStatusPayloadID]) AS [CustomStatusText],
         (SELECT TOP 1 [Text] FROM Payloads P WHERE
-            P.[TaskHub] = __SchemaNamePlaceholder__.CurrentTaskHub() AND
+            P.[TaskHub] = I.[TaskHub] AND
             P.[InstanceID] = I.[InstanceID] AND
             P.[PayloadID] = I.[InputPayloadID]) AS [InputText],
         (SELECT TOP 1 [Text] FROM Payloads P WHERE 
-            P.[TaskHub] = __SchemaNamePlaceholder__.CurrentTaskHub() AND
+            P.[TaskHub] = I.[TaskHub] AND
             P.[InstanceID] = I.[InstanceID] AND
             P.[PayloadID] = I.[OutputPayloadID]) AS [OutputText],
         I.[ParentInstanceID]
     FROM Instances I
-    WHERE
-        I.[TaskHub] = __SchemaNamePlaceholder__.CurrentTaskHub()
+    -- like operator is the simplest way to keep indexed seek with conditional where
+    WHERE I.[TaskHub] LIKE __SchemaNamePlaceholder__._CurrentTaskHub('%')
 GO
 
 CREATE OR ALTER VIEW __SchemaNamePlaceholder__.vHistory
@@ -216,12 +239,12 @@ AS
         H.[VisibleTime],
         H.[TraceContext],
 	    (SELECT TOP 1 [Text] FROM Payloads P WHERE
-            P.[TaskHub] = __SchemaNamePlaceholder__.CurrentTaskHub() AND
+            P.[TaskHub] = H.[TaskHub] AND
             P.[InstanceID] = H.[InstanceID] AND
             P.[PayloadID] = H.[DataPayloadID]) AS [Payload]
     FROM History H
-    WHERE
-        H.[TaskHub] = __SchemaNamePlaceholder__.CurrentTaskHub()
+    -- like operator is the simplest way to keep indexed seek with conditional where
+    WHERE H.[TaskHub] LIKE __SchemaNamePlaceholder__._CurrentTaskHub('%')
 GO
 
 
@@ -233,10 +256,11 @@ CREATE OR ALTER PROCEDURE __SchemaNamePlaceholder__.CreateInstance
     @InputText varchar(MAX) = NULL,
     @StartTime datetime2 = NULL,
     @DedupeStatuses varchar(MAX) = 'Pending,Running',
-    @TraceContext varchar(800) = NULL
+    @TraceContext varchar(800) = NULL,
+    @TaskHubName varchar(150) = NULL
 AS
 BEGIN
-    DECLARE @TaskHub varchar(50) = __SchemaNamePlaceholder__.CurrentTaskHub()
+    DECLARE @TaskHub varchar(50) = __SchemaNamePlaceholder__._CurrentTaskHub(@TaskHubName)
     DECLARE @EventType varchar(30) = 'ExecutionStarted'
     DECLARE @RuntimeStatus varchar(30) = 'Pending'
 
@@ -268,7 +292,7 @@ BEGIN
             -- Purge the existing instance data so that it can be overwritten
             DECLARE @instancesToPurge InstanceIDs
             INSERT INTO @instancesToPurge VALUES (@InstanceID)
-            EXEC __SchemaNamePlaceholder__.PurgeInstanceStateByID @instancesToPurge
+            EXEC __SchemaNamePlaceholder__.PurgeInstanceStateByID @instancesToPurge, @TaskHubName
         END
 
         COMMIT TRANSACTION
@@ -342,10 +366,11 @@ GO
 
 CREATE OR ALTER PROCEDURE __SchemaNamePlaceholder__.GetInstanceHistory
     @InstanceID varchar(100),
-    @GetInputsAndOutputs bit = 0
+    @GetInputsAndOutputs bit = 0,
+    @TaskHubName varchar(150) = NULL
 AS
 BEGIN
-    DECLARE @TaskHub varchar(50) = __SchemaNamePlaceholder__.CurrentTaskHub()
+    DECLARE @TaskHub varchar(50) = __SchemaNamePlaceholder__._CurrentTaskHub(@TaskHubName)
     DECLARE @ParentInstanceID varchar(100)
     DECLARE @Version varchar(100)
     
@@ -388,12 +413,13 @@ CREATE OR ALTER PROCEDURE __SchemaNamePlaceholder__.RaiseEvent
     @Name varchar(300),
     @InstanceID varchar(100) = NULL,
     @PayloadText varchar(MAX) = NULL,
-    @DeliveryTime datetime2 = NULL
+    @DeliveryTime datetime2 = NULL,
+    @TaskHubName varchar(150) = NULL
 AS
 BEGIN
     BEGIN TRANSACTION
 
-    DECLARE @TaskHub varchar(50) = __SchemaNamePlaceholder__.CurrentTaskHub()
+    DECLARE @TaskHub varchar(50) = __SchemaNamePlaceholder__._CurrentTaskHub(@TaskHubName)
 
     -- External event messages must target new instances or they must use
     -- the "auto start" instance ID format of @orchestrationname@identifier.
@@ -457,7 +483,8 @@ GO
 
 CREATE OR ALTER PROCEDURE __SchemaNamePlaceholder__.TerminateInstance
     @InstanceID varchar(100),
-    @Reason varchar(max) = NULL
+    @Reason varchar(max) = NULL,
+    @TaskHubName varchar(150) = NULL
 AS
 BEGIN
     BEGIN TRANSACTION
@@ -467,7 +494,7 @@ BEGIN
     -- order across all stored procedures that execute within a transaction.
     -- Table order for this sproc: Instances --> (NewEvents --> Payloads --> NewEvents)  
 
-    DECLARE @TaskHub varchar(50) = __SchemaNamePlaceholder__.CurrentTaskHub()
+    DECLARE @TaskHub varchar(50) = __SchemaNamePlaceholder__._CurrentTaskHub(@TaskHubName)
 
     DECLARE @existingStatus varchar(30) = (
         SELECT TOP 1 existing.[RuntimeStatus]
@@ -517,10 +544,11 @@ GO
 
 
 CREATE OR ALTER PROCEDURE __SchemaNamePlaceholder__.PurgeInstanceStateByID
-    @InstanceIDs InstanceIDs READONLY
+    @InstanceIDs InstanceIDs READONLY,
+    @TaskHubName varchar(150) = NULL
 AS
 BEGIN
-    DECLARE @TaskHub varchar(50) = __SchemaNamePlaceholder__.CurrentTaskHub()
+    DECLARE @TaskHub varchar(50) = __SchemaNamePlaceholder__._CurrentTaskHub(@TaskHubName)
 
     BEGIN TRANSACTION
 
@@ -541,10 +569,11 @@ GO
 
 CREATE OR ALTER PROCEDURE __SchemaNamePlaceholder__.PurgeInstanceStateByTime
     @ThresholdTime datetime2,
-    @FilterType tinyint = 0
+    @FilterType tinyint = 0,
+    @TaskHubName varchar(150) = NULL
 AS
 BEGIN
-    DECLARE @TaskHub varchar(50) = __SchemaNamePlaceholder__.CurrentTaskHub()
+    DECLARE @TaskHub varchar(50) = __SchemaNamePlaceholder__._CurrentTaskHub(@TaskHubName)
 
     DECLARE @instanceIDs InstanceIDs
 
@@ -569,7 +598,7 @@ BEGIN
     END
 
     DECLARE @deletedInstances int
-    EXECUTE @deletedInstances = __SchemaNamePlaceholder__.PurgeInstanceStateByID @instanceIDs
+    EXECUTE @deletedInstances = __SchemaNamePlaceholder__.PurgeInstanceStateByID @instanceIDs, @TaskHubName
     RETURN @deletedInstances
 END
 GO
@@ -602,7 +631,8 @@ GO
 CREATE OR ALTER PROCEDURE __SchemaNamePlaceholder__._LockNextOrchestration
     @BatchSize int,
     @LockedBy varchar(100),
-    @LockExpiration datetime2
+    @LockExpiration datetime2,
+    @TaskHubName varchar(150) = NULL
 AS
 BEGIN
     DECLARE @now datetime2 = SYSUTCDATETIME()
@@ -610,7 +640,7 @@ BEGIN
     DECLARE @parentInstanceID varchar(100)
     DECLARE @version varchar(100)
     DECLARE @runtimeStatus varchar(30)
-    DECLARE @TaskHub varchar(50) = __SchemaNamePlaceholder__.CurrentTaskHub()
+    DECLARE @TaskHub varchar(50) = __SchemaNamePlaceholder__._CurrentTaskHub(@TaskHubName)
 
     BEGIN TRANSACTION
 
@@ -721,12 +751,13 @@ CREATE OR ALTER PROCEDURE __SchemaNamePlaceholder__._CheckpointOrchestration
     @DeletedEvents MessageIDs READONLY,
     @NewHistoryEvents HistoryEvents READONLY,
     @NewOrchestrationEvents OrchestrationEvents READONLY,
-    @NewTaskEvents TaskEvents READONLY
+    @NewTaskEvents TaskEvents READONLY,
+    @TaskHubName varchar(150) = NULL
 AS
 BEGIN
     BEGIN TRANSACTION
 
-    DECLARE @TaskHub varchar(50) = __SchemaNamePlaceholder__.CurrentTaskHub()
+    DECLARE @TaskHub varchar(50) = __SchemaNamePlaceholder__._CurrentTaskHub(@TaskHubName)
 
     DECLARE @InputPayloadID uniqueidentifier
     DECLARE @CustomStatusPayloadID uniqueidentifier
@@ -1019,10 +1050,11 @@ GO
 
 CREATE OR ALTER PROCEDURE __SchemaNamePlaceholder__._DiscardEventsAndUnlockInstance
     @InstanceID varchar(100),
-    @DeletedEvents MessageIDs READONLY
+    @DeletedEvents MessageIDs READONLY,
+    @TaskHubName varchar(150) = NULL
 AS
 BEGIN
-    DECLARE @taskHub varchar(50) = __SchemaNamePlaceholder__.CurrentTaskHub()
+    DECLARE @taskHub varchar(50) = __SchemaNamePlaceholder__._CurrentTaskHub(@TaskHubName)
 
     -- We return the list of deleted messages so that the caller can issue a 
     -- warning about missing messages
@@ -1042,7 +1074,8 @@ GO
 
 
 CREATE OR ALTER PROCEDURE __SchemaNamePlaceholder__._AddOrchestrationEvents
-    @NewOrchestrationEvents OrchestrationEvents READONLY 
+    @NewOrchestrationEvents OrchestrationEvents READONLY,
+    @TaskHubName varchar(150) = NULL
 AS
 BEGIN
     BEGIN TRANSACTION
@@ -1052,7 +1085,7 @@ BEGIN
     -- order across all stored procedures that execute within a transaction.
     -- Table order for this sproc: Payloads --> NewEvents
 
-    DECLARE @TaskHub varchar(50) = __SchemaNamePlaceholder__.CurrentTaskHub()
+    DECLARE @TaskHub varchar(50) = __SchemaNamePlaceholder__._CurrentTaskHub(@TaskHubName)
     
     -- External event messages can create new instances
     -- NOTE: There is a chance this could result in deadlocks if two 
@@ -1133,10 +1166,11 @@ CREATE OR ALTER PROCEDURE __SchemaNamePlaceholder__.QuerySingleOrchestration
     @InstanceID varchar(100),
     @ExecutionID varchar(50) = NULL,
     @FetchInput bit = 1,
-    @FetchOutput bit = 1
+    @FetchOutput bit = 1,
+    @TaskHubName varchar(150) = NULL
 AS
 BEGIN
-    DECLARE @TaskHub varchar(50) = __SchemaNamePlaceholder__.CurrentTaskHub()
+    DECLARE @TaskHub varchar(50) = __SchemaNamePlaceholder__._CurrentTaskHub(@TaskHubName)
 
     SELECT TOP 1
         I.[InstanceID],
@@ -1179,10 +1213,11 @@ CREATE OR ALTER PROCEDURE __SchemaNamePlaceholder__._QueryManyOrchestrations
     @CreatedTimeTo datetime2 = NULL,
     @RuntimeStatusFilter varchar(200) = NULL,
     @InstanceIDPrefix varchar(100) = NULL,
-    @ExcludeSubOrchestrations bit = 0
+    @ExcludeSubOrchestrations bit = 0,
+    @TaskHubName varchar(150) = NULL
 AS
 BEGIN
-    DECLARE @TaskHub varchar(50) = __SchemaNamePlaceholder__.CurrentTaskHub()
+    DECLARE @TaskHub varchar(50) = __SchemaNamePlaceholder__._CurrentTaskHub(@TaskHubName)
 
     SELECT
         I.[InstanceID],
@@ -1224,10 +1259,11 @@ GO
 
 CREATE OR ALTER PROCEDURE __SchemaNamePlaceholder__._LockNextTask
     @LockedBy varchar(100),
-    @LockExpiration datetime2
+    @LockExpiration datetime2,
+    @TaskHubName varchar(150) = NULL
 AS
 BEGIN
-    DECLARE @TaskHub varchar(50) = __SchemaNamePlaceholder__.CurrentTaskHub()
+    DECLARE @TaskHub varchar(50) = __SchemaNamePlaceholder__._CurrentTaskHub(@TaskHubName)
     DECLARE @now datetime2 = SYSUTCDATETIME()
 
     DECLARE @SequenceNumber bigint
@@ -1281,10 +1317,11 @@ GO
 
 CREATE OR ALTER PROCEDURE __SchemaNamePlaceholder__._RenewOrchestrationLocks
     @InstanceID varchar(100),
-    @LockExpiration datetime2
+    @LockExpiration datetime2,
+    @TaskHubName varchar(150) = NULL
 AS
 BEGIN
-    DECLARE @TaskHub varchar(50) = __SchemaNamePlaceholder__.CurrentTaskHub()
+    DECLARE @TaskHub varchar(50) = __SchemaNamePlaceholder__._CurrentTaskHub(@TaskHubName)
 
     UPDATE Instances
     SET [LockExpiration] = @LockExpiration
@@ -1295,10 +1332,11 @@ GO
 
 CREATE OR ALTER PROCEDURE __SchemaNamePlaceholder__._RenewTaskLocks
     @RenewingTasks MessageIDs READONLY,
-    @LockExpiration datetime2
+    @LockExpiration datetime2,
+    @TaskHubName varchar(150) = NULL
 AS
 BEGIN
-    DECLARE @TaskHub varchar(50) = __SchemaNamePlaceholder__.CurrentTaskHub()
+    DECLARE @TaskHub varchar(50) = __SchemaNamePlaceholder__._CurrentTaskHub(@TaskHubName)
 
     UPDATE N
     SET [LockExpiration] = @LockExpiration
@@ -1311,10 +1349,11 @@ GO
 
 CREATE OR ALTER PROCEDURE __SchemaNamePlaceholder__._CompleteTasks
     @CompletedTasks MessageIDs READONLY,
-    @Results TaskEvents READONLY
+    @Results TaskEvents READONLY,
+    @TaskHubName varchar(150) = NULL
 AS
 BEGIN
-    DECLARE @TaskHub varchar(50) = __SchemaNamePlaceholder__.CurrentTaskHub()
+    DECLARE @TaskHub varchar(50) = __SchemaNamePlaceholder__._CurrentTaskHub(@TaskHubName)
 
     BEGIN TRANSACTION
 
@@ -1410,12 +1449,13 @@ GO
 
 CREATE OR ALTER PROCEDURE __SchemaNamePlaceholder__._RewindInstance
     @InstanceID varchar(100),
-    @Reason varchar(max) = NULL
+    @Reason varchar(max) = NULL,
+    @TaskHubName varchar(150) = NULL
 AS
 BEGIN
     BEGIN TRANSACTION
 
-    EXEC __SchemaNamePlaceholder__._RewindInstanceRecursive @InstanceID, @Reason
+    EXEC __SchemaNamePlaceholder__._RewindInstanceRecursive @InstanceID, @Reason, @TaskHubName
 
     COMMIT TRANSACTION
 END
@@ -1424,10 +1464,11 @@ GO
 
 CREATE OR ALTER PROCEDURE __SchemaNamePlaceholder__._RewindInstanceRecursive
     @InstanceID varchar(100),
-    @Reason varchar(max) = NULL
+    @Reason varchar(max) = NULL,
+    @TaskHubName varchar(150) = NULL
 AS
 BEGIN
-    DECLARE @TaskHub varchar(50) = __SchemaNamePlaceholder__.CurrentTaskHub()
+    DECLARE @TaskHub varchar(50) = __SchemaNamePlaceholder__._CurrentTaskHub(@TaskHubName)
 
     -- *** IMPORTANT ***
     -- To prevent deadlocks, it is important to maintain consistent table access
@@ -1529,7 +1570,7 @@ BEGIN
 
     WHILE @@FETCH_STATUS = 0 BEGIN
         -- Call rewind recursively on the failing suborchestrations
-        EXECUTE __SchemaNamePlaceholder__._RewindInstanceRecursive @subOrchestrationInstanceID, @Reason
+        EXECUTE __SchemaNamePlaceholder__._RewindInstanceRecursive @subOrchestrationInstanceID, @Reason, @TaskHubName
         FETCH NEXT FROM subOrchestrationCursor INTO @subOrchestrationInstanceID
     END
     CLOSE subOrchestrationCursor

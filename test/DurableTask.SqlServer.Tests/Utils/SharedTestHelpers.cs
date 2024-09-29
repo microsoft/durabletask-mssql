@@ -30,9 +30,17 @@ namespace DurableTask.SqlServer.Tests.Utils
 
         public static string GetDefaultConnectionString(string database = "DurableDB")
         {
-            // The default for local development on a Windows OS
-            string defaultConnectionString = $"Server=localhost;Database={database};Trusted_Connection=True;Encrypt=False;";
-            var builder = new SqlConnectionStringBuilder(defaultConnectionString);
+            // Externally configured connection string for local environemnt (workaround defaults below).
+            // Fixme: CoreScenarios.MultiInstanceQueries require Initial Catalog=DurableDB to be set.
+            string environmentConnectionString = Environment.GetEnvironmentVariable("SQLDB_Connection");
+
+            var connectionString = !string.IsNullOrWhiteSpace(environmentConnectionString)
+                ? environmentConnectionString
+                // The default for local development on a Windows OS
+                : $"Server=localhost;Trusted_Connection=True;Encrypt=False;";
+            
+            var builder = new SqlConnectionStringBuilder(connectionString);
+            builder.InitialCatalog = database;
 
             // The use of SA_PASSWORD is intended for use with the mssql docker container
             string saPassword = Environment.GetEnvironmentVariable("SA_PASSWORD");
