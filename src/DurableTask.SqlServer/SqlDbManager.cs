@@ -177,20 +177,19 @@ namespace DurableTask.SqlServer
 
         async Task EnsureDatabaseExistsAsync()
         {
-            // Note that we may not be able to connect to the DB, let alone obtain the lock,
+            // Note that we may not be able to connect to the target DB, let alone obtain the lock,
             // if the database does not exist yet. So we obtain a connection to the 'master' database for now.
-            // If the current connection doesn't have permission to access the master database, this will fail
-            // with a "Login failed for user ..." error, in which case we log and return.
+            // If the current connection doesn't have permission to access the master database, this will fail.
+            // The exact error we see is hard to predict, so we catch SqlException and log a generic message.
             using SqlConnection connection = this.settings.CreateConnection("master");
             try
             {
                 await connection.OpenAsync();
             }
-            catch (SqlException e) when (e.Number == 18456 /* LOGON_FAILED */)
+            catch (SqlException)
             {
                 this.traceHelper.GenericInfoEvent(
-                    "Failed to connect to the master database. The user may not have permission to access the " + 
-                    "master database. Skipping database exists check.",
+                    "Failed to connect to the master database. Skipping database exists check.",
                     instanceId: null);
                 return;
             }

@@ -1444,7 +1444,7 @@ BEGIN
     -- Instance IDs can be overwritten only if the orchestration is in a terminal state
     IF @existingStatus NOT IN ('Failed')
     BEGIN
-        DECLARE @msg nvarchar(4000) = FORMATMESSAGE('Cannot rewing instance with ID ''%s'' because it is not in a ''Failed'' state, but in ''%s'' state.', @InstanceID, @existingStatus);
+        DECLARE @msg nvarchar(4000) = FORMATMESSAGE('Cannot rewind instance with ID ''%s'' because it is not in a ''Failed'' state, but in ''%s'' state.', @InstanceID, @existingStatus);
         THROW 50001, @msg, 1;
     END
     
