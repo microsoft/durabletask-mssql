@@ -5,6 +5,7 @@
 ### Updates
 
 * Fix SQL retry logic to open a new connection if a previous failure closed the connection ([#221](https://github.com/microsoft/durabletask-mssql/pull/221)) - contributed by [@microrama](https://github.com/microrama)
+* Fix to (re)enable lower-privilege connection strings ([#234](https://github.com/microsoft/durabletask-mssql/pull/234))
 
 ## v1.3.0
 
