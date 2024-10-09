@@ -15,6 +15,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution 
 		.github\workflows\build-and-test.yml = .github\workflows\build-and-test.yml
 		CHANGELOG.md = CHANGELOG.md
 		src\common.props = src\common.props
+		Directory.Build.targets = Directory.Build.targets
 		nuget.config = nuget.config
 		README.md = README.md
 		sign.snk = sign.snk
@@ -33,11 +34,11 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "test", "test", "{4A7226CF-5
 		test\setup.ps1 = test\setup.ps1
 	EndProjectSection
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TestDBGenerator", "tools\TestDBGenerator\TestDBGenerator.csproj", "{28117755-60C3-463D-A32D-E0A38E9E4ADA}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "TestDBGenerator", "tools\TestDBGenerator\TestDBGenerator.csproj", "{28117755-60C3-463D-A32D-E0A38E9E4ADA}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tools", "tools", "{C6E6ACAB-F123-4D18-891E-DE9C44539153}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Functions.Worker.Extensions.DurableTask.SqlServer", "src\Functions.Worker.Extensions.DurableTask.SqlServer\Functions.Worker.Extensions.DurableTask.SqlServer.csproj", "{307C5A62-9943-48B8-8513-BBCDF0FBC3D0}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Functions.Worker.Extensions.DurableTask.SqlServer", "src\Functions.Worker.Extensions.DurableTask.SqlServer\Functions.Worker.Extensions.DurableTask.SqlServer.csproj", "{307C5A62-9943-48B8-8513-BBCDF0FBC3D0}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
