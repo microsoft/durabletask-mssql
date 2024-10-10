@@ -19,14 +19,22 @@ namespace DurableTask.SqlServer.AzureFunctions
         static readonly ScaleStatus NoScaleVote = new ScaleStatus { Vote = ScaleVote.None };
         static readonly ScaleStatus ScaleOutVote = new ScaleStatus { Vote = ScaleVote.ScaleOut };
 
-        readonly SqlOrchestrationService service;
+        readonly SqlMetricsProvider metricsProvider;
 
         int? previousWorkerCount = -1;
 
-        public SqlScaleMonitor(SqlOrchestrationService service, string taskHubName)
+        public SqlScaleMonitor(string taskHubName, SqlMetricsProvider sqlMetricsProvider)
         {
-            this.service = service ?? throw new ArgumentNullException(nameof(service));
-            this.Descriptor = new ScaleMonitorDescriptor($"DurableTask-SqlServer:{taskHubName ?? "default"}");
+            // Scalers in Durable Functions are shared for all functions in the same task hub.
+            // So instead of using a function ID, we use the task hub name as the basis for the descriptor ID.
+            string id = $"DurableTask-SqlServer:{taskHubName ?? "default"}";
+
+#if FUNCTIONS_V4
+            this.Descriptor = new ScaleMonitorDescriptor(id: id, functionId: id);
+#else
+            this.Descriptor = new ScaleMonitorDescriptor(id);
+#endif
+            this.metricsProvider = sqlMetricsProvider ?? throw new ArgumentNullException(nameof(sqlMetricsProvider));
         }
 
         /// <inheritdoc />
@@ -38,13 +46,7 @@ namespace DurableTask.SqlServer.AzureFunctions
         /// <inheritdoc />
         public async Task<SqlScaleMetric> GetMetricsAsync()
         {
-            // GetRecommendedReplicaCountAsync will write a trace if the recommendation results
-            // in a worker count that is different from the worker count we pass in as an argument.
-            int recommendedReplicaCount = await this.service.GetRecommendedReplicaCountAsync(
-                this.previousWorkerCount,
-                CancellationToken.None);
-
-            return new SqlScaleMetric { RecommendedReplicaCount = recommendedReplicaCount };
+            return await this.metricsProvider.GetMetricsAsync(this.previousWorkerCount);
         }
 
         /// <inheritdoc />

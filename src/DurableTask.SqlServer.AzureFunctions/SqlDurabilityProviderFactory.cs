@@ -66,7 +66,7 @@ namespace DurableTask.SqlServer.AzureFunctions
             lock (this.clientProviders)
             {
                 string key = GetDurabilityProviderKey(attribute);
-                if (this.clientProviders.TryGetValue(key, out DurabilityProvider clientProvider))
+                if (this.clientProviders.TryGetValue(key, out DurabilityProvider? clientProvider))
                 {
                     return clientProvider;
                 }
