@@ -4,6 +4,7 @@
 #if FUNCTIONS_V4
 namespace DurableTask.SqlServer.AzureFunctions
 {
+    using System;
     using System.Threading.Tasks;
     using Microsoft.Azure.WebJobs.Host.Scale;
 
@@ -28,7 +29,7 @@ namespace DurableTask.SqlServer.AzureFunctions
             SqlScaleMetric sqlScaleMetric = await this.sqlMetricsProvider.GetMetricsAsync();
             return new TargetScalerResult
             {
-                TargetWorkerCount = sqlScaleMetric.RecommendedReplicaCount,
+                TargetWorkerCount = Math.Max(0, sqlScaleMetric.RecommendedReplicaCount),
             };
         }
     }

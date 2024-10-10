@@ -10,7 +10,7 @@ namespace DurableTask.SqlServer.AzureFunctions
     {
         readonly SqlOrchestrationService service;
 
-        public SqlMetricsProvider(SqlOrchestrationService service, int? previousWorkerCount = null)
+        public SqlMetricsProvider(SqlOrchestrationService service)
         {
             this.service = service;
         }

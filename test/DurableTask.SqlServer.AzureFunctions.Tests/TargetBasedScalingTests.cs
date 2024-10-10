@@ -3,14 +3,11 @@
 
 namespace DurableTask.SqlServer.AzureFunctions.Tests
 {
-    using System;
     using DurableTask.Core;
     using Microsoft.Azure.WebJobs.Extensions.DurableTask;
     using Microsoft.Azure.WebJobs.Host.Scale;
-    using Microsoft.Extensions.Logging;
     using Moq;
     using Xunit;
-    using Xunit.Abstractions;
 
     public class TargetBasedScalingTests
     {
@@ -21,10 +18,10 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
         {
             this.orchestrationServiceMock = new Mock<IOrchestrationService>(MockBehavior.Strict);
 
+            SqlOrchestrationService? nullServiceArg = null; // not needed for this test
             this.metricsProviderMock = new Mock<SqlMetricsProvider>(
-                MockBehavior.Strict,
-                null,
-                null);
+                behavior: MockBehavior.Strict,
+                nullServiceArg);
         }
 
         [Theory]
@@ -40,14 +37,14 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
                 new Mock<IOrchestrationServiceClient>().Object,
                 "connectionName");
 
-            SqlScaleMetric sqlScaleMetric = new SqlScaleMetric()
+            var sqlScaleMetric = new SqlScaleMetric()
             {
                 RecommendedReplicaCount = expectedTargetWorkerCount,
             };
 
             this.metricsProviderMock.Setup(m => m.GetMetricsAsync(null)).ReturnsAsync(sqlScaleMetric);
 
-            SqlTargetScaler targetScaler = new SqlTargetScaler(
+            var targetScaler = new SqlTargetScaler(
                 "functionId",
                 this.metricsProviderMock.Object);
 
