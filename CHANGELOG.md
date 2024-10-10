@@ -1,10 +1,16 @@
 # Changelog
 
-## v1.3.1 (Unreleased)
+## v1.4.0
+
+### New
+
+* Support for Azure Functions target-based scaling ([#169](https://github.com/microsoft/durabletask-mssql/pull/169))
+* Added `net6.0` TFM to Microsoft.DurableTask.SqlServer.AzureFunctions
 
 ### Updates
 
 * Fix SQL retry logic to open a new connection if a previous failure closed the connection ([#221](https://github.com/microsoft/durabletask-mssql/pull/221)) - contributed by [@microrama](https://github.com/microrama)
+* Pin Microsoft.Azure.WebJobs.Extensions.DurableTask dependency to 2.13.7 instead of wildcard to avoid accidental build breaks
 
 ## v1.3.0
 

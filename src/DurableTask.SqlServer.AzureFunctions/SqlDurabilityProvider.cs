@@ -23,6 +23,9 @@ namespace DurableTask.SqlServer.AzureFunctions
         readonly SqlOrchestrationService service;
 
         SqlScaleMonitor? scaleMonitor;
+#if FUNCTIONS_V4
+        SqlTargetScaler? targetScaler;
+#endif
 
         public SqlDurabilityProvider(
             SqlOrchestrationService service,
@@ -197,12 +200,17 @@ namespace DurableTask.SqlServer.AzureFunctions
             string storageConnectionString,
             out IScaleMonitor scaleMonitor)
         {
-            SqlMetricsProvider sqlMetricsProvider = new SqlMetricsProvider(this.service);
-            scaleMonitor = this.scaleMonitor ??= new SqlScaleMonitor(this.service, hubName, sqlMetricsProvider);
+            if (this.scaleMonitor == null)
+            {
+                var sqlMetricsProvider = new SqlMetricsProvider(this.service);
+                this.scaleMonitor = new SqlScaleMonitor(hubName, sqlMetricsProvider);
+            }
+
+            scaleMonitor = this.scaleMonitor;
             return true;
         }
 
-#if NETCOREAPP
+#if FUNCTIONS_V4
         public override bool TryGetTargetScaler(
             string functionId,
             string functionName,
@@ -210,9 +218,13 @@ namespace DurableTask.SqlServer.AzureFunctions
             string connectionName,
             out ITargetScaler targetScaler)
         {
-            SqlMetricsProvider sqlMetricsProvider = new SqlMetricsProvider(this.service);
-            targetScaler = new SqlTargetScaler(functionId, sqlMetricsProvider);
+            if (this.targetScaler == null)
+            {
+                var sqlMetricsProvider = new SqlMetricsProvider(this.service);
+                this.targetScaler = new SqlTargetScaler(hubName, sqlMetricsProvider);
+            }
 
+            targetScaler = this.targetScaler;
             return true;
         }
 #endif
