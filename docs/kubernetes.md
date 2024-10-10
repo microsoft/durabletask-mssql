@@ -74,7 +74,7 @@ $mssqlPod = kubectl get pods -n mssql -o jsonpath='{.items[0].metadata.name}'
 
 # Use sqlcmd.exe to create a database named "DurableDB".
 # Replace 'PLACEHOLDER' with the password you used earlier
-kubectl exec -n mssql $mssqlPod -- /opt/mssql-tools/bin/sqlcmd -S . -U sa -P "PLACEHOLDER" -Q "CREATE DATABASE [DurableDB] COLLATE Latin1_General_100_BIN2_UTF8"
+kubectl exec -n mssql $mssqlPod -- /opt/mssql-tools18/bin/sqlcmd -S . -U sa -P "PLACEHOLDER" -Q "CREATE DATABASE [DurableDB] COLLATE Latin1_General_100_BIN2_UTF8"
 ```
 
 ?> If you have an old version of the database already deployed, you may want to first delete that one using `DROP DATABASE [DurableDB]` SQL command. This should only be necessary when using alpha builds of the Durable Task SQL provider. Newer builds will take care of database schema upgrades automatically.
