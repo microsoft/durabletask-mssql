@@ -27,7 +27,8 @@ The Durable SQL provider for Durable Functions and DTFx are available as NuGet p
 
 | Package | Latest Version | Description |
 | ------- | -------------- | ----------- |
-| Microsoft.DurableTask.SqlServer.AzureFunctions | [![NuGet](https://img.shields.io/nuget/v/Microsoft.DurableTask.SqlServer.AzureFunctions.svg?style=flat)](https://www.nuget.org/packages/Microsoft.DurableTask.SqlServer.AzureFunctions/) | Use this package if building serverless Function apps with Azure Durable Functions. |
+| Microsoft.Azure.Functions.Worker.Extensions.DurableTask.SqlServer | [![NuGet](https://img.shields.io/nuget/v/Microsoft.Azure.Functions.Worker.Extensions.DurableTask.SqlServer.svg?style=flat)](https://www.nuget.org/packages/Microsoft.Azure.Functions.Worker.Extensions.DurableTask.SqlServer/) | Use this package if using Azure Durable Functions with the .NET out-of-process worker. |
+| Microsoft.DurableTask.SqlServer.AzureFunctions | [![NuGet](https://img.shields.io/nuget/v/Microsoft.DurableTask.SqlServer.AzureFunctions.svg?style=flat)](https://www.nuget.org/packages/Microsoft.DurableTask.SqlServer.AzureFunctions/) | Use this package if building serverless Function apps with Azure Durable Functions (for everything _except_ the .NET out-of-process worker). |
 | Microsoft.DurableTask.SqlServer | [![NuGet](https://img.shields.io/nuget/v/Microsoft.DurableTask.SqlServer.svg?style=flat)](https://www.nuget.org/packages/Microsoft.DurableTask.SqlServer/) | Use this package if using DTFx to build .NET apps. |
 
 ## Documentation

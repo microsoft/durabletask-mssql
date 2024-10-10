@@ -38,7 +38,7 @@ spec:
         - name: ACCEPT_EULA
           value: "Y"
         - name: SA_PASSWORD
-          value: "Pass@word1"
+          value: "PLACEHOLDER" # replace PLACEHOLDER With a password
 ---
 apiVersion: v1
 kind: Service
@@ -72,8 +72,9 @@ Once the container starts up, use the following PowerShell commands to create a 
 # Get the name of the Pod running SQL Server
 $mssqlPod = kubectl get pods -n mssql -o jsonpath='{.items[0].metadata.name}'
 
-# Use sqlcmd.exe to create a database named "DurableDB"
-kubectl exec -n mssql $mssqlPod -- /opt/mssql-tools/bin/sqlcmd -S . -U sa -P "Pass@word1" -Q "CREATE DATABASE [DurableDB] COLLATE Latin1_General_100_BIN2_UTF8"
+# Use sqlcmd.exe to create a database named "DurableDB".
+# Replace 'PLACEHOLDER' with the password you used earlier
+kubectl exec -n mssql $mssqlPod -- /opt/mssql-tools18/bin/sqlcmd -S . -U sa -P "PLACEHOLDER" -Q "CREATE DATABASE [DurableDB] COLLATE Latin1_General_100_BIN2_UTF8"
 ```
 
 ?> If you have an old version of the database already deployed, you may want to first delete that one using `DROP DATABASE [DurableDB]` SQL command. This should only be necessary when using alpha builds of the Durable Task SQL provider. Newer builds will take care of database schema upgrades automatically.
@@ -114,7 +115,8 @@ metadata:
   name: mssql-secrets
 type: Opaque
 stringData:
-  SQLDB_Connection: "Server=mssqlinst.mssql.svc.cluster.local;Database=DurableDB;User ID=sa;Password=Pass@word1;Persist Security Info=False;TrustServerCertificate=True;Encrypt=True;"
+  # Replace PLACEHOLDER with the password you chose earlier
+  SQLDB_Connection: "Server=mssqlinst.mssql.svc.cluster.local;Database=DurableDB;User ID=sa;Password=PLACEHOLDER;Persist Security Info=False;TrustServerCertificate=True;Encrypt=True;"
 ```
 
 Name the yaml file **mssql-secrets.yml** and deploy it to your cluster.

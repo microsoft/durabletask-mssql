@@ -32,7 +32,8 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
         readonly string testName;
         readonly IHost functionsHost;
         readonly IDurableClientFactory clientFactory;
-        
+        readonly ITestOutputHelper output;
+
         TestCredential? testCredential;
 
         public IntegrationTestBase(ITestOutputHelper output, string? taskHubName = null, bool multiTenancy = true)
@@ -88,6 +89,7 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
                     })
                 .Build();
             this.clientFactory = serviceCollection.BuildServiceProvider().GetRequiredService<IDurableClientFactory>();
+            this.output = output;
         }
 
         async Task IAsyncLifetime.InitializeAsync()
@@ -95,8 +97,8 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
             await SharedTestHelpers.InitializeDatabaseAsync(this.schema);
 
             // Create a user login specifically for this test to isolate it from other tests
-            await SharedTestHelpers.EnableMultiTenancyAsync(this.multiTenancy, this.schema);
-            this.testCredential = await SharedTestHelpers.CreateTaskHubLoginAsync(this.testName, this.schema);
+            await SharedTestHelpers.EnableMultiTenancyAsync(this.output, this.multiTenancy, this.schema);
+            this.testCredential = await SharedTestHelpers.CreateTaskHubLoginAsync(this.output, this.testName, this.schema);
 
             this.settingsResolver.AddSetting("SQLDB_Connection", this.testCredential.ConnectionString);
             await this.functionsHost.StartAsync();
@@ -109,7 +111,7 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
             // Remove the temporarily-created credentials from the database
             if (this.testCredential != null)
             {
-                await SharedTestHelpers.DropTaskHubLoginAsync(this.testCredential, this.schema);
+                await SharedTestHelpers.DropTaskHubLoginAsync(this.output, this.testCredential, this.schema);
             }
         }
 

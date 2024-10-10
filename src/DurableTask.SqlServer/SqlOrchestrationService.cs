@@ -20,19 +20,13 @@ namespace DurableTask.SqlServer
     using DurableTask.SqlServer.SqlTypes;
     using DurableTask.SqlServer.Utils;
     using Microsoft.Data.SqlClient;
-    using Newtonsoft.Json;
+
 
     public class SqlOrchestrationService : OrchestrationServiceBase
     {
-        readonly BackoffPollingHelper orchestrationBackoffHelper = new BackoffPollingHelper(
-            minimumInterval: TimeSpan.FromMilliseconds(50),
-            maximumInterval: TimeSpan.FromSeconds(3)); // TODO: Configurable
-
-        readonly BackoffPollingHelper activityBackoffHelper = new BackoffPollingHelper(
-            minimumInterval: TimeSpan.FromMilliseconds(50),
-            maximumInterval: TimeSpan.FromSeconds(3)); // TODO: Configurable
-
         readonly SqlOrchestrationServiceSettings settings;
+        readonly BackoffPollingHelper orchestrationBackoffHelper;
+        readonly BackoffPollingHelper activityBackoffHelper;
         readonly LogHelper traceHelper;
         readonly SqlDbManager dbManager;
         readonly string lockedByValue;
@@ -41,6 +35,14 @@ namespace DurableTask.SqlServer
         public SqlOrchestrationService(SqlOrchestrationServiceSettings? settings)
         {
             this.settings = ValidateSettings(settings) ?? throw new ArgumentNullException(nameof(settings));
+            this.orchestrationBackoffHelper = new BackoffPollingHelper(
+                this.settings.MinOrchestrationPollingInterval,
+                this.settings.MaxOrchestrationPollingInterval,
+                this.settings.DeltaBackoffOrchestrationPollingInterval);
+            this.activityBackoffHelper = new BackoffPollingHelper(
+                this.settings.MinActivityPollingInterval,
+                this.settings.MaxActivityPollingInterval,
+                this.settings.DeltaBackoffActivityPollingInterval);
             this.traceHelper = new LogHelper(this.settings.LoggerFactory.CreateLogger("DurableTask.SqlServer"));
             this.dbManager = new SqlDbManager(this.settings, this.traceHelper);
             this.lockedByValue = $"{this.settings.AppName},{Process.GetCurrentProcess().Id}";
@@ -203,6 +205,7 @@ namespace DurableTask.SqlServer
                             currentStatus = SqlUtils.GetRuntimeStatus(reader);
                             isRunning =
                                 currentStatus == OrchestrationStatus.Running ||
+                                currentStatus == OrchestrationStatus.Suspended ||
                                 currentStatus == OrchestrationStatus.Pending;
                         }
                         else
@@ -511,6 +514,7 @@ namespace DurableTask.SqlServer
             command.Parameters.Add("@ExecutionID", SqlDbType.VarChar, size: 50).Value = instance.ExecutionId;
             command.Parameters.Add("@InputText", SqlDbType.VarChar).Value = startEvent.Input;
             command.Parameters.Add("@StartTime", SqlDbType.DateTime2).Value = startEvent.ScheduledStartTime;
+            command.Parameters.Add("@TraceContext", SqlDbType.VarChar, size: 800).Value = SqlUtils.GetTraceContext(startEvent);
 
             if (dedupeStatuses?.Length > 0)
             {
@@ -567,19 +571,7 @@ namespace DurableTask.SqlServer
                     return state;
                 }
 
-                try
-                {
-                    await Task.Delay(TimeSpan.FromSeconds(1), combinedCts.Token);
-                }
-                catch (TaskCanceledException)
-                {
-                    if (timeoutCts.Token.IsCancellationRequested)
-                    {
-                        throw new TimeoutException($"A caller-specified timeout of {timeout} has expired, but instance '{instanceId}' is still in an {state?.OrchestrationStatus.ToString() ?? "unknown"} state.");
-                    }
-
-                    throw;
-                }
+                await Task.Delay(TimeSpan.FromSeconds(1), combinedCts.Token);
             }
         }
 
@@ -624,7 +616,7 @@ namespace DurableTask.SqlServer
             using DbDataReader reader = await SqlUtils.ExecuteReaderAsync(command, this.traceHelper, instanceId);
 
             List<HistoryEvent> history = ReadHistoryEvents(reader, executionIdFilter);
-            return JsonConvert.SerializeObject(history);
+            return DTUtils.SerializeToJson(history);
         }
 
         static List<HistoryEvent> ReadHistoryEvents(

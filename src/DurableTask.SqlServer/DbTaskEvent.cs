@@ -6,7 +6,7 @@ namespace DurableTask.SqlServer
     using System;
     using DurableTask.Core;
 
-    struct DbTaskEvent
+    readonly struct DbTaskEvent
     {
         readonly DateTime timestamp;
 

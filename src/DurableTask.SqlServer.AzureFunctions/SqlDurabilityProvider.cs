@@ -78,7 +78,7 @@ namespace DurableTask.SqlServer.AzureFunctions
             JObject entityJson;
             try
             {
-                entityJson = JObject.Parse(entityMetadata);
+                entityJson = JObject.Parse(entityMetadata!);
             }
             catch (JsonException e)
             {
@@ -86,7 +86,7 @@ namespace DurableTask.SqlServer.AzureFunctions
             }
 
             // Entities that are deleted are expected to have { "exists": false }.
-            if (entityJson.TryGetValue("exists", out JToken existsValue) &&
+            if (entityJson.TryGetValue("exists", out JToken? existsValue) &&
                 existsValue.Type == JTokenType.Boolean &&
                 existsValue.Value<bool>() == false)
             {
@@ -94,7 +94,7 @@ namespace DurableTask.SqlServer.AzureFunctions
             }
 
             // The actual state comes from the { "state": "..." } string field.
-            if (!entityJson.TryGetValue("state", out JToken value))
+            if (!entityJson.TryGetValue("state", out JToken? value))
             {
                 return null;
             }

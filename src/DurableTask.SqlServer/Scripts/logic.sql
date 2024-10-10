@@ -1,6 +1,85 @@
 ﻿-- Copyright (c) Microsoft Corporation.
 -- Licensed under the MIT License.
 
+-- Create custom types. This must be done before creating stored procedures.
+-- IMPORTANT: If you make any changes to these types, you must also add a line in the schema upgrade script
+--            (for example, schema-1.X.0) to drop them so that those changes are properly reflected.
+IF TYPE_ID(N'__SchemaNamePlaceholder__.InstanceIDs') IS NULL
+    CREATE TYPE __SchemaNamePlaceholder__.InstanceIDs AS TABLE (
+        [InstanceID] varchar(100) NOT NULL
+    )
+GO
+
+IF TYPE_ID(N'__SchemaNamePlaceholder__.MessageIDs') IS NULL
+    -- WARNING: Reordering fields is a breaking change!
+    CREATE TYPE __SchemaNamePlaceholder__.MessageIDs AS TABLE (
+        [InstanceID] varchar(100) NULL,
+        [SequenceNumber] bigint NULL
+    )
+GO
+
+IF TYPE_ID(N'__SchemaNamePlaceholder__.HistoryEvents') IS NULL
+    -- WARNING: Reordering fields is a breaking change!
+    CREATE TYPE __SchemaNamePlaceholder__.HistoryEvents AS TABLE (
+        [InstanceID] varchar(100) NULL,
+        [ExecutionID] varchar(50) NULL,
+        [SequenceNumber] bigint NULL,
+        [EventType] varchar(40) NULL,
+        [Name] varchar(300) NULL,
+        [RuntimeStatus] varchar(30) NULL,
+        [TaskID] int NULL,
+        [Timestamp] datetime2 NULL,
+        [IsPlayed] bit NULL,
+        [VisibleTime] datetime2 NULL,
+        [Reason] varchar(max) NULL,
+        [PayloadText] varchar(max) NULL,
+        [PayloadID] uniqueidentifier NULL,
+        [ParentInstanceID] varchar(100) NULL,
+        [Version] varchar(100) NULL,
+        [TraceContext] varchar(800) NULL
+    )
+GO
+
+IF TYPE_ID(N'__SchemaNamePlaceholder__.OrchestrationEvents') IS NULL
+    -- WARNING: Reordering fields is a breaking change!
+    CREATE TYPE __SchemaNamePlaceholder__.OrchestrationEvents AS TABLE (
+        [InstanceID] varchar(100) NULL,
+        [ExecutionID] varchar(50) NULL,
+        [SequenceNumber] bigint NULL,
+        [EventType] varchar(40) NULL,
+        [Name] varchar(300) NULL,
+        [RuntimeStatus] varchar(30) NULL,
+        [TaskID] int NULL,
+        [VisibleTime] datetime2 NULL,
+        [Reason] varchar(max) NULL,
+        [PayloadText] varchar(max) NULL,
+        [PayloadID] uniqueidentifier NULL,
+        [ParentInstanceID] varchar(100) NULL,
+        [Version] varchar(100) NULL,
+        [TraceContext] varchar(800) NULL
+    )
+GO
+
+IF TYPE_ID(N'__SchemaNamePlaceholder__.TaskEvents') IS NULL
+    -- WARNING: Reordering fields is a breaking change!
+    CREATE TYPE __SchemaNamePlaceholder__.TaskEvents AS TABLE (
+        [InstanceID] varchar(100) NULL,
+        [ExecutionID] varchar(50) NULL,
+        [Name] varchar(300) NULL,
+        [EventType] varchar(40) NULL,
+        [TaskID] int NULL,
+        [VisibleTime] datetime2 NULL,
+        [LockedBy] varchar(100) NULL,
+        [LockExpiration] datetime2 NULL,
+        [Reason] varchar(max) NULL,
+        [PayloadText] varchar(max) NULL,
+        [PayloadID] uniqueidentifier NULL,
+        [Version] varchar(100) NULL,
+        [TraceContext] varchar(800) NULL
+    )
+GO
+
+
 CREATE OR ALTER FUNCTION __SchemaNamePlaceholder__.CurrentTaskHub()
     RETURNS varchar(50)
     WITH EXECUTE AS CALLER
@@ -102,6 +181,7 @@ AS
         I.[LastUpdatedTime],
         I.[CompletedTime],
         I.[RuntimeStatus],
+        I.[TraceContext],
         (SELECT TOP 1 [Text] FROM Payloads P WHERE
             P.[TaskHub] = __SchemaNamePlaceholder__.CurrentTaskHub() AND
             P.[InstanceID] = I.[InstanceID] AND
@@ -113,7 +193,8 @@ AS
         (SELECT TOP 1 [Text] FROM Payloads P WHERE 
             P.[TaskHub] = __SchemaNamePlaceholder__.CurrentTaskHub() AND
             P.[InstanceID] = I.[InstanceID] AND
-            P.[PayloadID] = I.[OutputPayloadID]) AS [OutputText]
+            P.[PayloadID] = I.[OutputPayloadID]) AS [OutputText],
+        I.[ParentInstanceID]
     FROM Instances I
     WHERE
         I.[TaskHub] = __SchemaNamePlaceholder__.CurrentTaskHub()
@@ -133,6 +214,7 @@ AS
 	    H.[Name],
 	    H.[RuntimeStatus],
         H.[VisibleTime],
+        H.[TraceContext],
 	    (SELECT TOP 1 [Text] FROM Payloads P WHERE
             P.[TaskHub] = __SchemaNamePlaceholder__.CurrentTaskHub() AND
             P.[InstanceID] = H.[InstanceID] AND
@@ -150,7 +232,8 @@ CREATE OR ALTER PROCEDURE __SchemaNamePlaceholder__.CreateInstance
     @ExecutionID varchar(50) = NULL,
     @InputText varchar(MAX) = NULL,
     @StartTime datetime2 = NULL,
-    @DedupeStatuses varchar(MAX) = 'Pending,Running'
+    @DedupeStatuses varchar(MAX) = 'Pending,Running',
+    @TraceContext varchar(800) = NULL
 AS
 BEGIN
     DECLARE @TaskHub varchar(50) = __SchemaNamePlaceholder__.CurrentTaskHub()
@@ -177,6 +260,7 @@ BEGIN
         IF @existingStatus IN (SELECT value FROM STRING_SPLIT(@DedupeStatuses, ','))
         BEGIN
             DECLARE @msg nvarchar(4000) = FORMATMESSAGE('Cannot create instance with ID ''%s'' because a pending or running instance with ID already exists.', @InstanceID);
+            ROLLBACK TRANSACTION;
             THROW 50001, @msg, 1;
         END
         ELSE IF @existingStatus IS NOT NULL
@@ -217,7 +301,8 @@ BEGIN
         [InstanceID],
         [ExecutionID],
         [RuntimeStatus],
-        [InputPayloadID])
+        [InputPayloadID],
+        [TraceContext])
     VALUES (
         @Name,
         @Version,
@@ -225,7 +310,8 @@ BEGIN
         @InstanceID,
         @ExecutionID,
         @RuntimeStatus,
-        @InputPayloadID
+        @InputPayloadID,
+        @TraceContext
     )
 
     INSERT INTO NewEvents (
@@ -236,6 +322,7 @@ BEGIN
         [RuntimeStatus],
         [VisibleTime],
         [EventType],
+        [TraceContext],
         [PayloadID]
     ) VALUES (
         @Name,
@@ -245,6 +332,7 @@ BEGIN
         @RuntimeStatus,
         @StartTime,
         @EventType,
+        @TraceContext,
         @InputPayloadID)
 
     COMMIT TRANSACTION
@@ -281,7 +369,8 @@ BEGIN
         (CASE WHEN @GetInputsAndOutputs = 0 THEN NULL ELSE P.[Text] END) AS [PayloadText],
         [PayloadID],
         @ParentInstanceID as [ParentInstanceID],
-        @Version as [Version]
+        @Version as [Version],
+        H.[TraceContext]
     FROM History H WITH (INDEX (PK_History))
         LEFT OUTER JOIN Payloads P ON
             P.[TaskHub] = @TaskHub AND
@@ -331,7 +420,10 @@ BEGIN
 
         -- The instance ID is not auto-start and doesn't already exist, so we fail.
         IF @@ROWCOUNT = 0
-            THROW 50000, 'The instance does not exist.', 1; 
+        BEGIN
+          ROLLBACK TRANSACTION;
+          THROW 50000, 'The instance does not exist.', 1; 
+        END
     END
 
     -- Payloads are stored separately from the events
@@ -384,8 +476,10 @@ BEGIN
     )
 
     IF @existingStatus IS NULL
+    BEGIN
+        ROLLBACK TRANSACTION;
         THROW 50000, 'The instance does not exist.', 1;
-
+    END
     -- If the instance is already completed, no need to terminate it.
     IF @existingStatus IN ('Pending', 'Running')
     BEGIN
@@ -542,7 +636,6 @@ BEGIN
             E.[InstanceID] = I.[InstanceID]
     WHERE
         I.TaskHub = @TaskHub AND
-        I.[RuntimeStatus] NOT IN ('Suspended') AND
 	    (I.[LockExpiration] IS NULL OR I.[LockExpiration] < @now) AND
         (E.[VisibleTime] IS NULL OR E.[VisibleTime] < @now)
 
@@ -565,7 +658,8 @@ BEGIN
         P.[PayloadID],
         DATEDIFF(SECOND, [Timestamp], @now) AS [WaitTime],
         @parentInstanceID as [ParentInstanceID],
-        @version as [Version]
+        @version as [Version],
+        N.[TraceContext]
     FROM NewEvents N
         LEFT OUTER JOIN __SchemaNamePlaceholder__.[Payloads] P ON 
             P.[TaskHub] = @TaskHub AND
@@ -604,7 +698,8 @@ BEGIN
         (CASE WHEN [EventType] IN ('TaskScheduled', 'SubOrchestrationInstanceCreated') THEN NULL ELSE P.[Text] END) AS [PayloadText],
         [PayloadID],
         @parentInstanceID as [ParentInstanceID],
-        @version as [Version]
+        @version as [Version],
+        H.[TraceContext]
     FROM History H WITH (INDEX (PK_History))
         LEFT OUTER JOIN Payloads P ON
             P.[TaskHub] = @TaskHub AND
@@ -745,8 +840,10 @@ BEGIN
     WHERE [TaskHub] = @TaskHub and [InstanceID] = @InstanceID
 
     IF @@ROWCOUNT = 0
+    BEGIN
+        ROLLBACK TRANSACTION;
         THROW 50000, 'The instance does not exist.', 1;
-
+    END
     -- External event messages can create new instances
     -- NOTE: There is a chance this could result in deadlocks if two 
     --       instances are sending events to each other at the same time
@@ -756,14 +853,16 @@ BEGIN
         [ExecutionID],
         [Name],
         [Version],
-        [RuntimeStatus])
+        [RuntimeStatus],
+        [TraceContext])
     SELECT DISTINCT
         @TaskHub,
         E.[InstanceID],
         NEWID(),
         SUBSTRING(E.[InstanceID], 2, CHARINDEX('@', E.[InstanceID], 2) - 2),
         '',
-        'Pending'
+        'Pending',
+        E.[TraceContext]
     FROM @NewOrchestrationEvents E
     WHERE LEFT(E.[InstanceID], 1) = '@'
         AND CHARINDEX('@', E.[InstanceID], 2) > 0
@@ -771,7 +870,7 @@ BEGIN
             SELECT 1
             FROM Instances I
             WHERE [TaskHub] = @TaskHub AND I.[InstanceID] = E.[InstanceID])
-    GROUP BY E.[InstanceID]
+    GROUP BY E.[InstanceID], E.[TraceContext]
     ORDER BY E.[InstanceID] ASC
 
     -- Create sub-orchestration instances
@@ -782,7 +881,8 @@ BEGIN
         [Name],
         [Version],
         [ParentInstanceID],
-        [RuntimeStatus])
+        [RuntimeStatus],
+        [TraceContext])
     SELECT DISTINCT
         @TaskHub,
         E.[InstanceID],
@@ -790,7 +890,8 @@ BEGIN
         E.[Name],
         E.[Version],
         E.[ParentInstanceID],
-        'Pending'
+        'Pending',
+        E.[TraceContext]
     FROM @NewOrchestrationEvents E
     WHERE E.[EventType] IN ('ExecutionStarted')
         AND NOT EXISTS (
@@ -821,6 +922,7 @@ BEGIN
         [RuntimeStatus],
         [VisibleTime],
         [TaskID],
+        [TraceContext],
         [PayloadID]
     ) 
     SELECT 
@@ -832,6 +934,7 @@ BEGIN
         [RuntimeStatus],
         [VisibleTime],
         [TaskID],
+        [TraceContext],
         [PayloadID]
     FROM @NewOrchestrationEvents
     
@@ -860,6 +963,7 @@ BEGIN
         [Name],
         [RuntimeStatus],
         [VisibleTime],
+        [TraceContext],
         [DataPayloadID])
     SELECT
         @TaskHub,
@@ -873,6 +977,7 @@ BEGIN
         H.[Name],
         H.[RuntimeStatus],
         H.[VisibleTime],
+        H.[TraceContext],
         H.[PayloadID]
     FROM @NewHistoryEvents H
 
@@ -887,7 +992,8 @@ BEGIN
         [LockedBy],
         [LockExpiration],
         [PayloadID],
-        [Version]
+        [Version],
+        [TraceContext]
     )
     OUTPUT
         INSERTED.[SequenceNumber],
@@ -902,7 +1008,8 @@ BEGIN
         [LockedBy],
         [LockExpiration],
         [PayloadID],
-        [Version]
+        [Version],
+        [TraceContext]
     FROM @NewTaskEvents
 
     COMMIT TRANSACTION
@@ -957,27 +1064,32 @@ BEGIN
             [ExecutionID],
             [Name],
             [Version],
-            [RuntimeStatus])
+            [RuntimeStatus],
+            [TraceContext])
         SELECT DISTINCT
             @TaskHub,
             E.[InstanceID],
             NEWID(),
             SUBSTRING(E.[InstanceID], 2, CHARINDEX('@', E.[InstanceID], 2) - 2),
             '',
-            'Pending'
+            'Pending',
+            E.[TraceContext]
         FROM @NewOrchestrationEvents E
         WHERE NOT EXISTS (
             SELECT 1
             FROM Instances I
             WHERE [TaskHub] = @TaskHub AND I.[InstanceID] = E.[InstanceID])
-        GROUP BY E.[InstanceID]
+        GROUP BY E.[InstanceID], E.[TraceContext]
         ORDER BY E.[InstanceID] ASC
     END TRY
     BEGIN CATCH
         -- Ignore PK violations here, which can happen when multiple clients
         -- try to add messages at the same time for the same instance
         IF ERROR_NUMBER() <> 2627  -- 2627 is PK violation
-            THROW
+        BEGIN
+          ROLLBACK TRANSACTION;
+          THROW;
+        END
     END CATCH
 
     -- Insert new event data payloads into the Payloads table in batches.
@@ -997,6 +1109,7 @@ BEGIN
         [RuntimeStatus],
         [VisibleTime],
         [TaskID],
+        [TraceContext],
         [PayloadID]
     ) 
     SELECT 
@@ -1008,6 +1121,7 @@ BEGIN
         [RuntimeStatus],
         [VisibleTime],
         [TaskID],
+        [TraceContext],
         [PayloadID]
     FROM @NewOrchestrationEvents
 
@@ -1045,7 +1159,8 @@ BEGIN
         CASE WHEN @FetchOutput = 1 THEN (SELECT TOP 1 [Text] FROM Payloads P WHERE
             P.[TaskHub] = @TaskHub AND
             P.[InstanceID] = I.[InstanceID] AND
-            P.[PayloadID] = I.[OutputPayloadID]) ELSE NULL END AS [OutputText]
+            P.[PayloadID] = I.[OutputPayloadID]) ELSE NULL END AS [OutputText],
+        I.[TraceContext]
     FROM Instances I
     WHERE
         I.[TaskHub] = @TaskHub AND
@@ -1090,7 +1205,8 @@ BEGIN
         CASE WHEN @FetchOutput = 1 THEN (SELECT TOP 1 [Text] FROM Payloads P WHERE
             P.[TaskHub] = @TaskHub AND
             P.[InstanceID] = I.[InstanceID] AND
-            P.[PayloadID] = I.[OutputPayloadID]) ELSE NULL END AS [OutputText]
+            P.[PayloadID] = I.[OutputPayloadID]) ELSE NULL END AS [OutputText],
+        I.[TraceContext]
     FROM
         Instances I
     WHERE
@@ -1153,7 +1269,8 @@ BEGIN
             P.[TaskHub] = @TaskHub AND
             P.[InstanceID] = N.[InstanceID] AND
             P.[PayloadID] = N.[PayloadID]) AS [PayloadText],
-        DATEDIFF(SECOND, [Timestamp], @now) AS [WaitTime]
+        DATEDIFF(SECOND, [Timestamp], @now) AS [WaitTime],
+        [TraceContext]
     FROM NewTasks N
     WHERE [TaskHub] = @TaskHub AND [SequenceNumber] = @SequenceNumber
 
@@ -1261,8 +1378,10 @@ BEGIN
     -- This can happen if the message was completed by another worker, in which
     -- case we don't want any of the side-effects to persist.
     IF @@ROWCOUNT <> (SELECT COUNT(*) FROM @CompletedTasks)
+    BEGIN
+        ROLLBACK TRANSACTION;
         THROW 50002, N'Failed to delete the completed task events(s). They may have been deleted by another worker, in which case the current execution is likely a duplicate. Any results or pending side-effects of this task activity execution will be discarded.', 1;
-
+    END
     COMMIT TRANSACTION
 END
 GO

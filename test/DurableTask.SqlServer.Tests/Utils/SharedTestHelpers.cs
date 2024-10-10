@@ -13,11 +13,13 @@ namespace DurableTask.SqlServer.Tests.Utils
     using System.Threading;
     using System.Threading.Tasks;
     using Microsoft.Data.SqlClient;
+    using SemVersion;
     using Xunit.Abstractions;
 
     public static class SharedTestHelpers
     {
-        private const string DefaultSchema = "dt";
+        const string DefaultSchema = "dt";
+
         public static string GetTestName(ITestOutputHelper output)
         {
             Type type = output.GetType();
@@ -29,7 +31,7 @@ namespace DurableTask.SqlServer.Tests.Utils
         public static string GetDefaultConnectionString(string database = "DurableDB")
         {
             // The default for local development on a Windows OS
-            string defaultConnectionString = $"Server=localhost;Database={database};Trusted_Connection=True;";
+            string defaultConnectionString = $"Server=localhost;Database={database};Trusted_Connection=True;Encrypt=False;";
             var builder = new SqlConnectionStringBuilder(defaultConnectionString);
 
             // The use of SA_PASSWORD is intended for use with the mssql docker container
@@ -51,10 +53,20 @@ namespace DurableTask.SqlServer.Tests.Utils
             return builder.ToString();
         }
 
-        public static async Task<object> ExecuteSqlAsync(string commandText, string connectionString = null)
+        public static async Task<SemanticVersion> GetCurrentSchemaVersionAsync(
+            ITestOutputHelper output,
+            string connectionString,
+            string schema = DefaultSchema)
+        {
+            // Returns the latest version as the first result
+            string result = (string)await ExecuteSqlAsync(output, $"EXECUTE {schema}._GetVersions", connectionString);
+            return SemanticVersion.Parse(result);
+        }
+
+        public static async Task<object> ExecuteSqlAsync(ITestOutputHelper output, string commandText, string connectionString = null)
         {
             Exception lastException = null;
-            for (int retry = 0; retry < 3; retry++)
+            for (int retry = 0; retry < 5; retry++)
             {
                 try
                 {
@@ -64,16 +76,19 @@ namespace DurableTask.SqlServer.Tests.Utils
                     await command.Connection.OpenAsync();
 
                     command.CommandText = commandText;
+                    output.WriteLine($"Executing SQL command: {commandText}");
                     return await command.ExecuteScalarAsync();
                 }
                 catch (SqlException e) when (e.Number == 15434)
                 {
                     // 15434 : Could not drop login 'XXX' as the user is currently logged in.
+                    output.WriteLine($"SQL command failed: {e.Message}");
                     lastException = e;
                 }
                 catch (SqlException e) when (e.Number == 6106)
                 {
                     // 6106 : Process ID 'XXX' is not an active process ID
+                    output.WriteLine($"SQL command failed: {e.Message}");
                     lastException = e;
                 }
             }
@@ -90,16 +105,16 @@ namespace DurableTask.SqlServer.Tests.Utils
             await service.CreateIfNotExistsAsync();
         }
 
-        public static async Task<TestCredential> CreateTaskHubLoginAsync(string prefix, string schema = DefaultSchema)
+        public static async Task<TestCredential> CreateTaskHubLoginAsync(ITestOutputHelper output, string prefix, string schema = DefaultSchema)
         {
             // NOTE: Max length for user IDs is 128 characters
             string userId = $"{prefix}_{DateTime.UtcNow:yyyyMMddhhmmssff}";
             string password = GeneratePassword();
 
             // Generate a low-priviledge user account. This will map to a unique task hub.
-            await ExecuteSqlAsync($"CREATE LOGIN [testlogin_{userId}] WITH PASSWORD = '{password}'");
-            await ExecuteSqlAsync($"CREATE USER [testuser_{userId}] FOR LOGIN [testlogin_{userId}]");
-            await ExecuteSqlAsync($"ALTER ROLE {schema}_runtime ADD MEMBER [testuser_{userId}]");
+            await ExecuteSqlAsync(output, $"CREATE LOGIN [testlogin_{userId}] WITH PASSWORD = '{password}'");
+            await ExecuteSqlAsync(output, $"CREATE USER [testuser_{userId}] FOR LOGIN [testlogin_{userId}]");
+            await ExecuteSqlAsync(output, $"ALTER ROLE {schema}_runtime ADD MEMBER [testuser_{userId}]");
 
             var builder = new SqlConnectionStringBuilder(GetDefaultConnectionString())
             {
@@ -111,27 +126,33 @@ namespace DurableTask.SqlServer.Tests.Utils
             return new TestCredential(userId, builder.ToString());
         }
 
-        public static async Task DropTaskHubLoginAsync(TestCredential credential, string schema = DefaultSchema)
+        public static async Task DropTaskHubLoginAsync(ITestOutputHelper output, TestCredential credential, string schema = DefaultSchema)
         {
             // Drop the generated user information
             string userId = credential.UserId;
-            await ExecuteSqlAsync($"ALTER ROLE {schema}_runtime DROP MEMBER [testuser_{userId}]");
-            await ExecuteSqlAsync($"DROP USER IF EXISTS [testuser_{userId}]");
+            await ExecuteSqlAsync(output, $"ALTER ROLE {schema}_runtime DROP MEMBER [testuser_{userId}]");
+            await ExecuteSqlAsync(output, $"DROP USER IF EXISTS [testuser_{userId}]");
 
-            // drop all the connections; otherwise, the DROP LOGIN statement will fail
-            await ExecuteSqlAsync($"DECLARE @kill varchar(max) = ''; SELECT @kill = @kill + 'KILL ' + CAST(session_id AS varchar(5)) + ';' FROM sys.dm_exec_sessions WHERE original_login_name = 'testlogin_{userId}'; EXEC(@kill);");
-            await ExecuteSqlAsync($"DROP LOGIN [testlogin_{userId}]");
+            // Drop all the connections; otherwise, the DROP LOGIN statement will fail.
+            // This is flakey, especially on slower CI machines, so it may need to be retried.
+            await ExecuteSqlAsync(output, string.Join(";\n", new string[]
+            {
+                $"DECLARE @kill varchar(max) = ''",
+                $"SELECT @kill = @kill + 'KILL ' + CAST(session_id AS varchar(5)) + ';' FROM sys.dm_exec_sessions WHERE original_login_name = 'testlogin_{userId}'",
+                $"EXEC(@kill)",
+                $"IF EXISTS (SELECT name FROM sys.sql_logins WHERE name='testlogin_{userId}') DROP LOGIN [testlogin_{userId}]",
+            }));
         }
 
-        public static async Task EnableMultiTenancyAsync(bool multiTenancy, string schema = DefaultSchema)
+        public static async Task EnableMultiTenancyAsync(ITestOutputHelper output, bool multiTenancy, string schema = DefaultSchema)
         {
             if (!multiTenancy)
             {
-            await PurgeAsync(schema);
+                await PurgeAsync(output, schema);
             }
 
             int param = multiTenancy ? 1 : 0;
-            await ExecuteSqlAsync($"EXECUTE {schema}.SetGlobalSetting @Name='TaskHubMode', @Value={param}");
+            await ExecuteSqlAsync(output, $"EXECUTE {schema}.SetGlobalSetting @Name='TaskHubMode', @Value={param}");
         }
 
         static string GeneratePassword()
@@ -243,13 +264,13 @@ namespace DurableTask.SqlServer.Tests.Utils
             }
         }
 
-        public static async Task PurgeAsync(string schema = "dt")
+        public static async Task PurgeAsync(ITestOutputHelper output, string schema = "dt")
         {
-            await ExecuteSqlAsync($"TRUNCATE TABLE [{schema}].[NewTasks]");
-            await ExecuteSqlAsync($"TRUNCATE TABLE [{schema}].[NewEvents]");
-            await ExecuteSqlAsync($"TRUNCATE TABLE [{schema}].[Instances]");
-            await ExecuteSqlAsync($"TRUNCATE TABLE [{schema}].[History]");
-            await ExecuteSqlAsync($"TRUNCATE TABLE [{schema}].[Payloads]");
+            await ExecuteSqlAsync(output, $"TRUNCATE TABLE [{schema}].[NewTasks]");
+            await ExecuteSqlAsync(output, $"TRUNCATE TABLE [{schema}].[NewEvents]");
+            await ExecuteSqlAsync(output, $"TRUNCATE TABLE [{schema}].[Instances]");
+            await ExecuteSqlAsync(output, $"TRUNCATE TABLE [{schema}].[History]");
+            await ExecuteSqlAsync(output, $"TRUNCATE TABLE [{schema}].[Payloads]");
         }
     }
 }
