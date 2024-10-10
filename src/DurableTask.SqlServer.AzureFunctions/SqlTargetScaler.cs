@@ -21,7 +21,7 @@ namespace DurableTask.SqlServer.AzureFunctions
             this.TargetScalerDescriptor = new TargetScalerDescriptor(id);
         }
 
-        public TargetScalerDescriptor TargetScalerDescriptor { get; private set; }
+        public TargetScalerDescriptor TargetScalerDescriptor { get; }
 
         public async Task<TargetScalerResult> GetScaleResultAsync(TargetScalerContext context)
         {
