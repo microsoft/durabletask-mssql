@@ -335,8 +335,14 @@ namespace DurableTask.SqlServer
             IList<TaskMessage> orchestratorMessages,
             IList<TaskMessage> timerMessages,
             TaskMessage continuedAsNewMessage,
-            OrchestrationState orchestrationState)
+            OrchestrationState? orchestrationState)
         {
+            if (orchestrationState is null || !newRuntimeState.IsValid)
+            {
+                // The work item was invalid. We can't do anything with it so we ignore it.
+                return;
+            }
+
             ExtendedOrchestrationWorkItem currentWorkItem = (ExtendedOrchestrationWorkItem)workItem;
 
             this.traceHelper.CheckpointStarting(orchestrationState);
