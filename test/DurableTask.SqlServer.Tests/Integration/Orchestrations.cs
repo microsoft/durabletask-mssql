@@ -862,5 +862,29 @@ namespace DurableTask.SqlServer.Tests.Integration
             // Now the orchestration should complete immediately
             await instance.WaitForCompletion(timeout: TimeSpan.FromSeconds(3), expectedOutput: EventCount);
         }
+
+        [Fact]
+        public async Task TerminateScheduledOrchestration()
+        {
+            string orchestrationName = "ScheduledOrchestration";
+
+            // Does nothing except return the original input
+            TestInstance<object> instance = await this.testService.RunOrchestration(
+                input: (object)null,
+                orchestrationName,
+                version: null,
+                instanceId: null,
+                scheduledStartTime: DateTime.UtcNow.AddSeconds(30),
+                implementation: (ctx, input) => Task.FromResult("done"));
+
+            // Terminate the orchestration before it starts
+            await instance.TerminateAsync("Bye!");
+
+            await instance.WaitForCompletion(
+                expectedStatus: OrchestrationStatus.Terminated,
+                expectedOutput: "Bye!");
+
+            LogAssert.NoWarningsOrErrors(this.testService.LogProvider);
+        }
     }
 }

@@ -504,7 +504,7 @@ namespace DurableTask.SqlServer.Tests.Integration
                 schemaName);
             Assert.Equal(1, currentSchemaVersion.Major);
             Assert.Equal(4, currentSchemaVersion.Minor);
-            Assert.Equal(0, currentSchemaVersion.Patch);
+            Assert.Equal(1, currentSchemaVersion.Patch);
         }
 
         sealed class TestDatabase : IDisposable

@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.4.1 (Unreleased)
+
+### Updates
+
+* Fix issue where scheduled orchestrations aren't immediately terminated ([#178](https://github.com/microsoft/durabletask-mssql/issues/178))
+
 ## v1.4.0
 
 ### New

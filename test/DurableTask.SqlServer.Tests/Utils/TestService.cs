@@ -132,11 +132,32 @@ namespace DurableTask.SqlServer.Tests.Utils
                 activities);
         }
 
+        public Task<TestInstance<TInput>> RunOrchestration<TOutput, TInput>(
+            TInput input,
+            string orchestrationName,
+            string version,
+            string instanceId,
+            Func<OrchestrationContext, TInput, Task<TOutput>> implementation,
+            Action<OrchestrationContext, string, string> onEvent = null,
+            params (string name, TaskActivity activity)[] activities)
+        {
+            return this.RunOrchestration(
+                input,
+                orchestrationName,
+                version,
+                instanceId,
+                scheduledStartTime: null,
+                implementation,
+                onEvent,
+                activities);
+        }
+
         public async Task<TestInstance<TInput>> RunOrchestration<TOutput, TInput>(
             TInput input,
             string orchestrationName,
             string version,
             string instanceId,
+            DateTime? scheduledStartTime,
             Func<OrchestrationContext, TInput, Task<TOutput>> implementation,
             Action<OrchestrationContext, string, string> onEvent = null,
             params (string name, TaskActivity activity)[] activities)
@@ -147,11 +168,34 @@ namespace DurableTask.SqlServer.Tests.Utils
                 inputGenerator: i => input,
                 orchestrationName: orchestrationName,
                 version: version,
+                scheduledStartTime: scheduledStartTime,
                 implementation,
                 onEvent,
                 activities);
 
             return instances[0];
+        }
+
+        public Task<IReadOnlyList<TestInstance<TInput>>> RunOrchestrations<TOutput, TInput>(
+            int count,
+            Func<int, string> instanceIdGenerator,
+            Func<int, TInput> inputGenerator,
+            string orchestrationName,
+            string version,
+            Func<OrchestrationContext, TInput, Task<TOutput>> implementation,
+            Action<OrchestrationContext, string, string> onEvent = null,
+            params (string name, TaskActivity activity)[] activities)
+        {
+            return this.RunOrchestrations(
+                count,
+                instanceIdGenerator,
+                inputGenerator,
+                orchestrationName,
+                version,
+                scheduledStartTime: null,
+                implementation,
+                onEvent,
+                activities);
         }
 
         public async Task<IReadOnlyList<TestInstance<TInput>>> RunOrchestrations<TOutput, TInput>(
@@ -160,6 +204,7 @@ namespace DurableTask.SqlServer.Tests.Utils
             Func<int, TInput> inputGenerator,
             string orchestrationName,
             string version,
+            DateTime? scheduledStartTime,
             Func<OrchestrationContext, TInput, Task<TOutput>> implementation,
             Action<OrchestrationContext, string, string> onEvent = null,
             params (string name, TaskActivity activity)[] activities)
@@ -178,11 +223,25 @@ namespace DurableTask.SqlServer.Tests.Utils
                 TInput input = inputGenerator != null ? inputGenerator(i) : default;
 
                 DateTime utcNow = DateTime.UtcNow;
-                OrchestrationInstance instance = await this.client.CreateOrchestrationInstanceAsync(
-                    orchestrationName,
-                    version,
-                    instanceId,
-                    input);
+
+                OrchestrationInstance instance;
+                if (scheduledStartTime.HasValue)
+                {
+                    instance = await this.client.CreateScheduledOrchestrationInstanceAsync(
+                        orchestrationName,
+                        version,
+                        instanceId,
+                        input,
+                        startAt: scheduledStartTime.Value);
+                }
+                else
+                {
+                    instance = await this.client.CreateOrchestrationInstanceAsync(
+                        orchestrationName,
+                        version,
+                        instanceId,
+                        input);
+                }
 
                 return new TestInstance<TInput>(
                     this.client,
