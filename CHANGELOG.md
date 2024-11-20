@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.5.0
+
+### New
+* Update Microsoft.Azure.WebJobs.Extensions.DurableTask dependency to 3.0.0 and DurableTask.Core to 3.*. ([#281]https://github.com/microsoft/durabletask-mssql/pull/281)
+
 ## v1.4.0
 
 ### New
