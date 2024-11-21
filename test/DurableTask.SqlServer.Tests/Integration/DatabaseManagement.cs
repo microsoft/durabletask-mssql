@@ -502,8 +502,8 @@ namespace DurableTask.SqlServer.Tests.Integration
                 this.output,
                 database.ConnectionString,
                 schemaName);
-            Assert.Equal(1, currentSchemaVersion.Major);
-            Assert.Equal(5, currentSchemaVersion.Minor);
+            Assert.Equal(2, currentSchemaVersion.Major);
+            Assert.Equal(0, currentSchemaVersion.Minor);
             Assert.Equal(0, currentSchemaVersion.Patch);
         }
 
