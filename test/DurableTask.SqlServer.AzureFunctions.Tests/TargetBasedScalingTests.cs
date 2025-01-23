@@ -3,6 +3,7 @@
 
 namespace DurableTask.SqlServer.AzureFunctions.Tests
 {
+    using System.Threading.Tasks;
     using DurableTask.Core;
     using Microsoft.Azure.WebJobs.Extensions.DurableTask;
     using Microsoft.Azure.WebJobs.Host.Scale;
@@ -21,14 +22,14 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
             SqlOrchestrationService? nullServiceArg = null; // not needed for this test
             this.metricsProviderMock = new Mock<SqlMetricsProvider>(
                 behavior: MockBehavior.Strict,
-                nullServiceArg);
+                nullServiceArg!);
         }
 
         [Theory]
         [InlineData(0)]
         [InlineData(10)]
         [InlineData(20)]
-        public async void TargetBasedScalingTest(int expectedTargetWorkerCount)
+        public async Task TargetBasedScalingTest(int expectedTargetWorkerCount)
         {
             var durabilityProviderMock = new Mock<DurabilityProvider>(
                 MockBehavior.Strict,

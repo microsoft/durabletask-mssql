@@ -236,12 +236,12 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
 
         class TestSettingsResolver : INameResolver, IConnectionInfoResolver
         {
-            readonly Dictionary<string, string> testSettings;
+            readonly Dictionary<string, string?> testSettings;
             IConfigurationRoot? config;
 
             public TestSettingsResolver()
             {
-                this.testSettings = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                this.testSettings = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
             }
 
             public void AddSetting(string name, string value)
