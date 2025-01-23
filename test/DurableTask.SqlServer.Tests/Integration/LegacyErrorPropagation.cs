@@ -12,6 +12,7 @@ namespace DurableTask.SqlServer.Tests.Integration
     using Xunit;
     using Xunit.Abstractions;
 
+    [Collection("Integration")]
     public class LegacyErrorPropagation : IAsyncLifetime
     {
         readonly TestService testService;

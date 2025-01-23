@@ -9,6 +9,7 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
     using Xunit;
     using Xunit.Abstractions;
 
+    [Collection("Integration")]
     public class WithoutMultiTenancyCoreScenarios : CoreScenarios
     {
         public WithoutMultiTenancyCoreScenarios(ITestOutputHelper output)

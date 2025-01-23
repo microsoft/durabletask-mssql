@@ -21,6 +21,7 @@ namespace DurableTask.SqlServer.Tests.Integration
     using Xunit;
     using Xunit.Abstractions;
 
+    [Collection("Integration")]
     public class DatabaseManagement
     {
         readonly TestLogProvider logProvider;

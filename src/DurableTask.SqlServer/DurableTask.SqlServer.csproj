@@ -21,10 +21,10 @@
   </ItemGroup>
   
   <ItemGroup>
-    <PackageReference Include="Microsoft.Azure.DurableTask.Core" Version="3.*" />
-    <PackageReference Include="Microsoft.Data.SqlClient" Version="3.1.5" />
-    <PackageReference Include="SemanticVersion" Version="2.1.0" />
-    <PackageReference Include="System.Threading.Channels" Version="4.7.1" />
+    <PackageReference Include="Microsoft.Azure.DurableTask.Core" />
+    <PackageReference Include="Microsoft.Data.SqlClient" />
+    <PackageReference Include="SemanticVersion" />
+    <PackageReference Include="System.Threading.Channels" />
   </ItemGroup>
 
 </Project>

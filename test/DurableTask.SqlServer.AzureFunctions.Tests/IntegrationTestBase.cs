@@ -167,7 +167,6 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
             return status;
         }
 
-
         protected async Task StartOrchestrationWithoutWaitingAsync(
             string name,
             object? input = null,
@@ -177,9 +176,9 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
             IDurableClient client = this.GetDurableClient(taskHub ?? this.taskHubName);
             instanceId = await client.StartNewAsync(name, instanceId ?? Guid.NewGuid().ToString("N"), input);
 
-            
             Assert.NotNull(instanceId);
         }
+
         protected async Task<DurableOrchestrationStatus> RewindOrchestrationAsync(string instanceId)
         {
             IDurableClient client = this.GetDurableClient();

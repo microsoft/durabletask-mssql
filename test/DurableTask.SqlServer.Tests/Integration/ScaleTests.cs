@@ -16,6 +16,7 @@ namespace DurableTask.SqlServer.Tests.Integration
     using Xunit;
     using Xunit.Abstractions;
 
+    [Collection("Integration")]
     public class ScaleTests : IAsyncLifetime
     {
         readonly TestService testService;

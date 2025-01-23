@@ -17,6 +17,7 @@ namespace DurableTask.SqlServer.Tests.Integration
     /// tests and therefore may not be appropriate for all CI or rapid testing scenarios.
     /// </summary>
     [Trait("Category", "Stress")]
+    [Collection("Integration")]
     public class StressTests : IAsyncLifetime
     {
         readonly TestService testService;

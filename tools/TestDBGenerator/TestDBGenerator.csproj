@@ -9,11 +9,11 @@
 
   <ItemGroup>
     <!-- Change this version to create databases with different versions -->
-    <PackageReference Include="Microsoft.DurableTask.SqlServer" Version="1.0.0" />
+    <PackageReference Include="Microsoft.DurableTask.SqlServer" VersionOverride="1.0.0" />
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.SqlServer.SqlManagementObjects" Version="170.8.0" />
+    <PackageReference Include="Microsoft.SqlServer.SqlManagementObjects" />
   </ItemGroup>
 
 </Project>
