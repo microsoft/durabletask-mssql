@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.5.1 (Unreleased)
+
+### Updates
+
+* Updated repo to use central package management
+* Resolved multiple CVEs in dependencies
+
 ## v1.5.0
 
 ### Updates
