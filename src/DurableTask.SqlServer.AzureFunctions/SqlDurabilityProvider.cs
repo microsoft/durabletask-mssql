@@ -22,10 +22,7 @@ namespace DurableTask.SqlServer.AzureFunctions
         readonly SqlDurabilityOptions durabilityOptions;
         readonly SqlOrchestrationService service;
 
-        SqlScaleMonitor? scaleMonitor;
-#if FUNCTIONS_V4
-        SqlTargetScaler? targetScaler;
-#endif
+        SqlMetricsProvider singletonSqlMetricsProvider;
 
         public SqlDurabilityProvider(
             SqlOrchestrationService service,
@@ -200,13 +197,12 @@ namespace DurableTask.SqlServer.AzureFunctions
             string storageConnectionString,
             out IScaleMonitor scaleMonitor)
         {
-            if (this.scaleMonitor == null)
+            if (this.singletonSqlMetricsProvider == null)
             {
-                var sqlMetricsProvider = new SqlMetricsProvider(this.service);
-                this.scaleMonitor = new SqlScaleMonitor(hubName, sqlMetricsProvider);
+                this.singletonSqlMetricsProvider = new SqlMetricsProvider(this.service);
             }
-
-            scaleMonitor = this.scaleMonitor;
+            scaleMonitor = new SqlScaleMonitor(hubName, this.singletonSqlMetricsProvider);
+            
             return true;
         }
 
@@ -218,13 +214,12 @@ namespace DurableTask.SqlServer.AzureFunctions
             string connectionName,
             out ITargetScaler targetScaler)
         {
-            if (this.targetScaler == null)
+            if (this.singletonSqlMetricsProvider == null)
             {
-                var sqlMetricsProvider = new SqlMetricsProvider(this.service);
-                this.targetScaler = new SqlTargetScaler(hubName, sqlMetricsProvider);
+                this.singletonSqlMetricsProvider = new SqlMetricsProvider(this.service);
             }
 
-            targetScaler = this.targetScaler;
+            targetScaler = new SqlTargetScaler(hubName, this.singletonSqlMetricsProvider);
             return true;
         }
 #endif
