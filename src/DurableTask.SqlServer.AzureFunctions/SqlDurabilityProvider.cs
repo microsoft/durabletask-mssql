@@ -22,7 +22,7 @@ namespace DurableTask.SqlServer.AzureFunctions
         readonly SqlDurabilityOptions durabilityOptions;
         readonly SqlOrchestrationService service;
 
-        SqlMetricsProvider singletonSqlMetricsProvider;
+        SqlMetricsProvider? singletonSqlMetricsProvider;
 
         public SqlDurabilityProvider(
             SqlOrchestrationService service,
