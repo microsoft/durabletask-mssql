@@ -219,7 +219,7 @@ namespace DurableTask.SqlServer.AzureFunctions
                 this.singletonSqlMetricsProvider = new SqlMetricsProvider(this.service);
             }
 
-            targetScaler = new SqlTargetScaler(functionId,this.singletonSqlMetricsProvider);
+            targetScaler = new SqlTargetScaler(functionId, this.singletonSqlMetricsProvider);
             return true;
         }
 #endif
