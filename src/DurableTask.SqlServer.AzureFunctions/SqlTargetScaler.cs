@@ -12,14 +12,13 @@ namespace DurableTask.SqlServer.AzureFunctions
     {
         readonly SqlMetricsProvider sqlMetricsProvider;
 
-        public SqlTargetScaler(string taskHubName, SqlMetricsProvider sqlMetricsProvider)
+        public SqlTargetScaler(string functionId, SqlMetricsProvider sqlMetricsProvider)
         {
             this.sqlMetricsProvider = sqlMetricsProvider;
 
             // Scalers in Durable Functions are shared for all functions in the same task hub.
             // So instead of using a function ID, we use the task hub name as the basis for the descriptor ID.
-            string id = $"DurableTask-SqlServer:{taskHubName ?? "default"}";
-            this.TargetScalerDescriptor = new TargetScalerDescriptor(id);
+            this.TargetScalerDescriptor = new TargetScalerDescriptor(functionId);
         }
 
         public TargetScalerDescriptor TargetScalerDescriptor { get; }

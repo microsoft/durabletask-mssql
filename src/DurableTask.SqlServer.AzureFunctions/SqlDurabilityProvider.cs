@@ -201,7 +201,7 @@ namespace DurableTask.SqlServer.AzureFunctions
             {
                 this.singletonSqlMetricsProvider = new SqlMetricsProvider(this.service);
             }
-            scaleMonitor = new SqlScaleMonitor(hubName, this.singletonSqlMetricsProvider);
+            scaleMonitor = new SqlScaleMonitor(functionId, hubName, this.singletonSqlMetricsProvider);
             
             return true;
         }
@@ -219,7 +219,7 @@ namespace DurableTask.SqlServer.AzureFunctions
                 this.singletonSqlMetricsProvider = new SqlMetricsProvider(this.service);
             }
 
-            targetScaler = new SqlTargetScaler(hubName, this.singletonSqlMetricsProvider);
+            targetScaler = new SqlTargetScaler(functionId,this.singletonSqlMetricsProvider);
             return true;
         }
 #endif
