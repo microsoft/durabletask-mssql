@@ -1,11 +1,12 @@
 # Changelog
 
-## v1.5.1 (Unreleased)
+## v1.5.1
 
 ### Updates
 
+* Use Singelton metrics provider instead of IScaleMonitor and ITargetScaler ([#285]https://github.com/microsoft/durabletask-mssql/pull/285)
 * Updated repo to use central package management
-* Resolved multiple CVEs in dependencies
+* Resolved multiple CVEs in dependencies(
 
 ## v1.5.0
 
