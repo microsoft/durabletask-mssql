@@ -20,14 +20,12 @@ namespace DurableTask.SqlServer.AzureFunctions
 
         public virtual async Task<SqlScaleMetric> GetMetricsAsync(int? previousWorkerCount = null)
         {
-            int recommendedReplicaCount;
-
             // We only want to query the metrics every 5 seconds.
             if (this.metrics == null || DateTime.UtcNow >= this.metricsTimeStamp.AddSeconds(5))
             {
                 // GetRecommendedReplicaCountAsync will write a trace if the recommendation results
                 // in a worker count that is different from the worker count we pass in as an argument.
-                recommendedReplicaCount = await this.service.GetRecommendedReplicaCountAsync(
+                int recommendedReplicaCount = await this.service.GetRecommendedReplicaCountAsync(
                     previousWorkerCount,
                     CancellationToken.None);
 
