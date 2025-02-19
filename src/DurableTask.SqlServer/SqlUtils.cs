@@ -256,6 +256,7 @@ namespace DurableTask.SqlServer
                 CompletedTime = GetUtcDateTime(reader, "CompletedTime"),
                 CreatedTime = GetUtcDateTime(reader, "CreatedTime"),
                 Input = reader.GetStringOrNull(reader.GetOrdinal("InputText")),
+                Output = reader.GetStringOrNull(reader.GetOrdinal("OutputText")),
                 LastUpdatedTime = GetUtcDateTime(reader, "LastUpdatedTime"),
                 Name = GetName(reader),
                 Version = GetVersion(reader),
