@@ -61,33 +61,12 @@ namespace DurableTask.SqlServer.Logging
             string AppName,
             string ExtensionVersion)
         {
-            this.AcquiredAppLockCore(
+            this.WriteEvent(
                 EventIds.AcquiredAppLock,
                 StatusCode,
                 LatencyMs,
                 AppName,
                 ExtensionVersion);
-        }
-
-        [NonEvent]
-        unsafe void AcquiredAppLockCore(int eventId, int statusCode, long latencyMs, string appName, string extensionVersion)
-        {
-            // This needs to be done manually because the built-in WriteEvent(int, long, long) overload will overwrite data (as shown in testing)
-            fixed (char* appNamePtr = appName)
-            fixed (char* extensionVersionPtr = extensionVersion)
-            {
-                EventData* data = stackalloc EventData[4];
-                data[0].DataPointer = (IntPtr)(&statusCode);
-                data[0].Size = sizeof(int);
-                data[1].DataPointer = (IntPtr)(&latencyMs);
-                data[1].Size = sizeof(long);
-                data[2].DataPointer = (IntPtr)appNamePtr;
-                data[2].Size = (appName.Length + 1) + 2;
-                data[3].DataPointer = (IntPtr)extensionVersionPtr;
-                data[3].Size = (extensionVersion.Length + 1) + 2;
-
-                this.WriteEventCore(eventId, 2, data);
-            }
         }
 
         [Event(EventIds.CheckpointStarting, Level = EventLevel.Informational)]
