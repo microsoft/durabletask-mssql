@@ -1,6 +1,6 @@
 # Changelog
 
-## v1.5.2 (Unreleased)
+## v1.5.2
 
 ### Updates
 

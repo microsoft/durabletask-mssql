@@ -882,6 +882,7 @@ namespace DurableTask.SqlServer.Tests.Integration
             await instance.TerminateAsync("Bye!");
 
             await instance.WaitForCompletion(
+                timeout: TimeSpan.FromSeconds(3),
                 expectedStatus: OrchestrationStatus.Terminated,
                 expectedOutput: "Bye!");
 

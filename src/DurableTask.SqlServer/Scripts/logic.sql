@@ -465,7 +465,7 @@ BEGIN
     -- *** IMPORTANT ***
     -- To prevent deadlocks, it is important to maintain consistent table access
     -- order across all stored procedures that execute within a transaction.
-    -- Table order for this sproc: Instances --> (NewEvents --> Payloads --> NewEvents)  
+    -- Table order for this sproc: Instances --> (Payloads --> Instances --> NewEvents)  
 
     DECLARE @TaskHub varchar(50) = __SchemaNamePlaceholder__.CurrentTaskHub()
 
