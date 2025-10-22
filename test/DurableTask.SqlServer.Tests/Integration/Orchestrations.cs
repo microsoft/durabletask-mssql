@@ -441,6 +441,33 @@ namespace DurableTask.SqlServer.Tests.Integration
                 LogAssert.CheckpointCompleted(orchestrationName));
         }
 
+        [Fact]
+        public async Task TerminatePendingInstance()
+        {
+            string input = $"Hello {DateTime.UtcNow:o}";
+            string orchestrationName = "HelloWorld";
+
+            // Schedule an orchestration to start in 30 seconsd
+            TestInstance<string> instance = await this.testService.RunOrchestration(
+                input,
+                orchestrationName,
+                implementation: (ctx, input) => Task.FromResult(input),
+                DateTime.UtcNow.AddSeconds(30));
+
+            // Confirm the orchestration is in a pending state and terminate it
+            OrchestrationState state = await instance.GetStateAsync();
+            Assert.NotNull(state);
+            Assert.Equal(OrchestrationStatus.Pending, state.OrchestrationStatus);
+            await instance.TerminateAsync("Bye!");
+
+            // Confirm the termination was successful
+            TimeSpan timeout = TimeSpan.FromSeconds(5);
+            state = await instance.WaitForCompletion(
+                timeout,
+                expectedStatus: OrchestrationStatus.Terminated,
+                expectedOutput: "Bye!");
+        }
+
         [Theory]
         [InlineData(10)]
         [InlineData(300)]

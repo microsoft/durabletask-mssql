@@ -487,7 +487,7 @@ BEGIN
             SELECT TOP (1) 1 FROM NewEvents
             WHERE [TaskHub] = @TaskHub AND [InstanceID] = @InstanceID AND [EventType] = 'ExecutionTerminated'
         )
-        BEGIN
+        BEGIN   
             -- Payloads are stored separately from the events
             DECLARE @PayloadID uniqueidentifier = NULL
             IF @Reason IS NOT NULL
@@ -498,16 +498,29 @@ BEGIN
                 VALUES (@TaskHub, @InstanceID, @PayloadID, @Reason)
             END
 
-            INSERT INTO NewEvents (
-                [TaskHub],
-                [InstanceID],
-                [EventType],
-                [PayloadID]
-            ) VALUES (
-                @TaskHub,
-                @InstanceID,
-                'ExecutionTerminated',
-                @PayloadID)
+            IF @existingStatus = 'Pending'
+            BEGIN
+                UPDATE Instances
+                SET [RuntimeStatus] = 'Terminated',
+                [CompletedTime] = SYSUTCDATETIME(),
+                [LastUpdatedTime] = SYSUTCDATETIME(),
+                [OutputPayloadID] = @PayloadID
+                WHERE [TaskHub] = @TaskHub AND [InstanceID] = @InstanceID
+            END
+
+            ELSE
+            BEGIN
+                INSERT INTO NewEvents (
+                    [TaskHub],
+                    [InstanceID],
+                    [EventType],
+                    [PayloadID]
+                ) VALUES (
+                    @TaskHub,
+                    @InstanceID,
+                    'ExecutionTerminated',
+                    @PayloadID)
+            END
         END
     END
 

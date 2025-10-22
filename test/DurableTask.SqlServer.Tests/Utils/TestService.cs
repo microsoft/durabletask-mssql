@@ -129,7 +129,23 @@ namespace DurableTask.SqlServer.Tests.Utils
                 instanceId: Guid.NewGuid().ToString("N"),
                 implementation,
                 onEvent,
+                scheduledTime: null,
                 activities);
+        }
+
+        public Task<TestInstance<TInput>> RunOrchestration<TOutput, TInput>(
+            TInput input,
+            string orchestrationName,
+            Func<OrchestrationContext, TInput, Task<TOutput>> implementation,
+            DateTime scheduledTime)
+        {
+            return this.RunOrchestration(
+                input,
+                orchestrationName,
+                string.Empty,
+                instanceId: Guid.NewGuid().ToString("N"),
+                implementation,
+                scheduledTime: scheduledTime);
         }
 
         public async Task<TestInstance<TInput>> RunOrchestration<TOutput, TInput>(
@@ -139,6 +155,7 @@ namespace DurableTask.SqlServer.Tests.Utils
             string instanceId,
             Func<OrchestrationContext, TInput, Task<TOutput>> implementation,
             Action<OrchestrationContext, string, string> onEvent = null,
+            DateTime? scheduledTime = null,
             params (string name, TaskActivity activity)[] activities)
         {
             IReadOnlyList<TestInstance<TInput>> instances = await this.RunOrchestrations(
@@ -149,6 +166,7 @@ namespace DurableTask.SqlServer.Tests.Utils
                 version: version,
                 implementation,
                 onEvent,
+                scheduledTime,
                 activities);
 
             return instances[0];
@@ -162,6 +180,7 @@ namespace DurableTask.SqlServer.Tests.Utils
             string version,
             Func<OrchestrationContext, TInput, Task<TOutput>> implementation,
             Action<OrchestrationContext, string, string> onEvent = null,
+            DateTime? scheduledTime = null,
             params (string name, TaskActivity activity)[] activities)
         {
             // Register the inline orchestration - note that this will only work once per test
@@ -182,7 +201,10 @@ namespace DurableTask.SqlServer.Tests.Utils
                     orchestrationName,
                     version,
                     instanceId,
-                    input);
+                    input,
+                    tags: null,
+                    dedupeStatuses: null,
+                    startAt: scheduledTime ?? DateTime.UtcNow);
 
                 return new TestInstance<TInput>(
                     this.client,
