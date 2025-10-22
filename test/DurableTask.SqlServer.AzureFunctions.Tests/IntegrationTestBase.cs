@@ -167,7 +167,6 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
             return status;
         }
 
-
         protected async Task StartOrchestrationWithoutWaitingAsync(
             string name,
             object? input = null,
@@ -177,9 +176,9 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
             IDurableClient client = this.GetDurableClient(taskHub ?? this.taskHubName);
             instanceId = await client.StartNewAsync(name, instanceId ?? Guid.NewGuid().ToString("N"), input);
 
-            
             Assert.NotNull(instanceId);
         }
+
         protected async Task<DurableOrchestrationStatus> RewindOrchestrationAsync(string instanceId)
         {
             IDurableClient client = this.GetDurableClient();
@@ -237,12 +236,12 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
 
         class TestSettingsResolver : INameResolver, IConnectionInfoResolver
         {
-            readonly Dictionary<string, string> testSettings;
+            readonly Dictionary<string, string?> testSettings;
             IConfigurationRoot? config;
 
             public TestSettingsResolver()
             {
-                this.testSettings = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                this.testSettings = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
             }
 
             public void AddSetting(string name, string value)

@@ -21,6 +21,7 @@ namespace DurableTask.SqlServer.Tests.Integration
     using Xunit;
     using Xunit.Abstractions;
 
+    [Collection("Integration")]
     public class DatabaseManagement
     {
         readonly TestLogProvider logProvider;
@@ -503,7 +504,7 @@ namespace DurableTask.SqlServer.Tests.Integration
                 database.ConnectionString,
                 schemaName);
             Assert.Equal(1, currentSchemaVersion.Major);
-            Assert.Equal(4, currentSchemaVersion.Minor);
+            Assert.Equal(5, currentSchemaVersion.Minor);
             Assert.Equal(1, currentSchemaVersion.Patch);
         }
 

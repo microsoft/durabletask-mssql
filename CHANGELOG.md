@@ -1,10 +1,25 @@
 # Changelog
 
-## v1.4.1 (Unreleased)
+## v1.5.2 (Unreleased)
 
 ### Updates
 
 * Fix issue where scheduled orchestrations aren't immediately terminated ([#178](https://github.com/microsoft/durabletask-mssql/issues/178))
+
+## v1.5.1
+
+### Updates
+
+* Use Singleton metrics provider instead of IScaleMonitor and ITargetScaler ([#285](https://github.com/microsoft/durabletask-mssql/pull/285))
+* Updated repo to use central package management
+* Resolved multiple CVEs in dependencies
+
+## v1.5.0
+
+### Updates
+
+* Updated Microsoft.Azure.WebJobs.Extensions.DurableTask dependency to 3.0.0 and DurableTask.Core to 3.*. ([#281](https://github.com/microsoft/durabletask-mssql/pull/281))
+* Removed `netstandard2.0` TFM from Microsoft.DurableTask.SqlServer.AzureFunctions
 
 ## v1.4.0
 

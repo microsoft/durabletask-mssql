@@ -1,0 +1,42 @@
+﻿<Project>
+  <PropertyGroup>
+    <!--
+    More information about central package management:
+    https://learn.microsoft.com/nuget/consume-packages/central-package-management
+    -->
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+  
+  <!-- Product dependencies -->
+  <ItemGroup>
+    <PackageVersion Include="Microsoft.Azure.DurableTask.Core" Version="3.0.0" />
+    <PackageVersion Include="Microsoft.Azure.Functions.Worker.Extensions.Abstractions" Version="1.3.0" />
+    <PackageVersion Include="Microsoft.Azure.WebJobs.Extensions.DurableTask" Version="3.0.3" />
+    <PackageVersion Include="Microsoft.Data.SqlClient" Version="3.1.7" />
+    <PackageVersion Include="Microsoft.SourceLink.GitHub" Version="1.1.1" />
+    <PackageVersion Include="SemanticVersion" Version="2.1.0" />
+  </ItemGroup>
+  
+  <!-- Test dependencies -->
+  <ItemGroup>
+    <PackageVersion Include="Microsoft.Extensions.Logging.EventSource" Version="6.0.1" />
+    <PackageVersion Include="Microsoft.NET.Sdk.Functions" Version="4.6.0" />
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
+    <PackageVersion Include="Microsoft.SqlServer.SqlManagementObjects" Version="172.52.0" />
+    <PackageVersion Include="Moq" Version="4.20.72" />
+    <PackageVersion Include="OpenTelemetry.Exporter.InMemory" Version="1.9.0" />
+    <PackageVersion Include="xunit" Version="2.9.3" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="3.0.1" />
+  </ItemGroup>
+  
+  <!-- Transitive dependency pinning -->
+  <ItemGroup>
+    <!-- NOTE: We can't upgrade past Azure.Core v1.43.0 until the Azure Functions host also updates to this version
+               due to a compatibility issue that exists in v1.44.0 and above. -->
+    <PackageVersion Include="Azure.Core" Version="1.43.0" />
+    <PackageVersion Include="Azure.Identity" Version="1.12.1" />
+    <PackageVersion Include="Microsoft.IdentityModel.JsonWebTokens" Version="6.35.0" />
+    <PackageVersion Include="System.IdentityModel.Tokens.Jwt" Version="6.35.0" />
+    <PackageVersion Include="System.Text.Json" Version="6.0.11" />
+  </ItemGroup>
+</Project>

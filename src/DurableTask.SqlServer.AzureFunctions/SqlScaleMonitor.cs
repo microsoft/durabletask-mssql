@@ -23,14 +23,13 @@ namespace DurableTask.SqlServer.AzureFunctions
 
         int? previousWorkerCount = -1;
 
-        public SqlScaleMonitor(string taskHubName, SqlMetricsProvider sqlMetricsProvider)
+        public SqlScaleMonitor(string functionId, string taskHubName, SqlMetricsProvider sqlMetricsProvider)
         {
-            // Scalers in Durable Functions are shared for all functions in the same task hub.
-            // So instead of using a function ID, we use the task hub name as the basis for the descriptor ID.
-            string id = $"DurableTask-SqlServer:{taskHubName ?? "default"}";
+            // Scalers in Durable Functions is per function ids. And scalers share the same sqlMetricsProvider in the same taskhub. 
+            string id = $"{functionId}-DurableTask-SqlServer:{taskHubName ?? "default"}";
 
 #if FUNCTIONS_V4
-            this.Descriptor = new ScaleMonitorDescriptor(id: id, functionId: id);
+            this.Descriptor = new ScaleMonitorDescriptor(id: id, functionId: functionId);
 #else
             this.Descriptor = new ScaleMonitorDescriptor(id);
 #endif
