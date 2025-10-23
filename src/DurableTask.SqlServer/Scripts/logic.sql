@@ -465,49 +465,74 @@ BEGIN
     -- *** IMPORTANT ***
     -- To prevent deadlocks, it is important to maintain consistent table access
     -- order across all stored procedures that execute within a transaction.
-    -- Table order for this sproc: Instances --> (NewEvents --> Payloads --> NewEvents)  
+    -- Table order for this sproc: Instances --> (Payloads --> Instances --> NewEvents)  
 
     DECLARE @TaskHub varchar(50) = __SchemaNamePlaceholder__.CurrentTaskHub()
 
-    DECLARE @existingStatus varchar(30) = (
-        SELECT TOP 1 existing.[RuntimeStatus]
-        FROM Instances existing WITH (HOLDLOCK)
-        WHERE [TaskHub] = @TaskHub AND [InstanceID] = @InstanceID
-    )
+    DECLARE @existingStatus varchar(30)
+    DECLARE @existingLockExpiration datetime2(7)
+
+    -- Get the status of an existing orchestration
+    SELECT TOP 1
+        @existingStatus = existing.[RuntimeStatus],
+        @existingLockExpiration = existing.[LockExpiration]
+    FROM Instances existing WITH (HOLDLOCK)
+    WHERE [TaskHub] = @TaskHub AND [InstanceID] = @InstanceID
 
     IF @existingStatus IS NULL
     BEGIN
         ROLLBACK TRANSACTION;
         THROW 50000, 'The instance does not exist.', 1;
     END
-    -- If the instance is already completed, no need to terminate it.
-    IF @existingStatus IN ('Pending', 'Running')
-    BEGIN
-        IF NOT EXISTS (
-            SELECT TOP (1) 1 FROM NewEvents
-            WHERE [TaskHub] = @TaskHub AND [InstanceID] = @InstanceID AND [EventType] = 'ExecutionTerminated'
-        )
-        BEGIN
-            -- Payloads are stored separately from the events
-            DECLARE @PayloadID uniqueidentifier = NULL
-            IF @Reason IS NOT NULL
-            BEGIN
-                -- Note that we don't use the Reason column for the Reason with terminate events
-                SET @PayloadID = NEWID()
-                INSERT INTO Payloads ([TaskHub], [InstanceID], [PayloadID], [Text])
-                VALUES (@TaskHub, @InstanceID, @PayloadID, @Reason)
-            END
 
-            INSERT INTO NewEvents (
-                [TaskHub],
-                [InstanceID],
-                [EventType],
-                [PayloadID]
-            ) VALUES (
-                @TaskHub,
-                @InstanceID,
-                'ExecutionTerminated',
-                @PayloadID)
+    DECLARE @now datetime2(7) = SYSUTCDATETIME()
+
+    IF @existingStatus IN ('Running', 'Pending')
+    BEGIN
+        -- Create a payload to store the reason, if any
+        DECLARE @PayloadID uniqueidentifier = NULL
+        IF @Reason IS NOT NULL
+        BEGIN
+            -- Note that we don't use the Reason column for the Reason with terminate events
+            SET @PayloadID = NEWID()
+            INSERT INTO Payloads ([TaskHub], [InstanceID], [PayloadID], [Text])
+            VALUES (@TaskHub, @InstanceID, @PayloadID, @Reason)
+        END
+
+        -- Check the status of the orchestration to determine which termination path to take
+        IF @existingStatus = 'Pending' AND (@existingLockExpiration IS NULL OR @existingLockExpiration <= @now)
+        BEGIN
+            -- The orchestration hasn't started yet - transition it directly to the Terminated state and delete
+            -- any pending messages
+            UPDATE Instances SET
+                [RuntimeStatus] = 'Terminated',
+                [LastUpdatedTime] = @now,
+                [CompletedTime] = @now,
+                [OutputPayloadID] = @PayloadID,
+                [LockExpiration] = NULL -- release the lock, if any
+            WHERE [TaskHub] = @TaskHub AND [InstanceID] = @InstanceID
+
+            DELETE FROM NewEvents WHERE [TaskHub] = @TaskHub AND [InstanceID] = @InstanceID
+        END
+        ELSE
+        BEGIN
+            -- The orchestration has actually started running in this case
+            IF NOT EXISTS (
+                SELECT TOP (1) 1 FROM NewEvents
+                WHERE [TaskHub] = @TaskHub AND [InstanceID] = @InstanceID AND [EventType] = 'ExecutionTerminated'
+            )
+            BEGIN
+                INSERT INTO NewEvents (
+                    [TaskHub],
+                    [InstanceID],
+                    [EventType],
+                    [PayloadID]
+                ) VALUES (
+                    @TaskHub,
+                    @InstanceID,
+                    'ExecutionTerminated',
+                    @PayloadID)
+            END
         END
     END
 
@@ -1444,7 +1469,7 @@ BEGIN
     -- Instance IDs can be overwritten only if the orchestration is in a terminal state
     IF @existingStatus NOT IN ('Failed')
     BEGIN
-        DECLARE @msg nvarchar(4000) = FORMATMESSAGE('Cannot rewing instance with ID ''%s'' because it is not in a ''Failed'' state, but in ''%s'' state.', @InstanceID, @existingStatus);
+        DECLARE @msg nvarchar(4000) = FORMATMESSAGE('Cannot rewind instance with ID ''%s'' because it is not in a ''Failed'' state, but in ''%s'' state.', @InstanceID, @existingStatus);
         THROW 50001, @msg, 1;
     END
     
