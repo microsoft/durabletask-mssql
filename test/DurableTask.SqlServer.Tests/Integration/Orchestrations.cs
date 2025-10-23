@@ -878,11 +878,15 @@ namespace DurableTask.SqlServer.Tests.Integration
                 scheduledStartTime: DateTime.UtcNow.AddSeconds(30),
                 implementation: (ctx, input) => Task.FromResult("done"));
 
+            // Confirm that the orchestration is pending
+            OrchestrationState state = await instance.GetStateAsync();
+            Assert.Equal(OrchestrationStatus.Pending, state.OrchestrationStatus);
+
             // Terminate the orchestration before it starts
             await instance.TerminateAsync("Bye!");
 
+            // Confirm the orchestration was terminated
             await instance.WaitForCompletion(
-                timeout: TimeSpan.FromSeconds(3),
                 expectedStatus: OrchestrationStatus.Terminated,
                 expectedOutput: "Bye!");
 
