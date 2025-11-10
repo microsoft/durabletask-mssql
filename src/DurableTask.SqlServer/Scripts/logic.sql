@@ -627,7 +627,9 @@ GO
 CREATE OR ALTER PROCEDURE __SchemaNamePlaceholder__._LockNextOrchestration
     @BatchSize int,
     @LockedBy varchar(100),
-    @LockExpiration datetime2
+    @LockExpiration datetime2,
+    -- Orchestration type: NULL = any, 0 = orchestration, 1 = entity
+    @OrchestrationType BIT = NULL
 AS
 BEGIN
     DECLARE @now datetime2 = SYSUTCDATETIME()
@@ -662,7 +664,11 @@ BEGIN
     WHERE
         I.TaskHub = @TaskHub AND
 	    (I.[LockExpiration] IS NULL OR I.[LockExpiration] < @now) AND
-        (E.[VisibleTime] IS NULL OR E.[VisibleTime] < @now)
+        (E.[VisibleTime] IS NULL OR E.[VisibleTime] < @now) AND 
+        (@OrchestrationType IS NULL OR
+            (@OrchestrationType = 0 AND I.[InstanceID] NOT LIKE '@%@%') OR
+            (@OrchestrationType = 1 AND I.[InstanceID] LIKE '@%@%')
+        )
 
     -- Result #1: The list of new events to fetch.
     -- IMPORTANT: DO NOT CHANGE THE ORDER OF RETURNED COLUMNS!
