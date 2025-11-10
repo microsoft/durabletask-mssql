@@ -14,6 +14,7 @@ namespace DurableTask.SqlServer
     using System.Threading.Tasks;
     using DurableTask.Core;
     using DurableTask.Core.Common;
+    using DurableTask.Core.Entities;
     using DurableTask.Core.Exceptions;
     using DurableTask.Core.History;
     using DurableTask.Core.Query;
@@ -52,6 +53,19 @@ namespace DurableTask.SqlServer
         public override int MaxConcurrentTaskOrchestrationWorkItems => this.settings.MaxActiveOrchestrations;
 
         public override int MaxConcurrentTaskActivityWorkItems => this.settings.MaxConcurrentActivities;
+
+        public override EntityBackendProperties EntityBackendProperties
+           => new EntityBackendProperties()
+           {
+               EntityMessageReorderWindow = TimeSpan.FromMinutes(this.settings.EntityMessageReorderWindowInMinutes),
+               MaxEntityOperationBatchSize = this.settings.MaxEntityOperationBatchSize,
+               MaxConcurrentTaskEntityWorkItems = this.settings.MaxConcurrentTaskEntityWorkItems,
+               SupportsImplicitEntityDeletion = false, // not supported by this backend
+               MaximumSignalDelayTime = TimeSpan.MaxValue,
+               UseSeparateQueueForEntityWorkItems = this.settings.UseSeparateQueueForEntityWorkItems,
+           };
+
+        public override EntityBackendQueries? EntityBackendQueries => new EntitySqlBackendQueries(this);
 
         static SqlOrchestrationServiceSettings? ValidateSettings(SqlOrchestrationServiceSettings? settings)
         {
@@ -112,9 +126,40 @@ namespace DurableTask.SqlServer
             return this.dbManager.DeleteSchemaAsync();
         }
 
+        public override async Task<TaskOrchestrationWorkItem> LockNextOrchestrationWorkItemAsync(TimeSpan receiveTimeout, CancellationToken cancellationToken)
+        {
+#pragma warning disable CS8603 // Possible null reference return. Need to update base signature in IEntityOrchestrationService
+            return await this.LockNextWorkItemAsync(
+                receiveTimeout, 
+                cancellationToken,
+                OrchestrationFilterType.OrchestrationsOnly);
+# pragma warning restore CS8603
+        }
+
+        public override async Task<TaskOrchestrationWorkItem> LockNextEntityWorkItemAsync(TimeSpan receiveTimeout, CancellationToken cancellationToken)
+        {
+#pragma warning disable CS8603 // Possible null reference return. Need to update base signature in IEntityOrchestrationService
+            return await this.LockNextWorkItemAsync(
+                receiveTimeout, 
+                cancellationToken,
+                OrchestrationFilterType.EntitiesOnly);
+# pragma warning restore CS8603
+        }
+
         public override async Task<TaskOrchestrationWorkItem?> LockNextTaskOrchestrationWorkItemAsync(
             TimeSpan receiveTimeout,
             CancellationToken cancellationToken)
+        {
+            return await this.LockNextWorkItemAsync(
+                receiveTimeout,
+                cancellationToken,
+                OrchestrationFilterType.OrchestrationsOnly);
+        }
+
+        async Task<TaskOrchestrationWorkItem?> LockNextWorkItemAsync(
+            TimeSpan receiveTimeout,
+            CancellationToken cancellationToken,
+            OrchestrationFilterType orchestrationFilterType = OrchestrationFilterType.All)
         {
             bool isWaiting = false;
             Stopwatch stopwatch = Stopwatch.StartNew();
@@ -129,8 +174,16 @@ namespace DurableTask.SqlServer
                 command.Parameters.Add("@BatchSize", SqlDbType.Int).Value = batchSize;
                 command.Parameters.Add("@LockedBy", SqlDbType.VarChar, 100).Value = this.lockedByValue;
                 command.Parameters.Add("@LockExpiration", SqlDbType.DateTime2).Value = lockExpiration;
+                if (orchestrationFilterType == OrchestrationFilterType.OrchestrationsOnly)
+                {
+                    command.Parameters.Add("@OrchestrationType", SqlDbType.Int).Value = 0;
+                }
+                else if (orchestrationFilterType == OrchestrationFilterType.EntitiesOnly)
+                {
+                    command.Parameters.Add("@OrchestrationType", SqlDbType.Int).Value = 1;
+                }
 
-                DbDataReader reader;
+                    DbDataReader reader;
 
                 try
                 {
@@ -724,7 +777,7 @@ namespace DurableTask.SqlServer
                 FetchInput = false,
                 FetchOutput = false,
             };
-            
+
             if (purgeInstanceFilter.CreatedTimeTo != null)
             {
                 purgeQuery.CreatedTimeTo = purgeInstanceFilter.CreatedTimeTo.Value;
@@ -734,9 +787,9 @@ namespace DurableTask.SqlServer
             {
                 purgeQuery.StatusFilter = new HashSet<OrchestrationStatus>(purgeInstanceFilter.RuntimeStatus);
             }
-            
+
             IReadOnlyCollection<OrchestrationState> results = await this.GetManyOrchestrationsAsync(purgeQuery, CancellationToken.None);
-                                                                                                  
+
             IEnumerable<string> instanceIds = results.Select(r => r.OrchestrationInstance.InstanceId);
             int purgedInstanceCount = await this.PurgeOrchestrationHistoryAsync(instanceIds);
             return new PurgeResult(purgedInstanceCount);
@@ -779,7 +832,7 @@ namespace DurableTask.SqlServer
             }
 
             IReadOnlyCollection<OrchestrationState> results = await this.GetManyOrchestrationsAsync(sqlOrchestrationQuery, cancellationToken);
-            string? continuationToken = 
+            string? continuationToken =
                 results.Count == sqlOrchestrationQuery.PageSize ? (sqlOrchestrationQuery.PageNumber + 1).ToString() : null;
             return new OrchestrationQueryResult(results, continuationToken);
         }
@@ -918,6 +971,13 @@ namespace DurableTask.SqlServer
             }
 
             public TaskScheduledEvent ScheduledEvent { get; }
+        }
+
+        enum OrchestrationFilterType
+        {
+            All,
+            EntitiesOnly,
+            OrchestrationsOnly
         }
     }
 }
