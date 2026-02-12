@@ -97,7 +97,7 @@ namespace DurableTask.SqlServer
                             InstanceId = GetInstanceId(reader),
                             ExecutionId = GetExecutionId(reader),
                         },
-                        Tags = null, // TODO
+                        Tags = GetTags(reader),
                         Version = GetVersion(reader),
                         ParentTraceContext = GetTraceContext(reader),
                     };
@@ -259,7 +259,8 @@ namespace DurableTask.SqlServer
                 },
                 OrchestrationStatus = GetRuntimeStatus(reader),
                 Status = GetStringOrNull(reader, reader.GetOrdinal("CustomStatusText")),
-                ParentInstance = parentInstance
+                ParentInstance = parentInstance,
+                Tags = GetTags(reader),
             };
 
             // The OutputText column is overloaded to contain either orchestration output or failure details
@@ -481,6 +482,56 @@ namespace DurableTask.SqlServer
 
             traceContext.ActivityStartTime = GetTimestamp(reader);
             return traceContext;
+        }
+
+        internal static SqlString GetTags(HistoryEvent e)
+        {
+            if (e is ExecutionStartedEvent startedEvent &&
+                startedEvent.Tags != null &&
+                startedEvent.Tags.Count > 0)
+            {
+                return DTUtils.SerializeToJson(startedEvent.Tags);
+            }
+
+            return SqlString.Null;
+        }
+
+        internal static SqlString GetTagsFromContext(TaskMessage msg)
+        {
+            IDictionary<string, string>? tags = msg.OrchestrationExecutionContext?.OrchestrationTags;
+            if (tags != null && tags.Count > 0)
+            {
+                return DTUtils.SerializeToJson(tags);
+            }
+
+            return SqlString.Null;
+        }
+
+        internal static IDictionary<string, string>? GetTags(DbDataReader reader)
+        {
+            int ordinal;
+            try
+            {
+                ordinal = reader.GetOrdinal("Tags");
+            }
+            catch (IndexOutOfRangeException)
+            {
+                // The Tags column may not exist in older schema versions
+                return null;
+            }
+
+            if (reader.IsDBNull(ordinal))
+            {
+                return null;
+            }
+
+            string json = reader.GetString(ordinal);
+            if (string.IsNullOrEmpty(json))
+            {
+                return null;
+            }
+
+            return DTUtils.DeserializeFromJson<Dictionary<string, string>>(json);
         }
 
         public static SqlParameter AddInstanceIDsParameter(

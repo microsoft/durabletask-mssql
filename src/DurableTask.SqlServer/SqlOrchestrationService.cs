@@ -388,6 +388,11 @@ namespace DurableTask.SqlServer
                 currentWorkItem.EventPayloadMappings,
                 this.settings.SchemaName);
 
+            string? tagsJson = newRuntimeState.Tags != null && newRuntimeState.Tags.Count > 0
+                ? DTUtils.SerializeToJson(newRuntimeState.Tags)
+                : null;
+            command.Parameters.Add("@Tags", SqlDbType.VarChar).Value = (object?)tagsJson ?? DBNull.Value;
+
             try
             {
                 await SqlUtils.ExecuteNonQueryAsync(command, this.traceHelper, instance.InstanceId);
@@ -445,6 +450,19 @@ namespace DurableTask.SqlServer
 
                 TaskMessage message = reader.GetTaskMessage();
                 int dequeueCount = reader.GetInt32("DequeueCount");
+
+                // Reconstruct OrchestrationExecutionContext from the Tags column
+                // so that activity middleware can access orchestration tags.
+                IDictionary<string, string>? tags = SqlUtils.GetTags(reader);
+                if (tags != null)
+                {
+                    // OrchestrationExecutionContext.OrchestrationTags has an internal setter,
+                    // so we construct it via JSON deserialization.
+                    string contextJson = DTUtils.SerializeToJson(
+                        new { OrchestrationTags = tags });
+                    message.OrchestrationExecutionContext =
+                        DTUtils.DeserializeFromJson<OrchestrationExecutionContext>(contextJson);
+                }
 
                 // TODO: poison message handling for high dequeue counts
 
@@ -521,6 +539,11 @@ namespace DurableTask.SqlServer
             command.Parameters.Add("@InputText", SqlDbType.VarChar).Value = startEvent.Input;
             command.Parameters.Add("@StartTime", SqlDbType.DateTime2).Value = startEvent.ScheduledStartTime;
             command.Parameters.Add("@TraceContext", SqlDbType.VarChar, size: 800).Value = SqlUtils.GetTraceContext(startEvent);
+
+            string? tagsJson = startEvent.Tags != null && startEvent.Tags.Count > 0
+                ? DTUtils.SerializeToJson(startEvent.Tags)
+                : null;
+            command.Parameters.Add("@Tags", SqlDbType.VarChar).Value = (object?)tagsJson ?? DBNull.Value;
 
             if (dedupeStatuses?.Length > 0)
             {
