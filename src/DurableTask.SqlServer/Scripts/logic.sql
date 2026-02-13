@@ -194,8 +194,7 @@ AS
             P.[TaskHub] = __SchemaNamePlaceholder__.CurrentTaskHub() AND
             P.[InstanceID] = I.[InstanceID] AND
             P.[PayloadID] = I.[OutputPayloadID]) AS [OutputText],
-        I.[ParentInstanceID],
-        I.[Tags]
+        I.[ParentInstanceID]
     FROM Instances I
     WHERE
         I.[TaskHub] = __SchemaNamePlaceholder__.CurrentTaskHub()
@@ -352,12 +351,10 @@ BEGIN
     DECLARE @TaskHub varchar(50) = __SchemaNamePlaceholder__.CurrentTaskHub()
     DECLARE @ParentInstanceID varchar(100)
     DECLARE @Version varchar(100)
-    DECLARE @Tags varchar(MAX)
     
     SELECT
         @ParentInstanceID = [ParentInstanceID],
-        @Version = [Version],
-        @Tags = [Tags]
+        @Version = [Version]
     FROM Instances WHERE [InstanceID] = @InstanceID
 
     SELECT
@@ -376,8 +373,7 @@ BEGIN
         [PayloadID],
         @ParentInstanceID as [ParentInstanceID],
         @Version as [Version],
-        H.[TraceContext],
-        @Tags as [Tags]
+        H.[TraceContext]
     FROM History H WITH (INDEX (PK_History))
         LEFT OUTER JOIN Payloads P ON
             P.[TaskHub] = @TaskHub AND
@@ -1297,26 +1293,27 @@ BEGIN
         ([VisibleTime] IS NULL OR [VisibleTime] < @now)
 
     SELECT TOP (1)
-        N.[SequenceNumber],
-        N.[InstanceID],
-        N.[ExecutionID],
-        N.[Name],
+        [SequenceNumber],
+        [InstanceID],
+        [ExecutionID],
+        [Name],
         'TaskScheduled' AS [EventType],
-        N.[TaskID],
-        N.[VisibleTime],
-        N.[Timestamp],
-        N.[DequeueCount],
-        N.[Version],
+        [TaskID],
+        [VisibleTime],
+        [Timestamp],
+        [DequeueCount],
+        [Version],
         (SELECT TOP 1 [Text] FROM Payloads P WHERE
             P.[TaskHub] = @TaskHub AND
             P.[InstanceID] = N.[InstanceID] AND
             P.[PayloadID] = N.[PayloadID]) AS [PayloadText],
-        DATEDIFF(SECOND, N.[Timestamp], @now) AS [WaitTime],
-        N.[TraceContext],
-        I.[Tags]
+        DATEDIFF(SECOND, [Timestamp], @now) AS [WaitTime],
+        [TraceContext],
+        (SELECT TOP 1 I.[Tags] FROM Instances I WHERE
+            I.[TaskHub] = @TaskHub AND
+            I.[InstanceID] = N.[InstanceID]) AS [Tags]
     FROM NewTasks N
-        INNER JOIN Instances I ON I.[TaskHub] = @TaskHub AND I.[InstanceID] = N.[InstanceID]
-    WHERE N.[TaskHub] = @TaskHub AND N.[SequenceNumber] = @SequenceNumber
+    WHERE [TaskHub] = @TaskHub AND [SequenceNumber] = @SequenceNumber
 
     COMMIT TRANSACTION
 END
