@@ -484,29 +484,6 @@ namespace DurableTask.SqlServer
             return traceContext;
         }
 
-        internal static SqlString GetTags(HistoryEvent e)
-        {
-            if (e is ExecutionStartedEvent startedEvent &&
-                startedEvent.Tags != null &&
-                startedEvent.Tags.Count > 0)
-            {
-                return DTUtils.SerializeToJson(startedEvent.Tags);
-            }
-
-            return SqlString.Null;
-        }
-
-        internal static SqlString GetTagsFromContext(TaskMessage msg)
-        {
-            IDictionary<string, string>? tags = msg.OrchestrationExecutionContext?.OrchestrationTags;
-            if (tags != null && tags.Count > 0)
-            {
-                return DTUtils.SerializeToJson(tags);
-            }
-
-            return SqlString.Null;
-        }
-
         internal static IDictionary<string, string>? GetTags(DbDataReader reader)
         {
             int ordinal;
@@ -532,6 +509,16 @@ namespace DurableTask.SqlServer
             }
 
             return DTUtils.DeserializeFromJson<Dictionary<string, string>>(json);
+        }
+
+        internal static void AddTagsParameter(
+            this SqlParameterCollection parameters,
+            IDictionary<string, string>? tags)
+        {
+            string? json = tags != null && tags.Count > 0
+                ? DTUtils.SerializeToJson(tags)
+                : null;
+            parameters.Add("@Tags", SqlDbType.VarChar).Value = (object?)json ?? DBNull.Value;
         }
 
         public static SqlParameter AddInstanceIDsParameter(

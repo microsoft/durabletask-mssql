@@ -56,8 +56,7 @@ IF TYPE_ID(N'__SchemaNamePlaceholder__.OrchestrationEvents') IS NULL
         [PayloadID] uniqueidentifier NULL,
         [ParentInstanceID] varchar(100) NULL,
         [Version] varchar(100) NULL,
-        [TraceContext] varchar(800) NULL,
-        [Tags] varchar(max) NULL
+        [TraceContext] varchar(800) NULL
     )
 GO
 
@@ -76,8 +75,7 @@ IF TYPE_ID(N'__SchemaNamePlaceholder__.TaskEvents') IS NULL
         [PayloadText] varchar(max) NULL,
         [PayloadID] uniqueidentifier NULL,
         [Version] varchar(100) NULL,
-        [TraceContext] varchar(800) NULL,
-        [Tags] varchar(max) NULL
+        [TraceContext] varchar(800) NULL
     )
 GO
 
@@ -933,7 +931,7 @@ BEGIN
         E.[ParentInstanceID],
         'Pending',
         E.[TraceContext],
-        E.[Tags]
+        @Tags
     FROM @NewOrchestrationEvents E
     WHERE E.[EventType] IN ('ExecutionStarted')
         AND NOT EXISTS (
@@ -1035,8 +1033,7 @@ BEGIN
         [LockExpiration],
         [PayloadID],
         [Version],
-        [TraceContext],
-        [Tags]
+        [TraceContext]
     )
     OUTPUT
         INSERTED.[SequenceNumber],
@@ -1052,8 +1049,7 @@ BEGIN
         [LockExpiration],
         [PayloadID],
         [Version],
-        [TraceContext],
-        [Tags]
+        [TraceContext]
     FROM @NewTaskEvents
 
     COMMIT TRANSACTION
@@ -1301,25 +1297,26 @@ BEGIN
         ([VisibleTime] IS NULL OR [VisibleTime] < @now)
 
     SELECT TOP (1)
-        [SequenceNumber],
-        [InstanceID],
-        [ExecutionID],
-        [Name],
+        N.[SequenceNumber],
+        N.[InstanceID],
+        N.[ExecutionID],
+        N.[Name],
         'TaskScheduled' AS [EventType],
-        [TaskID],
-        [VisibleTime],
-        [Timestamp],
-        [DequeueCount],
-        [Version],
+        N.[TaskID],
+        N.[VisibleTime],
+        N.[Timestamp],
+        N.[DequeueCount],
+        N.[Version],
         (SELECT TOP 1 [Text] FROM Payloads P WHERE
             P.[TaskHub] = @TaskHub AND
             P.[InstanceID] = N.[InstanceID] AND
             P.[PayloadID] = N.[PayloadID]) AS [PayloadText],
-        DATEDIFF(SECOND, [Timestamp], @now) AS [WaitTime],
-        [TraceContext],
-        [Tags]
+        DATEDIFF(SECOND, N.[Timestamp], @now) AS [WaitTime],
+        N.[TraceContext],
+        I.[Tags]
     FROM NewTasks N
-    WHERE [TaskHub] = @TaskHub AND [SequenceNumber] = @SequenceNumber
+        INNER JOIN Instances I ON I.[TaskHub] = @TaskHub AND I.[InstanceID] = N.[InstanceID]
+    WHERE N.[TaskHub] = @TaskHub AND N.[SequenceNumber] = @SequenceNumber
 
     COMMIT TRANSACTION
 END

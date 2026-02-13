@@ -31,7 +31,6 @@ namespace DurableTask.SqlServer.SqlTypes
             new SqlMetaData("ParentInstanceID", SqlDbType.VarChar, 100),
             new SqlMetaData("Version", SqlDbType.VarChar, 100),
             new SqlMetaData("TraceContext", SqlDbType.VarChar, 800),
-            new SqlMetaData("Tags", SqlDbType.VarChar, -1 /* max */),
         };
 
         static class ColumnOrdinals
@@ -51,7 +50,6 @@ namespace DurableTask.SqlServer.SqlTypes
             public const int ParentInstanceID = 11;
             public const int Version = 12;
             public const int TraceContext = 13;
-            public const int Tags = 14;
         }
 
         public static SqlParameter AddOrchestrationEventsParameter(
@@ -154,7 +152,6 @@ namespace DurableTask.SqlServer.SqlTypes
             record.SetSqlString(ColumnOrdinals.ParentInstanceID, SqlUtils.GetParentInstanceId(msg.Event));
             record.SetSqlString(ColumnOrdinals.Version, SqlUtils.GetVersion(msg.Event));
             record.SetSqlString(ColumnOrdinals.TraceContext, SqlUtils.GetTraceContext(msg.Event));
-            record.SetSqlString(ColumnOrdinals.Tags, SqlUtils.GetTags(msg.Event));
 
             return record;
         }

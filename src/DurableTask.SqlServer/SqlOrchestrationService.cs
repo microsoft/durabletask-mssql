@@ -388,10 +388,7 @@ namespace DurableTask.SqlServer
                 currentWorkItem.EventPayloadMappings,
                 this.settings.SchemaName);
 
-            string? tagsJson = newRuntimeState.Tags != null && newRuntimeState.Tags.Count > 0
-                ? DTUtils.SerializeToJson(newRuntimeState.Tags)
-                : null;
-            command.Parameters.Add("@Tags", SqlDbType.VarChar).Value = (object?)tagsJson ?? DBNull.Value;
+            command.Parameters.AddTagsParameter(newRuntimeState.Tags);
 
             try
             {
@@ -540,10 +537,7 @@ namespace DurableTask.SqlServer
             command.Parameters.Add("@StartTime", SqlDbType.DateTime2).Value = startEvent.ScheduledStartTime;
             command.Parameters.Add("@TraceContext", SqlDbType.VarChar, size: 800).Value = SqlUtils.GetTraceContext(startEvent);
 
-            string? tagsJson = startEvent.Tags != null && startEvent.Tags.Count > 0
-                ? DTUtils.SerializeToJson(startEvent.Tags)
-                : null;
-            command.Parameters.Add("@Tags", SqlDbType.VarChar).Value = (object?)tagsJson ?? DBNull.Value;
+            command.Parameters.AddTagsParameter(startEvent.Tags);
 
             if (dedupeStatuses?.Length > 0)
             {

@@ -30,7 +30,6 @@ namespace DurableTask.SqlServer.SqlTypes
             new SqlMetaData("PayloadID", SqlDbType.UniqueIdentifier),
             new SqlMetaData("Version", SqlDbType.VarChar, 100),
             new SqlMetaData("TraceContext", SqlDbType.VarChar, 800),
-            new SqlMetaData("Tags", SqlDbType.VarChar, -1 /* max */),
         };
 
         static class ColumnOrdinals
@@ -49,7 +48,6 @@ namespace DurableTask.SqlServer.SqlTypes
             public const int PayloadId = 10;
             public const int Version = 11;
             public const int TraceContext = 12;
-            public const int Tags = 13;
         }
 
         public static SqlParameter AddTaskEventsParameter(
@@ -142,7 +140,6 @@ namespace DurableTask.SqlServer.SqlTypes
 
             record.SetSqlString(ColumnOrdinals.Version, SqlUtils.GetVersion(msg.Event));
             record.SetSqlString(ColumnOrdinals.TraceContext, SqlUtils.GetTraceContext(msg.Event));
-            record.SetSqlString(ColumnOrdinals.Tags, SqlUtils.GetTagsFromContext(msg));
             return record;
         }
     }
