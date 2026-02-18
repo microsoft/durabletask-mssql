@@ -868,8 +868,7 @@ BEGIN
         [LockExpiration] = NULL, -- release the lock
         [CustomStatusPayloadID] = @CustomStatusPayloadID,
         [InputPayloadID] = @InputPayloadID,
-        [OutputPayloadID] = @OutputPayloadID,
-        [Tags] = @Tags
+        [OutputPayloadID] = @OutputPayloadID
     FROM Instances
     WHERE [TaskHub] = @TaskHub and [InstanceID] = @InstanceID
 
@@ -1308,10 +1307,7 @@ BEGIN
             P.[InstanceID] = N.[InstanceID] AND
             P.[PayloadID] = N.[PayloadID]) AS [PayloadText],
         DATEDIFF(SECOND, [Timestamp], @now) AS [WaitTime],
-        [TraceContext],
-        (SELECT TOP 1 I.[Tags] FROM Instances I WHERE
-            I.[TaskHub] = @TaskHub AND
-            I.[InstanceID] = N.[InstanceID]) AS [Tags]
+        [TraceContext]
     FROM NewTasks N
     WHERE [TaskHub] = @TaskHub AND [SequenceNumber] = @SequenceNumber
 

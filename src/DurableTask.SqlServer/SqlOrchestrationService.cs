@@ -448,19 +448,6 @@ namespace DurableTask.SqlServer
                 TaskMessage message = reader.GetTaskMessage();
                 int dequeueCount = reader.GetInt32("DequeueCount");
 
-                // Reconstruct OrchestrationExecutionContext from the Tags column
-                // so that activity middleware can access orchestration tags.
-                IDictionary<string, string>? tags = SqlUtils.GetTags(reader);
-                if (tags != null)
-                {
-                    // OrchestrationExecutionContext.OrchestrationTags has an internal setter,
-                    // so we construct it via JSON deserialization.
-                    string contextJson = DTUtils.SerializeToJson(
-                        new { OrchestrationTags = tags });
-                    message.OrchestrationExecutionContext =
-                        DTUtils.DeserializeFromJson<OrchestrationExecutionContext>(contextJson);
-                }
-
                 // TODO: poison message handling for high dequeue counts
 
                 return new TaskActivityWorkItem
