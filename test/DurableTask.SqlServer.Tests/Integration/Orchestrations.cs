@@ -50,8 +50,11 @@ namespace DurableTask.SqlServer.Tests.Integration
                 orchestrationName,
                 implementation: (ctx, input) => Task.FromResult(input));
 
-            await instance.WaitForCompletion(
+            OrchestrationState state = await instance.WaitForCompletion(
                 expectedOutput: input);
+
+            // Verify backward compatibility: tags should be null when none are specified
+            Assert.Null(state.Tags);
 
             // Validate logs
             LogAssert.NoWarningsOrErrors(this.testService.LogProvider);
@@ -942,6 +945,181 @@ namespace DurableTask.SqlServer.Tests.Integration
                 LogAssert.CheckpointCompleted(orchestrationName),
                 LogAssert.CheckpointStarting(orchestrationName),
                 LogAssert.CheckpointCompleted(orchestrationName));
+        }
+
+        [Fact]
+        public async Task OrchestrationWithTags()
+        {
+            string input = $"Hello {DateTime.UtcNow:o}";
+            var tags = new Dictionary<string, string>
+            {
+                { "key1", "value1" },
+                { "key2", "value2" },
+            };
+
+            TestInstance<string> instance = await this.testService.RunOrchestrationWithTags(
+                input,
+                orchestrationName: "OrchestrationWithTags",
+                tags: tags,
+                implementation: (ctx, input) => Task.FromResult(input));
+
+            OrchestrationState state = await instance.WaitForCompletion(expectedOutput: input);
+
+            Assert.NotNull(state.Tags);
+            Assert.Equal(2, state.Tags.Count);
+            Assert.Equal("value1", state.Tags["key1"]);
+            Assert.Equal("value2", state.Tags["key2"]);
+
+            LogAssert.NoWarningsOrErrors(this.testService.LogProvider);
+        }
+
+        [Fact]
+        public async Task OrchestrationWithEmptyTags()
+        {
+            string input = $"Hello {DateTime.UtcNow:o}";
+
+            TestInstance<string> instance = await this.testService.RunOrchestrationWithTags(
+                input,
+                orchestrationName: "OrchestrationWithEmptyTags",
+                tags: new Dictionary<string, string>(),
+                implementation: (ctx, input) => Task.FromResult(input));
+
+            OrchestrationState state = await instance.WaitForCompletion(expectedOutput: input);
+
+            Assert.Null(state.Tags);
+
+            LogAssert.NoWarningsOrErrors(this.testService.LogProvider);
+        }
+
+        [Fact]
+        public async Task TagsSurviveContinueAsNew()
+        {
+            var tags = new Dictionary<string, string>
+            {
+                { "key1", "value1" },
+                { "key2", "value2" },
+            };
+
+            TestInstance<int> instance = await this.testService.RunOrchestrationWithTags(
+                input: 0,
+                orchestrationName: "TagsContinueAsNewTest",
+                tags: tags,
+                implementation: async (ctx, input) =>
+                {
+                    if (input < 3)
+                    {
+                        await ctx.CreateTimer<object>(DateTime.MinValue, null);
+                        ctx.ContinueAsNew(input + 1);
+                    }
+
+                    return input;
+                });
+
+            OrchestrationState state = await instance.WaitForCompletion(
+                expectedOutput: 3,
+                continuedAsNew: true);
+
+            Assert.NotNull(state.Tags);
+            Assert.Equal(2, state.Tags.Count);
+            Assert.Equal("value1", state.Tags["key1"]);
+            Assert.Equal("value2", state.Tags["key2"]);
+        }
+
+        [Fact]
+        public async Task SubOrchestrationInheritsTags()
+        {
+            var tags = new Dictionary<string, string>
+            {
+                { "key1", "value1" },
+                { "key2", "value2" },
+            };
+
+            string subOrchestrationName = "SubOrchestrationForTagTest";
+
+            this.testService.RegisterInlineOrchestration<string, string>(
+                subOrchestrationName,
+                implementation: (ctx, input) => Task.FromResult("done"));
+
+            TestInstance<string> instance = await this.testService.RunOrchestrationWithTags(
+                input: (string)null,
+                orchestrationName: "ParentOrchestrationForTagTest",
+                tags: tags,
+                implementation: async (ctx, input) =>
+                {
+                    return await ctx.CreateSubOrchestrationInstance<string>(
+                        subOrchestrationName, string.Empty, null);
+                });
+
+            OrchestrationState state = await instance.WaitForCompletion(
+                timeout: TimeSpan.FromSeconds(15),
+                expectedOutput: "done");
+
+            Assert.NotNull(state.Tags);
+            Assert.Equal("value1", state.Tags["key1"]);
+            Assert.Equal("value2", state.Tags["key2"]);
+        }
+
+        [Fact]
+        public async Task TagsWithSpecialCharacters()
+        {
+            string input = $"Hello {DateTime.UtcNow:o}";
+            var tags = new Dictionary<string, string>
+            {
+                { "key with spaces", "value with spaces" },
+                { "unicode-key-日本語", "unicode-value-中文" },
+                { "special\"chars", "value'with\"quotes" },
+            };
+
+            TestInstance<string> instance = await this.testService.RunOrchestrationWithTags(
+                input,
+                orchestrationName: "TagsSpecialCharsTest",
+                tags: tags,
+                implementation: (ctx, input) => Task.FromResult(input));
+
+            OrchestrationState state = await instance.WaitForCompletion(expectedOutput: input);
+
+            Assert.NotNull(state.Tags);
+            Assert.Equal(3, state.Tags.Count);
+            Assert.Equal("value with spaces", state.Tags["key with spaces"]);
+            Assert.Equal("unicode-value-中文", state.Tags["unicode-key-日本語"]);
+            Assert.Equal("value'with\"quotes", state.Tags["special\"chars"]);
+        }
+
+        [Fact]
+        public async Task TagsOnManyOrchestrations()
+        {
+            string input = $"Hello {DateTime.UtcNow:o}";
+            var tags = new Dictionary<string, string>
+            {
+                { "key1", "value1" },
+            };
+
+            TestInstance<string> instance = await this.testService.RunOrchestrationWithTags(
+                input,
+                orchestrationName: "TagsManyQueryTest",
+                tags: tags,
+                implementation: (ctx, input) => Task.FromResult(input));
+
+            await instance.WaitForCompletion(expectedOutput: input);
+
+            var filter = new SqlOrchestrationQuery();
+            IReadOnlyCollection<OrchestrationState> results =
+                await this.testService.OrchestrationServiceMock.Object.GetManyOrchestrationsAsync(
+                    filter, CancellationToken.None);
+
+            Assert.NotEmpty(results);
+            bool foundTaggedInstance = false;
+            foreach (OrchestrationState result in results)
+            {
+                if (result.OrchestrationInstance.InstanceId == instance.InstanceId)
+                {
+                    Assert.NotNull(result.Tags);
+                    Assert.Equal("value1", result.Tags["key1"]);
+                    foundTaggedInstance = true;
+                }
+            }
+
+            Assert.True(foundTaggedInstance, "Did not find the tagged orchestration instance in query results.");
         }
     }
 }

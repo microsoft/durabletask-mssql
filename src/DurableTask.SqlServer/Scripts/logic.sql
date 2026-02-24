@@ -709,7 +709,7 @@ BEGIN
     END
 
     -- Result #2: Basic information about this instance, including its runtime status
-    SELECT @instanceID AS [InstanceID], @runtimeStatus AS [RuntimeStatus], @tags AS [Tags]
+    SELECT @instanceID AS [InstanceID], @runtimeStatus AS [RuntimeStatus]
 
     -- Result #3: The full event history for the locked instance
     -- NOTE: This must be kept consistent with the dt.HistoryEvents custom data type
