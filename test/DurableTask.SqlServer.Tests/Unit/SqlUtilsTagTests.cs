@@ -6,8 +6,6 @@ namespace DurableTask.SqlServer.Tests.Unit
     using System;
     using System.Collections.Generic;
     using System.Data;
-    using DurableTask.Core;
-    using DurableTask.Core.History;
     using Microsoft.Data.SqlClient;
     using Newtonsoft.Json;
     using Xunit;
