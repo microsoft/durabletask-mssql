@@ -234,7 +234,7 @@ CREATE OR ALTER PROCEDURE __SchemaNamePlaceholder__.CreateInstance
     @StartTime datetime2 = NULL,
     @DedupeStatuses varchar(MAX) = 'Pending,Running',
     @TraceContext varchar(800) = NULL,
-    @Tags varchar(MAX) = NULL
+    @Tags varchar(8000) = NULL
 AS
 BEGIN
     DECLARE @TaskHub varchar(50) = __SchemaNamePlaceholder__.CurrentTaskHub()
@@ -638,7 +638,7 @@ BEGIN
     DECLARE @parentInstanceID varchar(100)
     DECLARE @version varchar(100)
     DECLARE @runtimeStatus varchar(30)
-    DECLARE @tags varchar(MAX)
+    DECLARE @tags varchar(8000)
     DECLARE @TaskHub varchar(50) = __SchemaNamePlaceholder__.CurrentTaskHub()
 
     BEGIN TRANSACTION
@@ -754,7 +754,7 @@ CREATE OR ALTER PROCEDURE __SchemaNamePlaceholder__._CheckpointOrchestration
     @NewHistoryEvents HistoryEvents READONLY,
     @NewOrchestrationEvents OrchestrationEvents READONLY,
     @NewTaskEvents TaskEvents READONLY,
-    @Tags varchar(MAX) = NULL
+    @Tags varchar(8000) = NULL
 AS
 BEGIN
     BEGIN TRANSACTION

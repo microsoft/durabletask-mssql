@@ -526,7 +526,7 @@ namespace DurableTask.SqlServer
             string? json = tags != null && tags.Count > 0
                 ? DTUtils.SerializeToJson(tags)
                 : null;
-            parameters.Add("@Tags", SqlDbType.VarChar).Value = (object?)json ?? DBNull.Value;
+            parameters.Add("@Tags", SqlDbType.VarChar, 8000).Value = (object?)json ?? DBNull.Value;
         }
 
         public static SqlParameter AddInstanceIDsParameter(
