@@ -1035,6 +1035,7 @@ namespace DurableTask.SqlServer.Tests.Integration
             };
 
             string subOrchestrationName = "SubOrchestrationForTagTest";
+            string subInstanceId = $"sub-{Guid.NewGuid():N}";
 
             this.testService.RegisterInlineOrchestration<string, string>(
                 subOrchestrationName,
@@ -1047,16 +1048,24 @@ namespace DurableTask.SqlServer.Tests.Integration
                 implementation: async (ctx, input) =>
                 {
                     return await ctx.CreateSubOrchestrationInstance<string>(
-                        subOrchestrationName, string.Empty, null);
+                        subOrchestrationName, string.Empty, subInstanceId, null);
                 });
 
             OrchestrationState state = await instance.WaitForCompletion(
                 timeout: TimeSpan.FromSeconds(15),
                 expectedOutput: "done");
 
+            // Verify parent orchestration tags
             Assert.NotNull(state.Tags);
             Assert.Equal("value1", state.Tags["key1"]);
             Assert.Equal("value2", state.Tags["key2"]);
+
+            // Verify sub-orchestration inherited the tags
+            OrchestrationState subState = await this.testService.GetOrchestrationStateAsync(subInstanceId);
+            Assert.NotNull(subState);
+            Assert.NotNull(subState.Tags);
+            Assert.Equal("value1", subState.Tags["key1"]);
+            Assert.Equal("value2", subState.Tags["key2"]);
         }
 
         [Fact]

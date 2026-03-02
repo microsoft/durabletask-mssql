@@ -87,6 +87,11 @@ namespace DurableTask.SqlServer.Tests.Utils
             this.client = new TaskHubClient(this.OrchestrationServiceMock.Object, loggerFactory: this.loggerFactory);
         }
 
+        public Task<OrchestrationState> GetOrchestrationStateAsync(string instanceId)
+        {
+            return this.client.GetOrchestrationStateAsync(new OrchestrationInstance { InstanceId = instanceId });
+        }
+
         public Task StartWorkerAsync() => this.worker?.StartAsync() ?? Task.CompletedTask;
 
         public Task PurgeAsync(DateTime maximumThreshold, OrchestrationStateTimeRangeFilterType filterType)
