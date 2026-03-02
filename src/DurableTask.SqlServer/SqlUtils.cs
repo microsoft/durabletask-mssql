@@ -76,11 +76,16 @@ namespace DurableTask.SqlServer
                     };
                     break;
                 case EventType.ExecutionCompleted:
-                    TryGetFailureDetails(reader, out FailureDetails? executionFailedDetails);
+                    FailureDetails? executionFailedDetails = null;
+                    OrchestrationStatus orchestrationStatus = GetRuntimeStatus(reader);
+                    if (orchestrationStatus == OrchestrationStatus.Failed)
+                    {
+                        TryGetFailureDetails(reader, out executionFailedDetails);
+                    }
                     historyEvent = new ExecutionCompletedEvent(
                         eventId,
                         result: GetPayloadText(reader),
-                        orchestrationStatus: GetRuntimeStatus(reader),
+                        orchestrationStatus: orchestrationStatus,
                         failureDetails: executionFailedDetails);
                     break;
                 case EventType.ExecutionStarted:
