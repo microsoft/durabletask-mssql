@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.5.3
+
+### Updates
+
+* Add logic to terminate suspended instances ([#301](https://github.com/microsoft/durabletask-mssql/pull/301))
+
 ## v1.5.2
 
 ### Updates
