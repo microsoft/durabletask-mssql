@@ -508,7 +508,15 @@ namespace DurableTask.SqlServer
                 return null;
             }
 
-            return DTUtils.DeserializeFromJson<Dictionary<string, string>>(json);
+            try
+            {
+                return DTUtils.DeserializeFromJson<Dictionary<string, string>>(json);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Failed to deserialize Tags JSON payload. Treating as null. Error: {ex}");
+                return null;
+            }
         }
 
         internal static void AddTagsParameter(
