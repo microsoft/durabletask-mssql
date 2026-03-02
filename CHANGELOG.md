@@ -4,6 +4,12 @@
 
 ### Updates
 
+* Bug fix for correctly generating the `ExecutionCompletedEvent` ([#303](https://github.com/microsoft/durabletask-mssql/pull/303))
+
+## v1.5.3
+
+### Updates
+
 * Add logic to terminate suspended instances ([#301](https://github.com/microsoft/durabletask-mssql/pull/301))
 
 ## v1.5.2
