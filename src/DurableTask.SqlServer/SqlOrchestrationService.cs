@@ -388,7 +388,6 @@ namespace DurableTask.SqlServer
                 currentWorkItem.EventPayloadMappings,
                 this.settings.SchemaName);
 
-            command.Parameters.AddTagsParameter(newRuntimeState.Tags);
 
             try
             {

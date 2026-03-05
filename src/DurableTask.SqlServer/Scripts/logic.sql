@@ -56,7 +56,8 @@ IF TYPE_ID(N'__SchemaNamePlaceholder__.OrchestrationEvents') IS NULL
         [PayloadID] uniqueidentifier NULL,
         [ParentInstanceID] varchar(100) NULL,
         [Version] varchar(100) NULL,
-        [TraceContext] varchar(800) NULL
+        [TraceContext] varchar(800) NULL,
+        [Tags] varchar(8000) NULL
     )
 GO
 
@@ -753,8 +754,7 @@ CREATE OR ALTER PROCEDURE __SchemaNamePlaceholder__._CheckpointOrchestration
     @DeletedEvents MessageIDs READONLY,
     @NewHistoryEvents HistoryEvents READONLY,
     @NewOrchestrationEvents OrchestrationEvents READONLY,
-    @NewTaskEvents TaskEvents READONLY,
-    @Tags varchar(8000) = NULL
+    @NewTaskEvents TaskEvents READONLY
 AS
 BEGIN
     BEGIN TRANSACTION
@@ -926,7 +926,7 @@ BEGIN
         E.[ParentInstanceID],
         'Pending',
         E.[TraceContext],
-        @Tags
+        E.[Tags]
     FROM @NewOrchestrationEvents E
     WHERE E.[EventType] IN ('ExecutionStarted')
         AND NOT EXISTS (

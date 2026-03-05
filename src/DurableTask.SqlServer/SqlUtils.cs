@@ -24,6 +24,7 @@ namespace DurableTask.SqlServer
     {
         static readonly Random random = new Random();
         static readonly char[] TraceContextSeparators = new char[] { '\n' };
+        const int MaxTagsPayloadSize = 8000;
 
         public static string? GetStringOrNull(this DbDataReader reader, int columnIndex)
         {
@@ -486,16 +487,7 @@ namespace DurableTask.SqlServer
 
         internal static IDictionary<string, string>? GetTags(DbDataReader reader)
         {
-            int ordinal;
-            try
-            {
-                ordinal = reader.GetOrdinal("Tags");
-            }
-            catch (IndexOutOfRangeException)
-            {
-                // The Tags column may not exist in older schema versions
-                return null;
-            }
+            int ordinal = reader.GetOrdinal("Tags");
 
             if (reader.IsDBNull(ordinal))
             {
@@ -519,6 +511,23 @@ namespace DurableTask.SqlServer
             }
         }
 
+        internal static SqlString GetTagsJson(HistoryEvent e)
+        {
+            if (e is ExecutionStartedEvent startedEvent && startedEvent.Tags != null && startedEvent.Tags.Count > 0)
+            {
+                string json = DTUtils.SerializeToJson(startedEvent.Tags);
+                if (json.Length > MaxTagsPayloadSize)
+                {
+                    throw new ArgumentException(
+                        $"The serialized tags payload is {json.Length} characters, which exceeds the maximum allowed size of {MaxTagsPayloadSize} characters.");
+                }
+
+                return json;
+            }
+
+            return SqlString.Null;
+        }
+
         internal static void AddTagsParameter(
             this SqlParameterCollection parameters,
             IDictionary<string, string>? tags)
@@ -526,7 +535,14 @@ namespace DurableTask.SqlServer
             string? json = tags != null && tags.Count > 0
                 ? DTUtils.SerializeToJson(tags)
                 : null;
-            parameters.Add("@Tags", SqlDbType.VarChar, 8000).Value = (object?)json ?? DBNull.Value;
+
+            if (json != null && json.Length > MaxTagsPayloadSize)
+            {
+                throw new ArgumentException(
+                    $"The serialized tags payload is {json.Length} characters, which exceeds the maximum allowed size of {MaxTagsPayloadSize} characters.");
+            }
+
+            parameters.Add("@Tags", SqlDbType.VarChar, MaxTagsPayloadSize).Value = (object?)json ?? DBNull.Value;
         }
 
         public static SqlParameter AddInstanceIDsParameter(

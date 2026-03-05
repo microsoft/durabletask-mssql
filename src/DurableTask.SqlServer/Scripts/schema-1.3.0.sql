@@ -8,7 +8,17 @@
 -- new schema-{major}.{minor}.{patch}.sql scripts.
 
 -- Add a new Tags column to the Instances table (JSON blob of string key-value pairs).
--- Tags are read directly from the Instances table in all stored procedures,
--- so no changes to the OrchestrationEvents/TaskEvents types or NewTasks table are needed.
 IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('__SchemaNamePlaceholder__.Instances') AND name = 'Tags')
     ALTER TABLE __SchemaNamePlaceholder__.Instances ADD [Tags] varchar(8000) NULL
+
+-- Add a Tags column to the OrchestrationEvents table type so that merged tags
+-- flow through sub-orchestration creation events. To change a type we must first
+-- drop all stored procedures that reference it, then drop the type itself.
+-- The type and sprocs will be recreated by logic.sql which executes afterwards.
+IF OBJECT_ID('__SchemaNamePlaceholder__._AddOrchestrationEvents') IS NOT NULL
+    DROP PROCEDURE __SchemaNamePlaceholder__._AddOrchestrationEvents
+IF OBJECT_ID('__SchemaNamePlaceholder__._CheckpointOrchestration') IS NOT NULL
+    DROP PROCEDURE __SchemaNamePlaceholder__._CheckpointOrchestration
+
+IF TYPE_ID('__SchemaNamePlaceholder__.OrchestrationEvents') IS NOT NULL
+    DROP TYPE __SchemaNamePlaceholder__.OrchestrationEvents
