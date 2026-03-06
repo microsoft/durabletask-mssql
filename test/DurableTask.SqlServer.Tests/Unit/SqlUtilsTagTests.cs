@@ -6,6 +6,8 @@ namespace DurableTask.SqlServer.Tests.Unit
     using System;
     using System.Collections.Generic;
     using System.Data;
+    using System.Data.SqlTypes;
+    using DurableTask.Core.History;
     using Microsoft.Data.SqlClient;
     using Newtonsoft.Json;
     using Xunit;
@@ -86,6 +88,71 @@ namespace DurableTask.SqlServer.Tests.Unit
             Assert.Equal("value'with\"quotes", deserialized["special\"key"]);
             Assert.Equal("中文", deserialized["unicode-日本語"]);
             Assert.Equal("value with spaces", deserialized["key with spaces"]);
+        }
+
+        [Fact]
+        public void AddTagsParameter_TagsExceedMaxSize_ThrowsArgumentException()
+        {
+            // Arrange: create tags whose JSON serialization exceeds 8000 chars
+            var tags = new Dictionary<string, string>
+            {
+                { "key", new string('x', 8000) },
+            };
+
+            using var command = new SqlCommand();
+
+            // Act & Assert
+            var ex = Assert.Throws<ArgumentException>(() => command.Parameters.AddTagsParameter(tags));
+            Assert.Contains("exceeds the maximum allowed size of 8000", ex.Message);
+        }
+
+        [Fact]
+        public void GetTagsJson_TagsExceedMaxSize_ThrowsArgumentException()
+        {
+            // Arrange: simulate merged tags that exceed 8000 chars
+            // This covers the sub-orchestration merge path where individually-valid
+            // parent + child tags combine to exceed the limit
+            var tags = new Dictionary<string, string>
+            {
+                { "key", new string('x', 8000) },
+            };
+
+            var startedEvent = new ExecutionStartedEvent(-1, null) { Tags = tags };
+
+            // Act & Assert
+            var ex = Assert.Throws<ArgumentException>(() => SqlUtils.GetTagsJson(startedEvent));
+            Assert.Contains("exceeds the maximum allowed size of 8000", ex.Message);
+        }
+
+        [Fact]
+        public void GetTagsJson_NonExecutionStartedEvent_ReturnsNull()
+        {
+            // Non-ExecutionStartedEvent should return SqlString.Null
+            var timerEvent = new TimerFiredEvent(-1);
+
+            SqlString result = SqlUtils.GetTagsJson(timerEvent);
+
+            Assert.True(result.IsNull);
+        }
+
+        [Fact]
+        public void GetTagsJson_ExecutionStartedWithTags_ReturnsJson()
+        {
+            var tags = new Dictionary<string, string>
+            {
+                { "env", "prod" },
+                { "team", "backend" },
+            };
+
+            var startedEvent = new ExecutionStartedEvent(-1, null) { Tags = tags };
+
+            SqlString result = SqlUtils.GetTagsJson(startedEvent);
+
+            Assert.False(result.IsNull);
+            var deserialized = JsonConvert.DeserializeObject<Dictionary<string, string>>(result.Value);
+            Assert.Equal(2, deserialized.Count);
+            Assert.Equal("prod", deserialized["env"]);
+            Assert.Equal("backend", deserialized["team"]);
         }
     }
 }

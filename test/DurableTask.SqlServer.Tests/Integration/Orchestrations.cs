@@ -1095,6 +1095,154 @@ namespace DurableTask.SqlServer.Tests.Integration
         }
 
         [Fact]
+        public async Task SubOrchestrationMergesTags()
+        {
+            // Parent tags
+            var parentTags = new Dictionary<string, string>
+            {
+                { "env", "prod" },
+                { "shared", "parent-value" },
+            };
+
+            // Sub-orchestration-specific tags (will be merged with parent tags by Core)
+            var subTags = new Dictionary<string, string>
+            {
+                { "team", "backend" },
+                { "shared", "child-override" },  // should override parent's value
+            };
+
+            string subOrchName = "SubOrchForMergeTest";
+            string subInstanceId = $"sub-merge-{Guid.NewGuid():N}";
+
+            this.testService.RegisterInlineOrchestration<string, string>(
+                subOrchName,
+                implementation: (ctx, input) => Task.FromResult("done"));
+
+            TestInstance<string> instance = await this.testService.RunOrchestrationWithTags(
+                input: (string)null,
+                orchestrationName: "ParentOrchForMergeTest",
+                tags: parentTags,
+                implementation: async (ctx, input) =>
+                {
+                    // Use the 5-arg overload that passes sub-orch-specific tags
+                    return await ctx.CreateSubOrchestrationInstance<string>(
+                        subOrchName, string.Empty, subInstanceId, null, subTags);
+                });
+
+            await instance.WaitForCompletion(
+                timeout: TimeSpan.FromSeconds(15),
+                expectedOutput: "done");
+
+            // Verify sub-orchestration has MERGED tags (parent + child, child overrides)
+            OrchestrationState subState = await this.testService.GetOrchestrationStateAsync(subInstanceId);
+            Assert.NotNull(subState);
+            Assert.NotNull(subState.Tags);
+            Assert.Equal("prod", subState.Tags["env"]);            // inherited from parent
+            Assert.Equal("backend", subState.Tags["team"]);        // from sub-orch
+            Assert.Equal("child-override", subState.Tags["shared"]); // child overrides parent
+        }
+
+        [Fact]
+        public async Task MultipleSubOrchestrationsMergeDifferentTags()
+        {
+            var parentTags = new Dictionary<string, string>
+            {
+                { "env", "prod" },
+            };
+
+            string subOrchName = "SubOrchForFanOutTest";
+            string subId1 = $"sub-fanout1-{Guid.NewGuid():N}";
+            string subId2 = $"sub-fanout2-{Guid.NewGuid():N}";
+
+            this.testService.RegisterInlineOrchestration<string, string>(
+                subOrchName,
+                implementation: (ctx, input) => Task.FromResult("done"));
+
+            TestInstance<string> instance = await this.testService.RunOrchestrationWithTags(
+                input: (string)null,
+                orchestrationName: "ParentOrchForFanOutTest",
+                tags: parentTags,
+                implementation: async (ctx, input) =>
+                {
+                    // Fan-out: create two sub-orchestrations with different tags
+                    var tags1 = new Dictionary<string, string> { { "region", "us" } };
+                    var tags2 = new Dictionary<string, string> { { "region", "eu" } };
+
+                    Task<string> t1 = ctx.CreateSubOrchestrationInstance<string>(
+                        subOrchName, string.Empty, subId1, null, tags1);
+                    Task<string> t2 = ctx.CreateSubOrchestrationInstance<string>(
+                        subOrchName, string.Empty, subId2, null, tags2);
+
+                    await Task.WhenAll(t1, t2);
+                    return "done";
+                });
+
+            await instance.WaitForCompletion(
+                timeout: TimeSpan.FromSeconds(15),
+                expectedOutput: "done");
+
+            // Verify each sub-orchestration got its own correctly-merged tags
+            OrchestrationState sub1 = await this.testService.GetOrchestrationStateAsync(subId1);
+            Assert.NotNull(sub1?.Tags);
+            Assert.Equal("prod", sub1.Tags["env"]);   // inherited from parent
+            Assert.Equal("us", sub1.Tags["region"]);   // specific to sub-orch 1
+
+            OrchestrationState sub2 = await this.testService.GetOrchestrationStateAsync(subId2);
+            Assert.NotNull(sub2?.Tags);
+            Assert.Equal("prod", sub2.Tags["env"]);   // inherited from parent
+            Assert.Equal("eu", sub2.Tags["region"]);   // specific to sub-orch 2
+        }
+
+        [Fact]
+        public async Task MergedTagsExceedMaxSize_ParentStaysRunning()
+        {
+            // Parent and child tags are each within the 8000-char limit,
+            // but exceed it after Core's MergeTags() combines them.
+            // Expected behavior: the parent's checkpoint fails with ArgumentException
+            // (thrown by GetTagsJson during TVP population), so the parent stays Running.
+            var parentTags = new Dictionary<string, string>
+            {
+                { "parentKey", new string('p', 4500) },
+            };
+
+            var childTags = new Dictionary<string, string>
+            {
+                { "childKey", new string('c', 4500) },
+            };
+
+            string subOrchName = "SubOrchForOverflowTest";
+            string subInstanceId = $"sub-overflow-{Guid.NewGuid():N}";
+
+            this.testService.RegisterInlineOrchestration<string, string>(
+                subOrchName,
+                implementation: (ctx, input) => Task.FromResult("done"));
+
+            TestInstance<string> instance = await this.testService.RunOrchestrationWithTags(
+                input: (string)null,
+                orchestrationName: "ParentOrchForOverflowTest",
+                tags: parentTags,
+                implementation: async (ctx, input) =>
+                {
+                    return await ctx.CreateSubOrchestrationInstance<string>(
+                        subOrchName, string.Empty, subInstanceId, null, childTags);
+                });
+
+            // Wait briefly to allow at least one checkpoint attempt
+            await Task.Delay(TimeSpan.FromSeconds(5));
+
+            // Parent should still be Pending because the checkpoint keeps failing.
+            // (The status update from Pending to Running happens inside _CheckpointOrchestration,
+            //  which never succeeds because TVP population throws before the SQL command executes.)
+            OrchestrationState parentState = await this.testService.GetOrchestrationStateAsync(instance.InstanceId);
+            Assert.NotNull(parentState);
+            Assert.Equal(OrchestrationStatus.Pending, parentState.OrchestrationStatus);
+
+            // Sub-orchestration should NOT have been created (checkpoint never succeeded)
+            OrchestrationState subState = await this.testService.GetOrchestrationStateAsync(subInstanceId);
+            Assert.Null(subState);
+        }
+
+        [Fact]
         public async Task TagsOnManyOrchestrations()
         {
             string input = $"Hello {DateTime.UtcNow:o}";
