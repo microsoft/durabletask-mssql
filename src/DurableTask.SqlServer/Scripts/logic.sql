@@ -352,10 +352,12 @@ BEGIN
     DECLARE @TaskHub varchar(50) = __SchemaNamePlaceholder__.CurrentTaskHub()
     DECLARE @ParentInstanceID varchar(100)
     DECLARE @Version varchar(100)
+    DECLARE @Tags varchar(8000)
     
     SELECT
         @ParentInstanceID = [ParentInstanceID],
-        @Version = [Version]
+        @Version = [Version],
+        @Tags = [Tags]
     FROM Instances WHERE [InstanceID] = @InstanceID
 
     SELECT
@@ -374,7 +376,8 @@ BEGIN
         [PayloadID],
         @ParentInstanceID as [ParentInstanceID],
         @Version as [Version],
-        H.[TraceContext]
+        H.[TraceContext],
+        @Tags as [Tags]
     FROM History H WITH (INDEX (PK_History))
         LEFT OUTER JOIN Payloads P ON
             P.[TaskHub] = @TaskHub AND
