@@ -1194,12 +1194,14 @@ namespace DurableTask.SqlServer.Tests.Integration
         }
 
         [Fact]
-        public async Task MergedTagsExceedMaxSize_ParentStaysRunning()
+        public async Task MergedTagsExceedMaxSize_OversizedTagsDropped()
         {
             // Parent and child tags are each within the 8000-char limit,
             // but exceed it after Core's MergeTags() combines them.
-            // Expected behavior: the parent's checkpoint fails with ArgumentException
-            // (thrown by GetTagsJson during TVP population), so the parent stays Running.
+            // Expected behavior: oversized merged tags are silently dropped
+            // (with a trace warning), the sub-orchestration is created with
+            // null tags, and the parent completes normally.
+
             var parentTags = new Dictionary<string, string>
             {
                 { "parentKey", new string('p', 4500) },
@@ -1227,19 +1229,14 @@ namespace DurableTask.SqlServer.Tests.Integration
                         subOrchName, string.Empty, subInstanceId, null, childTags);
                 });
 
-            // Wait briefly to allow at least one checkpoint attempt
-            await Task.Delay(TimeSpan.FromSeconds(5));
+            // Parent should complete normally (sub-orch returns "done")
+            await instance.WaitForCompletion(expectedOutput: "done");
 
-            // Parent should still be Pending because the checkpoint keeps failing.
-            // (The status update from Pending to Running happens inside _CheckpointOrchestration,
-            //  which never succeeds because TVP population throws before the SQL command executes.)
-            OrchestrationState parentState = await this.testService.GetOrchestrationStateAsync(instance.InstanceId);
-            Assert.NotNull(parentState);
-            Assert.Equal(OrchestrationStatus.Pending, parentState.OrchestrationStatus);
-
-            // Sub-orchestration should NOT have been created (checkpoint never succeeded)
+            // Sub-orchestration should have been created, but with null tags
+            // because the merged tags exceeded the maximum size.
             OrchestrationState subState = await this.testService.GetOrchestrationStateAsync(subInstanceId);
-            Assert.Null(subState);
+            Assert.NotNull(subState);
+            Assert.Null(subState.Tags);
         }
 
         [Fact]

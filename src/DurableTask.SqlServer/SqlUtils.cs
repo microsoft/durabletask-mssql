@@ -511,15 +511,18 @@ namespace DurableTask.SqlServer
             }
         }
 
-        internal static SqlString GetTagsJson(HistoryEvent e)
+        internal static SqlString GetTagsJson(HistoryEvent e, LogHelper logHelper)
         {
             if (e is ExecutionStartedEvent startedEvent && startedEvent.Tags != null && startedEvent.Tags.Count > 0)
             {
                 string json = DTUtils.SerializeToJson(startedEvent.Tags);
                 if (json.Length > MaxTagsPayloadSize)
                 {
-                    throw new ArgumentException(
-                        $"The serialized tags payload is {json.Length} characters, which exceeds the maximum allowed size of {MaxTagsPayloadSize} characters.");
+                    logHelper.GenericWarning(
+                        $"Dropping oversized tags ({json.Length} chars, max {MaxTagsPayloadSize}) for sub-orchestration. " +
+                        $"The merged parent+child tags exceed the allowed limit and will not be persisted.",
+                        instanceId: (e as ExecutionStartedEvent)?.ParentInstance?.OrchestrationInstance?.InstanceId);
+                    return SqlString.Null;
                 }
 
                 return json;

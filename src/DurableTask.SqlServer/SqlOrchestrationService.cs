@@ -372,7 +372,8 @@ namespace DurableTask.SqlServer
                 timerMessages,
                 continuedAsNewMessage,
                 currentWorkItem.EventPayloadMappings,
-                this.settings.SchemaName);
+                this.settings.SchemaName,
+                this.traceHelper);
 
             command.Parameters.AddTaskEventsParameter(
                 "@NewTaskEvents",
@@ -546,7 +547,7 @@ namespace DurableTask.SqlServer
             using SqlConnection connection = await this.GetAndOpenConnectionAsync();
             using SqlCommand command = this.GetSprocCommand(connection, $"{this.settings.SchemaName}._AddOrchestrationEvents");
 
-            command.Parameters.AddOrchestrationEventsParameter("@NewOrchestrationEvents", message, this.settings.SchemaName);
+            command.Parameters.AddOrchestrationEventsParameter("@NewOrchestrationEvents", message, this.settings.SchemaName, this.traceHelper);
 
             string instanceId = message.OrchestrationInstance.InstanceId;
             await SqlUtils.ExecuteNonQueryAsync(command, this.traceHelper, instanceId);

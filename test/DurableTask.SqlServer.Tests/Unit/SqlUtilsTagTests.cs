@@ -9,11 +9,13 @@ namespace DurableTask.SqlServer.Tests.Unit
     using System.Data.SqlTypes;
     using DurableTask.Core.History;
     using Microsoft.Data.SqlClient;
+    using Microsoft.Extensions.Logging.Abstractions;
     using Newtonsoft.Json;
     using Xunit;
 
     public class SqlUtilsTagTests
     {
+        static readonly LogHelper TestLogHelper = new LogHelper(NullLogger.Instance);
         [Fact]
         public void AddTagsParameter_WithTags_SetsJsonValue()
         {
@@ -107,11 +109,12 @@ namespace DurableTask.SqlServer.Tests.Unit
         }
 
         [Fact]
-        public void GetTagsJson_TagsExceedMaxSize_ThrowsArgumentException()
+        public void GetTagsJson_TagsExceedMaxSize_ReturnsNullAndDropsTags()
         {
-            // Arrange: simulate merged tags that exceed 8000 chars
+            // Arrange: simulate merged tags that exceed 8000 chars.
             // This covers the sub-orchestration merge path where individually-valid
-            // parent + child tags combine to exceed the limit
+            // parent + child tags combine to exceed the limit.
+            // Expected: returns SqlString.Null (tags silently dropped with a warning).
             var tags = new Dictionary<string, string>
             {
                 { "key", new string('x', 8000) },
@@ -119,9 +122,11 @@ namespace DurableTask.SqlServer.Tests.Unit
 
             var startedEvent = new ExecutionStartedEvent(-1, null) { Tags = tags };
 
-            // Act & Assert
-            var ex = Assert.Throws<ArgumentException>(() => SqlUtils.GetTagsJson(startedEvent));
-            Assert.Contains("exceeds the maximum allowed size of 8000", ex.Message);
+            // Act
+            SqlString result = SqlUtils.GetTagsJson(startedEvent, TestLogHelper);
+
+            // Assert: oversized tags are dropped, not thrown
+            Assert.True(result.IsNull);
         }
 
         [Fact]
@@ -130,7 +135,7 @@ namespace DurableTask.SqlServer.Tests.Unit
             // Non-ExecutionStartedEvent should return SqlString.Null
             var timerEvent = new TimerFiredEvent(-1);
 
-            SqlString result = SqlUtils.GetTagsJson(timerEvent);
+            SqlString result = SqlUtils.GetTagsJson(timerEvent, TestLogHelper);
 
             Assert.True(result.IsNull);
         }
@@ -146,7 +151,7 @@ namespace DurableTask.SqlServer.Tests.Unit
 
             var startedEvent = new ExecutionStartedEvent(-1, null) { Tags = tags };
 
-            SqlString result = SqlUtils.GetTagsJson(startedEvent);
+            SqlString result = SqlUtils.GetTagsJson(startedEvent, TestLogHelper);
 
             Assert.False(result.IsNull);
             var deserialized = JsonConvert.DeserializeObject<Dictionary<string, string>>(result.Value);
