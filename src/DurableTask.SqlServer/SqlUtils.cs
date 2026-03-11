@@ -24,6 +24,7 @@ namespace DurableTask.SqlServer
     {
         static readonly Random random = new Random();
         static readonly char[] TraceContextSeparators = new char[] { '\n' };
+        const int MaxTagsPayloadSize = 8000;
 
         public static string? GetStringOrNull(this DbDataReader reader, int columnIndex)
         {
@@ -97,7 +98,7 @@ namespace DurableTask.SqlServer
                             InstanceId = GetInstanceId(reader),
                             ExecutionId = GetExecutionId(reader),
                         },
-                        Tags = null, // TODO
+                        Tags = GetTags(reader),
                         Version = GetVersion(reader),
                         ParentTraceContext = GetTraceContext(reader),
                     };
@@ -259,7 +260,8 @@ namespace DurableTask.SqlServer
                 },
                 OrchestrationStatus = GetRuntimeStatus(reader),
                 Status = GetStringOrNull(reader, reader.GetOrdinal("CustomStatusText")),
-                ParentInstance = parentInstance
+                ParentInstance = parentInstance,
+                Tags = GetTags(reader),
             };
 
             // The OutputText column is overloaded to contain either orchestration output or failure details
@@ -481,6 +483,74 @@ namespace DurableTask.SqlServer
 
             traceContext.ActivityStartTime = GetTimestamp(reader);
             return traceContext;
+        }
+
+        internal static IDictionary<string, string>? GetTags(DbDataReader reader)
+        {
+            int ordinal = reader.GetOrdinal("Tags");
+
+            if (reader.IsDBNull(ordinal))
+            {
+                return null;
+            }
+
+            string json = reader.GetString(ordinal);
+            if (string.IsNullOrEmpty(json))
+            {
+                return null;
+            }
+
+            try
+            {
+                return DTUtils.DeserializeFromJson<Dictionary<string, string>>(json);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Failed to deserialize Tags JSON payload. Treating as null. Error: {ex}");
+                return null;
+            }
+        }
+
+        internal static SqlString GetTagsJson(HistoryEvent e, LogHelper logHelper)
+        {
+            if (e is ExecutionStartedEvent startedEvent && startedEvent.Tags != null && startedEvent.Tags.Count > 0)
+            {
+                string json = DTUtils.SerializeToJson(startedEvent.Tags);
+                int utf8Bytes = Encoding.UTF8.GetByteCount(json);
+                if (utf8Bytes > MaxTagsPayloadSize)
+                {
+                    logHelper.GenericWarning(
+                        $"Dropping oversized tags ({utf8Bytes} bytes, max {MaxTagsPayloadSize}) for sub-orchestration. " +
+                        $"The merged parent+child tags exceed the allowed limit and will not be persisted.",
+                        instanceId: (e as ExecutionStartedEvent)?.ParentInstance?.OrchestrationInstance?.InstanceId);
+                    return SqlString.Null;
+                }
+
+                return json;
+            }
+
+            return SqlString.Null;
+        }
+
+        internal static void AddTagsParameter(
+            this SqlParameterCollection parameters,
+            IDictionary<string, string>? tags)
+        {
+            string? json = tags != null && tags.Count > 0
+                ? DTUtils.SerializeToJson(tags)
+                : null;
+
+            if (json != null)
+            {
+                int utf8Bytes = Encoding.UTF8.GetByteCount(json);
+                if (utf8Bytes > MaxTagsPayloadSize)
+                {
+                    throw new ArgumentException(
+                        $"The serialized tags payload is {utf8Bytes} bytes, which exceeds the maximum allowed size of {MaxTagsPayloadSize} bytes.");
+                }
+            }
+
+            parameters.Add("@Tags", SqlDbType.VarChar, MaxTagsPayloadSize).Value = (object?)json ?? DBNull.Value;
         }
 
         public static SqlParameter AddInstanceIDsParameter(

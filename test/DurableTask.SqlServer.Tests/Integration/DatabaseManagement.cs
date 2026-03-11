@@ -46,6 +46,7 @@ namespace DurableTask.SqlServer.Tests.Integration
                 "drop-schema.sql",
                 "schema-1.0.0.sql",
                 "schema-1.2.0.sql",
+                "schema-1.3.0.sql",
                 "logic.sql",
                 "permissions.sql",
             };
@@ -98,6 +99,7 @@ namespace DurableTask.SqlServer.Tests.Integration
                     LogAssert.ExecutedSqlScript("drop-schema.sql"),
                     LogAssert.ExecutedSqlScript("schema-1.0.0.sql"),
                     LogAssert.ExecutedSqlScript("schema-1.2.0.sql"),
+                    LogAssert.ExecutedSqlScript("schema-1.3.0.sql"),
                     LogAssert.ExecutedSqlScript("logic.sql"),
                     LogAssert.ExecutedSqlScript("permissions.sql"),
                     LogAssert.SprocCompleted("dt._UpdateVersion"))
@@ -158,6 +160,7 @@ namespace DurableTask.SqlServer.Tests.Integration
                     LogAssert.ExecutedSqlScript("drop-schema.sql"),
                     LogAssert.ExecutedSqlScript("schema-1.0.0.sql"),
                     LogAssert.ExecutedSqlScript("schema-1.2.0.sql"),
+                    LogAssert.ExecutedSqlScript("schema-1.3.0.sql"),
                     LogAssert.ExecutedSqlScript("logic.sql"),
                     LogAssert.ExecutedSqlScript("permissions.sql"),
                     LogAssert.SprocCompleted($"{schemaName}._UpdateVersion"))
@@ -220,6 +223,7 @@ namespace DurableTask.SqlServer.Tests.Integration
                     LogAssert.ExecutedSqlScript("drop-schema.sql"),
                     LogAssert.ExecutedSqlScript("schema-1.0.0.sql"),
                     LogAssert.ExecutedSqlScript("schema-1.2.0.sql"),
+                    LogAssert.ExecutedSqlScript("schema-1.3.0.sql"),
                     LogAssert.ExecutedSqlScript("logic.sql"),
                     LogAssert.ExecutedSqlScript("permissions.sql"),
                     LogAssert.SprocCompleted($"{firstTestSchemaName}._UpdateVersion"))
@@ -230,6 +234,7 @@ namespace DurableTask.SqlServer.Tests.Integration
                     LogAssert.ExecutedSqlScript("drop-schema.sql"),
                     LogAssert.ExecutedSqlScript("schema-1.0.0.sql"),
                     LogAssert.ExecutedSqlScript("schema-1.2.0.sql"),
+                    LogAssert.ExecutedSqlScript("schema-1.3.0.sql"),
                     LogAssert.ExecutedSqlScript("logic.sql"),
                     LogAssert.ExecutedSqlScript("permissions.sql"),
                     LogAssert.SprocCompleted($"{secondTestSchemaName}._UpdateVersion"))
@@ -313,6 +318,7 @@ namespace DurableTask.SqlServer.Tests.Integration
                     LogAssert.SprocCompleted("dt._GetVersions"),
                     LogAssert.ExecutedSqlScript("schema-1.0.0.sql"),
                     LogAssert.ExecutedSqlScript("schema-1.2.0.sql"),
+                    LogAssert.ExecutedSqlScript("schema-1.3.0.sql"),
                     LogAssert.ExecutedSqlScript("logic.sql"),
                     LogAssert.ExecutedSqlScript("permissions.sql"),
                     LogAssert.SprocCompleted("dt._UpdateVersion"))
@@ -366,6 +372,7 @@ namespace DurableTask.SqlServer.Tests.Integration
                     LogAssert.SprocCompleted("dt._GetVersions"),
                     LogAssert.ExecutedSqlScript("schema-1.0.0.sql"),
                     LogAssert.ExecutedSqlScript("schema-1.2.0.sql"),
+                    LogAssert.ExecutedSqlScript("schema-1.3.0.sql"),
                     LogAssert.ExecutedSqlScript("logic.sql"),
                     LogAssert.ExecutedSqlScript("permissions.sql"),
                     LogAssert.SprocCompleted("dt._UpdateVersion"),

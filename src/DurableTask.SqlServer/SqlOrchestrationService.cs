@@ -372,7 +372,8 @@ namespace DurableTask.SqlServer
                 timerMessages,
                 continuedAsNewMessage,
                 currentWorkItem.EventPayloadMappings,
-                this.settings.SchemaName);
+                this.settings.SchemaName,
+                this.traceHelper);
 
             command.Parameters.AddTaskEventsParameter(
                 "@NewTaskEvents",
@@ -387,6 +388,7 @@ namespace DurableTask.SqlServer
                 nextSequenceNumber,
                 currentWorkItem.EventPayloadMappings,
                 this.settings.SchemaName);
+
 
             try
             {
@@ -522,6 +524,8 @@ namespace DurableTask.SqlServer
             command.Parameters.Add("@StartTime", SqlDbType.DateTime2).Value = startEvent.ScheduledStartTime;
             command.Parameters.Add("@TraceContext", SqlDbType.VarChar, size: 800).Value = SqlUtils.GetTraceContext(startEvent);
 
+            command.Parameters.AddTagsParameter(startEvent.Tags);
+
             if (dedupeStatuses?.Length > 0)
             {
                 command.Parameters.Add("@DedupeStatuses", SqlDbType.VarChar).Value = string.Join(",", dedupeStatuses);
@@ -543,7 +547,7 @@ namespace DurableTask.SqlServer
             using SqlConnection connection = await this.GetAndOpenConnectionAsync();
             using SqlCommand command = this.GetSprocCommand(connection, $"{this.settings.SchemaName}._AddOrchestrationEvents");
 
-            command.Parameters.AddOrchestrationEventsParameter("@NewOrchestrationEvents", message, this.settings.SchemaName);
+            command.Parameters.AddOrchestrationEventsParameter("@NewOrchestrationEvents", message, this.settings.SchemaName, this.traceHelper);
 
             string instanceId = message.OrchestrationInstance.InstanceId;
             await SqlUtils.ExecuteNonQueryAsync(command, this.traceHelper, instanceId);

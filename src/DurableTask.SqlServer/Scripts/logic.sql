@@ -56,7 +56,8 @@ IF TYPE_ID(N'__SchemaNamePlaceholder__.OrchestrationEvents') IS NULL
         [PayloadID] uniqueidentifier NULL,
         [ParentInstanceID] varchar(100) NULL,
         [Version] varchar(100) NULL,
-        [TraceContext] varchar(800) NULL
+        [TraceContext] varchar(800) NULL,
+        [Tags] varchar(8000) NULL
     )
 GO
 
@@ -233,7 +234,8 @@ CREATE OR ALTER PROCEDURE __SchemaNamePlaceholder__.CreateInstance
     @InputText varchar(MAX) = NULL,
     @StartTime datetime2 = NULL,
     @DedupeStatuses varchar(MAX) = 'Pending,Running',
-    @TraceContext varchar(800) = NULL
+    @TraceContext varchar(800) = NULL,
+    @Tags varchar(8000) = NULL
 AS
 BEGIN
     DECLARE @TaskHub varchar(50) = __SchemaNamePlaceholder__.CurrentTaskHub()
@@ -302,7 +304,8 @@ BEGIN
         [ExecutionID],
         [RuntimeStatus],
         [InputPayloadID],
-        [TraceContext])
+        [TraceContext],
+        [Tags])
     VALUES (
         @Name,
         @Version,
@@ -311,7 +314,8 @@ BEGIN
         @ExecutionID,
         @RuntimeStatus,
         @InputPayloadID,
-        @TraceContext
+        @TraceContext,
+        @Tags
     )
 
     INSERT INTO NewEvents (
@@ -348,10 +352,12 @@ BEGIN
     DECLARE @TaskHub varchar(50) = __SchemaNamePlaceholder__.CurrentTaskHub()
     DECLARE @ParentInstanceID varchar(100)
     DECLARE @Version varchar(100)
+    DECLARE @Tags varchar(8000)
     
     SELECT
         @ParentInstanceID = [ParentInstanceID],
-        @Version = [Version]
+        @Version = [Version],
+        @Tags = [Tags]
     FROM Instances WHERE [InstanceID] = @InstanceID
 
     SELECT
@@ -370,7 +376,8 @@ BEGIN
         [PayloadID],
         @ParentInstanceID as [ParentInstanceID],
         @Version as [Version],
-        H.[TraceContext]
+        H.[TraceContext],
+        @Tags as [Tags]
     FROM History H WITH (INDEX (PK_History))
         LEFT OUTER JOIN Payloads P ON
             P.[TaskHub] = @TaskHub AND
@@ -635,6 +642,7 @@ BEGIN
     DECLARE @parentInstanceID varchar(100)
     DECLARE @version varchar(100)
     DECLARE @runtimeStatus varchar(30)
+    DECLARE @tags varchar(8000)
     DECLARE @TaskHub varchar(50) = __SchemaNamePlaceholder__.CurrentTaskHub()
 
     BEGIN TRANSACTION
@@ -654,7 +662,8 @@ BEGIN
         @instanceID = I.[InstanceID],
         @parentInstanceID = I.[ParentInstanceID],
         @runtimeStatus = I.[RuntimeStatus],
-        @version = I.[Version]
+        @version = I.[Version],
+        @tags = I.[Tags]
     FROM 
         Instances I WITH (READPAST) INNER JOIN NewEvents E WITH (READPAST) ON
             E.[TaskHub] = @TaskHub AND
@@ -684,7 +693,8 @@ BEGIN
         DATEDIFF(SECOND, [Timestamp], @now) AS [WaitTime],
         @parentInstanceID as [ParentInstanceID],
         @version as [Version],
-        N.[TraceContext]
+        N.[TraceContext],
+        @tags as [Tags]
     FROM NewEvents N
         LEFT OUTER JOIN __SchemaNamePlaceholder__.[Payloads] P ON 
             P.[TaskHub] = @TaskHub AND
@@ -724,7 +734,8 @@ BEGIN
         [PayloadID],
         @parentInstanceID as [ParentInstanceID],
         @version as [Version],
-        H.[TraceContext]
+        H.[TraceContext],
+        @tags as [Tags]
     FROM History H WITH (INDEX (PK_History))
         LEFT OUTER JOIN Payloads P ON
             P.[TaskHub] = @TaskHub AND
@@ -907,7 +918,8 @@ BEGIN
         [Version],
         [ParentInstanceID],
         [RuntimeStatus],
-        [TraceContext])
+        [TraceContext],
+        [Tags])
     SELECT DISTINCT
         @TaskHub,
         E.[InstanceID],
@@ -916,7 +928,8 @@ BEGIN
         E.[Version],
         E.[ParentInstanceID],
         'Pending',
-        E.[TraceContext]
+        E.[TraceContext],
+        E.[Tags]
     FROM @NewOrchestrationEvents E
     WHERE E.[EventType] IN ('ExecutionStarted')
         AND NOT EXISTS (
@@ -1185,7 +1198,8 @@ BEGIN
             P.[TaskHub] = @TaskHub AND
             P.[InstanceID] = I.[InstanceID] AND
             P.[PayloadID] = I.[OutputPayloadID]) ELSE NULL END AS [OutputText],
-        I.[TraceContext]
+        I.[TraceContext],
+        I.[Tags]
     FROM Instances I
     WHERE
         I.[TaskHub] = @TaskHub AND
@@ -1231,7 +1245,8 @@ BEGIN
             P.[TaskHub] = @TaskHub AND
             P.[InstanceID] = I.[InstanceID] AND
             P.[PayloadID] = I.[OutputPayloadID]) ELSE NULL END AS [OutputText],
-        I.[TraceContext]
+        I.[TraceContext],
+        I.[Tags]
     FROM
         Instances I
     WHERE

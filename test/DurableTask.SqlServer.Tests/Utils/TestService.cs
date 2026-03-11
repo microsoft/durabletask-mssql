@@ -87,6 +87,11 @@ namespace DurableTask.SqlServer.Tests.Utils
             this.client = new TaskHubClient(this.OrchestrationServiceMock.Object, loggerFactory: this.loggerFactory);
         }
 
+        public Task<OrchestrationState> GetOrchestrationStateAsync(string instanceId)
+        {
+            return this.client.GetOrchestrationStateAsync(new OrchestrationInstance { InstanceId = instanceId });
+        }
+
         public Task StartWorkerAsync() => this.worker?.StartAsync() ?? Task.CompletedTask;
 
         public Task PurgeAsync(DateTime maximumThreshold, OrchestrationStateTimeRangeFilterType filterType)
@@ -261,6 +266,40 @@ namespace DurableTask.SqlServer.Tests.Utils
             }
 
             return instances;
+        }
+
+        public async Task<TestInstance<TInput>> RunOrchestrationWithTags<TOutput, TInput>(
+            TInput input,
+            string orchestrationName,
+            IDictionary<string, string> tags,
+            Func<OrchestrationContext, TInput, Task<TOutput>> implementation,
+            params (string name, TaskActivity activity)[] activities)
+        {
+            // Register the inline orchestration
+            this.RegisterInlineOrchestration(orchestrationName, string.Empty, implementation);
+
+            foreach ((string name, TaskActivity activity) in activities)
+            {
+                this.RegisterInlineActivity(name, string.Empty, activity);
+            }
+
+            string instanceId = Guid.NewGuid().ToString("N");
+            DateTime utcNow = DateTime.UtcNow;
+
+            OrchestrationInstance instance = await this.client.CreateOrchestrationInstanceAsync(
+                orchestrationName,
+                string.Empty,
+                instanceId,
+                input,
+                tags);
+
+            return new TestInstance<TInput>(
+                this.client,
+                instance,
+                orchestrationName,
+                string.Empty,
+                utcNow,
+                input);
         }
 
         public void RegisterInlineActivity(string name, string version, TaskActivity activity)
