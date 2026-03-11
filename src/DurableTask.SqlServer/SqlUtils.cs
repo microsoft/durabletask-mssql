@@ -516,10 +516,11 @@ namespace DurableTask.SqlServer
             if (e is ExecutionStartedEvent startedEvent && startedEvent.Tags != null && startedEvent.Tags.Count > 0)
             {
                 string json = DTUtils.SerializeToJson(startedEvent.Tags);
-                if (json.Length > MaxTagsPayloadSize)
+                int utf8Bytes = Encoding.UTF8.GetByteCount(json);
+                if (utf8Bytes > MaxTagsPayloadSize)
                 {
                     logHelper.GenericWarning(
-                        $"Dropping oversized tags ({json.Length} chars, max {MaxTagsPayloadSize}) for sub-orchestration. " +
+                        $"Dropping oversized tags ({utf8Bytes} bytes, max {MaxTagsPayloadSize}) for sub-orchestration. " +
                         $"The merged parent+child tags exceed the allowed limit and will not be persisted.",
                         instanceId: (e as ExecutionStartedEvent)?.ParentInstance?.OrchestrationInstance?.InstanceId);
                     return SqlString.Null;
@@ -539,10 +540,14 @@ namespace DurableTask.SqlServer
                 ? DTUtils.SerializeToJson(tags)
                 : null;
 
-            if (json != null && json.Length > MaxTagsPayloadSize)
+            if (json != null)
             {
-                throw new ArgumentException(
-                    $"The serialized tags payload is {json.Length} characters, which exceeds the maximum allowed size of {MaxTagsPayloadSize} characters.");
+                int utf8Bytes = Encoding.UTF8.GetByteCount(json);
+                if (utf8Bytes > MaxTagsPayloadSize)
+                {
+                    throw new ArgumentException(
+                        $"The serialized tags payload is {utf8Bytes} bytes, which exceeds the maximum allowed size of {MaxTagsPayloadSize} bytes.");
+                }
             }
 
             parameters.Add("@Tags", SqlDbType.VarChar, MaxTagsPayloadSize).Value = (object?)json ?? DBNull.Value;

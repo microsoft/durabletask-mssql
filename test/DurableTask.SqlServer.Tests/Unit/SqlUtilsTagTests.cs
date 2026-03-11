@@ -105,7 +105,7 @@ namespace DurableTask.SqlServer.Tests.Unit
 
             // Act & Assert
             var ex = Assert.Throws<ArgumentException>(() => command.Parameters.AddTagsParameter(tags));
-            Assert.Contains("exceeds the maximum allowed size of 8000", ex.Message);
+            Assert.Contains("exceeds the maximum allowed size of 8000 bytes", ex.Message);
         }
 
         [Fact]
