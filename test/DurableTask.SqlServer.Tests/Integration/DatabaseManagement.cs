@@ -46,7 +46,7 @@ namespace DurableTask.SqlServer.Tests.Integration
                 "drop-schema.sql",
                 "schema-1.0.0.sql",
                 "schema-1.2.0.sql",
-                "schema-1.3.0.sql",
+                "schema-1.6.0.sql",
                 "logic.sql",
                 "permissions.sql",
             };
@@ -99,7 +99,7 @@ namespace DurableTask.SqlServer.Tests.Integration
                     LogAssert.ExecutedSqlScript("drop-schema.sql"),
                     LogAssert.ExecutedSqlScript("schema-1.0.0.sql"),
                     LogAssert.ExecutedSqlScript("schema-1.2.0.sql"),
-                    LogAssert.ExecutedSqlScript("schema-1.3.0.sql"),
+                    LogAssert.ExecutedSqlScript("schema-1.6.0.sql"),
                     LogAssert.ExecutedSqlScript("logic.sql"),
                     LogAssert.ExecutedSqlScript("permissions.sql"),
                     LogAssert.SprocCompleted("dt._UpdateVersion"))
@@ -160,7 +160,7 @@ namespace DurableTask.SqlServer.Tests.Integration
                     LogAssert.ExecutedSqlScript("drop-schema.sql"),
                     LogAssert.ExecutedSqlScript("schema-1.0.0.sql"),
                     LogAssert.ExecutedSqlScript("schema-1.2.0.sql"),
-                    LogAssert.ExecutedSqlScript("schema-1.3.0.sql"),
+                    LogAssert.ExecutedSqlScript("schema-1.6.0.sql"),
                     LogAssert.ExecutedSqlScript("logic.sql"),
                     LogAssert.ExecutedSqlScript("permissions.sql"),
                     LogAssert.SprocCompleted($"{schemaName}._UpdateVersion"))
@@ -223,7 +223,7 @@ namespace DurableTask.SqlServer.Tests.Integration
                     LogAssert.ExecutedSqlScript("drop-schema.sql"),
                     LogAssert.ExecutedSqlScript("schema-1.0.0.sql"),
                     LogAssert.ExecutedSqlScript("schema-1.2.0.sql"),
-                    LogAssert.ExecutedSqlScript("schema-1.3.0.sql"),
+                    LogAssert.ExecutedSqlScript("schema-1.6.0.sql"),
                     LogAssert.ExecutedSqlScript("logic.sql"),
                     LogAssert.ExecutedSqlScript("permissions.sql"),
                     LogAssert.SprocCompleted($"{firstTestSchemaName}._UpdateVersion"))
@@ -234,7 +234,7 @@ namespace DurableTask.SqlServer.Tests.Integration
                     LogAssert.ExecutedSqlScript("drop-schema.sql"),
                     LogAssert.ExecutedSqlScript("schema-1.0.0.sql"),
                     LogAssert.ExecutedSqlScript("schema-1.2.0.sql"),
-                    LogAssert.ExecutedSqlScript("schema-1.3.0.sql"),
+                    LogAssert.ExecutedSqlScript("schema-1.6.0.sql"),
                     LogAssert.ExecutedSqlScript("logic.sql"),
                     LogAssert.ExecutedSqlScript("permissions.sql"),
                     LogAssert.SprocCompleted($"{secondTestSchemaName}._UpdateVersion"))
@@ -318,7 +318,7 @@ namespace DurableTask.SqlServer.Tests.Integration
                     LogAssert.SprocCompleted("dt._GetVersions"),
                     LogAssert.ExecutedSqlScript("schema-1.0.0.sql"),
                     LogAssert.ExecutedSqlScript("schema-1.2.0.sql"),
-                    LogAssert.ExecutedSqlScript("schema-1.3.0.sql"),
+                    LogAssert.ExecutedSqlScript("schema-1.6.0.sql"),
                     LogAssert.ExecutedSqlScript("logic.sql"),
                     LogAssert.ExecutedSqlScript("permissions.sql"),
                     LogAssert.SprocCompleted("dt._UpdateVersion"))
@@ -372,7 +372,7 @@ namespace DurableTask.SqlServer.Tests.Integration
                     LogAssert.SprocCompleted("dt._GetVersions"),
                     LogAssert.ExecutedSqlScript("schema-1.0.0.sql"),
                     LogAssert.ExecutedSqlScript("schema-1.2.0.sql"),
-                    LogAssert.ExecutedSqlScript("schema-1.3.0.sql"),
+                    LogAssert.ExecutedSqlScript("schema-1.6.0.sql"),
                     LogAssert.ExecutedSqlScript("logic.sql"),
                     LogAssert.ExecutedSqlScript("permissions.sql"),
                     LogAssert.SprocCompleted("dt._UpdateVersion"),
@@ -386,6 +386,25 @@ namespace DurableTask.SqlServer.Tests.Integration
                     LogAssert.AcquiredAppLock(),
                     LogAssert.SprocCompleted("dt._GetVersions"))
                 .EndOfLog();
+        }
+
+        /// <summary>
+        /// Verifies that the schema-1.6.0 migration correctly adds the Tags column
+        /// to the Instances table. Without the correctly named schema file, existing
+        /// databases would not be upgraded and the @Tags parameter would be unrecognized.
+        /// </summary>
+        [Fact]
+        public async Task SchemaUpgradeAddsTagsColumn()
+        {
+            using TestDatabase testDb = this.CreateTestDb();
+            IOrchestrationService service = this.CreateServiceWithTestDb(testDb);
+
+            // Create the full schema from scratch
+            await service.CreateAsync(recreateInstanceStore: true);
+
+            // Verify the Tags column exists on the Instances table
+            IEnumerable<string> columns = testDb.GetColumns("Instances");
+            Assert.Contains("Tags", columns);
         }
 
         TestDatabase CreateTestDb(bool initializeDatabase = true)
@@ -511,8 +530,8 @@ namespace DurableTask.SqlServer.Tests.Integration
                 database.ConnectionString,
                 schemaName);
             Assert.Equal(1, currentSchemaVersion.Major);
-            Assert.Equal(5, currentSchemaVersion.Minor);
-            Assert.Equal(4, currentSchemaVersion.Patch);
+            Assert.Equal(6, currentSchemaVersion.Minor);
+            Assert.Equal(0, currentSchemaVersion.Patch);
         }
 
         sealed class TestDatabase : IDisposable
@@ -570,6 +589,19 @@ namespace DurableTask.SqlServer.Tests.Integration
                     if (table.Schema == schemaName)
                     {
                         yield return $"{table.Schema}.{table.Name}";
+                    }
+                }
+            }
+
+            public IEnumerable<string> GetColumns(string tableName, string schemaName = "dt")
+            {
+                this.testDb.Tables.Refresh();
+                Table? table = this.testDb.Tables[tableName, schemaName];
+                if (table != null)
+                {
+                    foreach (Column column in table.Columns)
+                    {
+                        yield return column.Name;
                     }
                 }
             }
