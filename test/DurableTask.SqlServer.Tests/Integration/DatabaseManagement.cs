@@ -390,8 +390,8 @@ namespace DurableTask.SqlServer.Tests.Integration
 
         /// <summary>
         /// Verifies that the schema-1.6.0 migration correctly adds the Tags column
-        /// to the Instances table. Without the correctly named schema file, existing
-        /// databases would not be upgraded and the @Tags parameter would be unrecognized.
+        /// to the Instances and NewTasks tables. Without the correctly named schema file,
+        /// existing databases would not be upgraded and the @Tags parameter would be unrecognized.
         /// </summary>
         [Fact]
         public async Task SchemaUpgradeAddsTagsColumn()
@@ -403,8 +403,12 @@ namespace DurableTask.SqlServer.Tests.Integration
             await service.CreateAsync(recreateInstanceStore: true);
 
             // Verify the Tags column exists on the Instances table
-            IEnumerable<string> columns = testDb.GetColumns("Instances");
-            Assert.Contains("Tags", columns);
+            IEnumerable<string> instanceColumns = testDb.GetColumns("Instances");
+            Assert.Contains("Tags", instanceColumns);
+
+            // Verify the Tags column exists on the NewTasks table
+            IEnumerable<string> taskColumns = testDb.GetColumns("NewTasks");
+            Assert.Contains("Tags", taskColumns);
         }
 
         TestDatabase CreateTestDb(bool initializeDatabase = true)

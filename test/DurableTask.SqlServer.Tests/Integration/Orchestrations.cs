@@ -1275,5 +1275,50 @@ namespace DurableTask.SqlServer.Tests.Integration
 
             Assert.True(foundTaggedInstance, "Did not find the tagged orchestration instance in query results.");
         }
+
+        /// <summary>
+        /// Verifies that orchestration tags propagate to the activity middleware context
+        /// via OrchestrationExecutionContext, surviving the SQL persistence round-trip
+        /// through the NewTasks table. This test exposes the gap where tags were
+        /// serialized by TaskOrchestrationDispatcher but never persisted/restored
+        /// by the MSSQL backend.
+        /// </summary>
+        [Fact]
+        public async Task ActivityReceivesOrchestrationTags()
+        {
+            var tags = new Dictionary<string, string>
+            {
+                { "env", "test" },
+                { "team", "platform" },
+            };
+
+            // Capture tags seen by activity middleware
+            IDictionary<string, string> capturedTags = null;
+
+            this.testService.AddActivityDispatcherMiddleware(async (context, next) =>
+            {
+                var execContext = context.GetProperty<OrchestrationExecutionContext>();
+                capturedTags = execContext?.OrchestrationTags;
+                await next();
+            });
+
+            TestInstance<string> instance = await this.testService.RunOrchestrationWithTags(
+                input: "hello",
+                orchestrationName: "ActivityTagsPropagation",
+                tags: tags,
+                implementation: (ctx, input) => ctx.ScheduleTask<string>("Echo", "", input),
+                activities: new[]
+                {
+                    ("Echo", TestService.MakeActivity((TaskContext ctx, string input) => input)),
+                });
+
+            await instance.WaitForCompletion(expectedOutput: "hello");
+
+            // Verify the activity middleware received the orchestration's tags
+            Assert.NotNull(capturedTags);
+            Assert.Equal(2, capturedTags.Count);
+            Assert.Equal("test", capturedTags["env"]);
+            Assert.Equal("platform", capturedTags["team"]);
+        }
     }
 }
