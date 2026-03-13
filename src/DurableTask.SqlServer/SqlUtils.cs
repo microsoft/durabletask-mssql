@@ -45,17 +45,11 @@ namespace DurableTask.SqlServer
                 },
             };
 
-            if (tags != null)
+            if (tags != null && taskMessage.Event is TaskScheduledEvent scheduledEvent)
             {
-                // Populate OrchestrationExecutionContext so that activity middleware
-                // can access orchestration-level tags via context.GetProperty<OrchestrationExecutionContext>().
-                // OrchestrationTags has an internal setter, so we use reflection to set it
-                // from outside the DurableTask.Core assembly.
-                var context = new OrchestrationExecutionContext();
-                typeof(OrchestrationExecutionContext)
-                    .GetProperty(nameof(OrchestrationExecutionContext.OrchestrationTags))!
-                    .SetValue(context, tags);
-                taskMessage.OrchestrationExecutionContext = context;
+                // Restore merged tags on TaskScheduledEvent.Tags so activity middleware
+                // can access them via context.GetProperty<TaskScheduledEvent>().Tags.
+                scheduledEvent.Tags = tags;
             }
 
             return taskMessage;
@@ -539,13 +533,32 @@ namespace DurableTask.SqlServer
 
         internal static SqlString GetOrchestrationExecutionContextTagsJson(TaskMessage msg, LogHelper logHelper)
         {
-            IDictionary<string, string>? tags = msg.OrchestrationExecutionContext?.OrchestrationTags;
-            if (tags != null && tags.Count > 0)
+            IDictionary<string, string>? orchestrationTags = msg.OrchestrationExecutionContext?.OrchestrationTags;
+            IDictionary<string, string>? activityTags = (msg.Event as TaskScheduledEvent)?.Tags;
+
+            bool hasOrchTags = orchestrationTags != null && orchestrationTags.Count > 0;
+            bool hasActTags = activityTags != null && activityTags.Count > 0;
+
+            if (!hasOrchTags && !hasActTags)
             {
-                return SerializeTagsJson(tags, logHelper, msg.OrchestrationInstance?.InstanceId);
+                return SqlString.Null;
             }
 
-            return SqlString.Null;
+            // Merge flat: orchestration tags as base, activity tags override on key collision.
+            if (hasOrchTags && hasActTags)
+            {
+                var merged = new Dictionary<string, string>(orchestrationTags!);
+                foreach (var kvp in activityTags!)
+                {
+                    merged[kvp.Key] = kvp.Value;
+                }
+                return SerializeTagsJson(merged, logHelper, msg.OrchestrationInstance?.InstanceId);
+            }
+
+            return SerializeTagsJson(
+                hasOrchTags ? orchestrationTags! : activityTags!,
+                logHelper,
+                msg.OrchestrationInstance?.InstanceId);
         }
 
         static SqlString SerializeTagsJson(IDictionary<string, string> tags, LogHelper logHelper, string? instanceId)

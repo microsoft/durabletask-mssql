@@ -11,6 +11,8 @@ namespace DurableTask.SqlServer.Tests.Integration
     using System.Threading.Tasks;
     using DurableTask.Core;
     using DurableTask.Core.Exceptions;
+    using DurableTask.Core.History;
+    using DurableTask.Core.Middleware;
     using DurableTask.SqlServer.Tests.Logging;
     using DurableTask.SqlServer.Tests.Utils;
     using Moq;
@@ -1297,8 +1299,8 @@ namespace DurableTask.SqlServer.Tests.Integration
 
             this.testService.AddActivityDispatcherMiddleware(async (context, next) =>
             {
-                var execContext = context.GetProperty<OrchestrationExecutionContext>();
-                capturedTags = execContext?.OrchestrationTags;
+                var scheduledEvent = context.GetProperty<TaskScheduledEvent>();
+                capturedTags = scheduledEvent?.Tags;
                 await next();
             });
 
@@ -1319,6 +1321,55 @@ namespace DurableTask.SqlServer.Tests.Integration
             Assert.Equal(2, capturedTags.Count);
             Assert.Equal("test", capturedTags["env"]);
             Assert.Equal("platform", capturedTags["team"]);
+        }
+
+        /// <summary>
+        /// Verifies that per-activity tags (via ScheduleTaskOptions.Tags) are merged flat
+        /// with orchestration-level tags, and that activity tags override on key collision.
+        /// Both OrchestrationExecutionContext and TaskScheduledEvent carry the merged result.
+        /// </summary>
+        [Fact]
+        public async Task ActivityTagsMergedWithOrchestrationTags()
+        {
+            var orchestrationTags = new Dictionary<string, string>
+            {
+                { "env", "prod" },
+                { "team", "platform" },
+            };
+
+            // Capture tags seen by activity middleware via TaskScheduledEvent.Tags
+            IDictionary<string, string> capturedTags = null;
+
+            this.testService.AddActivityDispatcherMiddleware(async (context, next) =>
+            {
+                var scheduledEvent = context.GetProperty<TaskScheduledEvent>();
+                capturedTags = scheduledEvent?.Tags;
+                await next();
+            });
+
+            var activityOptions = ScheduleTaskOptions.CreateBuilder()
+                .AddTag("priority", "high")
+                .AddTag("env", "staging") // overrides orchestration-level "env"
+                .Build();
+
+            TestInstance<string> instance = await this.testService.RunOrchestrationWithTags(
+                input: "hello",
+                orchestrationName: "MergedActivityTags",
+                tags: orchestrationTags,
+                implementation: (ctx, input) => ctx.ScheduleTask<string>("Echo", "", activityOptions, input),
+                activities: new[]
+                {
+                    ("Echo", TestService.MakeActivity((TaskContext ctx, string input) => input)),
+                });
+
+            await instance.WaitForCompletion(expectedOutput: "hello");
+
+            // Verify merged tags: activity "env=staging" overrides orchestration "env=prod"
+            Assert.NotNull(capturedTags);
+            Assert.Equal(3, capturedTags.Count);
+            Assert.Equal("staging", capturedTags["env"]);
+            Assert.Equal("platform", capturedTags["team"]);
+            Assert.Equal("high", capturedTags["priority"]);
         }
     }
 }
