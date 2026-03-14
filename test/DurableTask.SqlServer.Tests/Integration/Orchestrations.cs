@@ -771,26 +771,29 @@ namespace DurableTask.SqlServer.Tests.Integration
             foreach (Activity span in exportedItems)
             {
                 this.outputHelper.WriteLine(
-                    $"{span.Id}: Name={span.DisplayName}, Start={span.StartTimeUtc:o}, Duration={span.Duration}");
+                    $"{span.Id}: Name={span.DisplayName}, Kind={span.Kind}, Start={span.StartTimeUtc:o}, Duration={span.Duration}, TraceState={span.TraceStateString ?? "(null)"}");
             }
 
             Assert.True(exportedItems.Count >= 4);
 
             // Validate the orchestration trace activity/span. Specifically, the IDs and time range.
             // We need to verify these because we use custom logic to store and retrieve this data (not serialization).
+            // Filter by Server kind to get the actual execution span, not the client-side scheduling span.
             Activity orchestratorSpan = exportedItems.LastOrDefault(
-                span => span.OperationName == $"orchestration:{orchestrationName}");
+                span => span.OperationName == $"orchestration:{orchestrationName}" && span.Kind == ActivityKind.Server);
             Assert.NotNull(orchestratorSpan);
             Assert.Equal(clientSpan.TraceId, orchestratorSpan.TraceId);
             Assert.NotEqual(clientSpan.SpanId, orchestratorSpan.SpanId); // new span ID
-            Assert.Equal("TestTraceState", orchestratorSpan.TraceStateString);
+            // The orchestration modifies Activity.Current.TraceStateString in-flight, and Core v3.3.0
+            // reflects this mutation on the Server span (v3.0.0 did not).
+            Assert.Equal("TestTraceState (modified!)", orchestratorSpan.TraceStateString);
             Assert.True(orchestratorSpan.StartTimeUtc >= clientSpan.StartTimeUtc);
             Assert.True(orchestratorSpan.Duration > delay * 2); // two sleeps
             Assert.True(orchestratorSpan.StartTimeUtc + orchestratorSpan.Duration <= clientSpan.StartTimeUtc + clientSpan.Duration);
 
             // Validate the sub-orchestrator span, which should be a sub-set of the parent orchestration span.
             Activity subOrchestratorSpan = exportedItems.LastOrDefault(
-                span => span.OperationName == $"orchestration:{subOrchestrationName}");
+                span => span.OperationName == $"orchestration:{subOrchestrationName}" && span.Kind == ActivityKind.Server);
             Assert.NotNull(subOrchestratorSpan);
             Assert.Equal(clientSpan.TraceId, subOrchestratorSpan.TraceId);
             Assert.NotEqual(orchestratorSpan.SpanId, subOrchestratorSpan.SpanId); // new span ID
@@ -801,7 +804,7 @@ namespace DurableTask.SqlServer.Tests.Integration
 
             // Validate the activity span, which should be a subset of the sub-orchestration span
             Activity activitySpan = exportedItems.LastOrDefault(
-                span => span.OperationName == $"activity:{activityName}");
+                span => span.OperationName == $"activity:{activityName}" && span.Kind == ActivityKind.Server);
             Assert.NotNull(activitySpan);
             Assert.Equal(clientSpan.TraceId, activitySpan.TraceId);
             Assert.NotEqual(subOrchestratorSpan.SpanId, activitySpan.SpanId); // new span ID
