@@ -9,6 +9,7 @@ namespace DurableTask.SqlServer.Tests.Utils
     using System.Linq;
     using System.Threading.Tasks;
     using DurableTask.Core;
+    using DurableTask.Core.Middleware;
     using DurableTask.SqlServer.Tests.Logging;
     using Microsoft.Extensions.Logging;
     using Moq;
@@ -93,6 +94,11 @@ namespace DurableTask.SqlServer.Tests.Utils
         }
 
         public Task StartWorkerAsync() => this.worker?.StartAsync() ?? Task.CompletedTask;
+
+        public void AddActivityDispatcherMiddleware(Func<DispatchMiddlewareContext, Func<Task>, Task> middleware)
+        {
+            this.worker.AddActivityDispatcherMiddleware(middleware);
+        }
 
         public Task PurgeAsync(DateTime maximumThreshold, OrchestrationStateTimeRangeFilterType filterType)
         {

@@ -76,7 +76,8 @@ IF TYPE_ID(N'__SchemaNamePlaceholder__.TaskEvents') IS NULL
         [PayloadText] varchar(max) NULL,
         [PayloadID] uniqueidentifier NULL,
         [Version] varchar(100) NULL,
-        [TraceContext] varchar(800) NULL
+        [TraceContext] varchar(800) NULL,
+        [Tags] varchar(8000) NULL
     )
 GO
 
@@ -1031,7 +1032,8 @@ BEGIN
         [LockExpiration],
         [PayloadID],
         [Version],
-        [TraceContext]
+        [TraceContext],
+        [Tags]
     )
     OUTPUT
         INSERTED.[SequenceNumber],
@@ -1047,7 +1049,8 @@ BEGIN
         [LockExpiration],
         [PayloadID],
         [Version],
-        [TraceContext]
+        [TraceContext],
+        [Tags]
     FROM @NewTaskEvents
 
     COMMIT TRANSACTION
@@ -1310,7 +1313,8 @@ BEGIN
             P.[InstanceID] = N.[InstanceID] AND
             P.[PayloadID] = N.[PayloadID]) AS [PayloadText],
         DATEDIFF(SECOND, [Timestamp], @now) AS [WaitTime],
-        [TraceContext]
+        [TraceContext],
+        [Tags]
     FROM NewTasks N
     WHERE [TaskHub] = @TaskHub AND [SequenceNumber] = @SequenceNumber
 
