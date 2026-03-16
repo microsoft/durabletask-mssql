@@ -33,8 +33,7 @@ namespace DurableTask.SqlServer
 
         public static TaskMessage GetTaskMessage(this DbDataReader reader)
         {
-            IDictionary<string, string>? tags = GetTags(reader);
-            var taskMessage = new TaskMessage
+            return new TaskMessage
             {
                 SequenceNumber = GetSequenceNumber(reader),
                 Event = reader.GetHistoryEvent(),
@@ -44,15 +43,6 @@ namespace DurableTask.SqlServer
                     ExecutionId = GetExecutionId(reader),
                 },
             };
-
-            if (tags != null && taskMessage.Event is TaskScheduledEvent scheduledEvent)
-            {
-                // Restore merged tags on TaskScheduledEvent.Tags so activity middleware
-                // can access them via context.GetProperty<TaskScheduledEvent>().Tags.
-                scheduledEvent.Tags = tags;
-            }
-
-            return taskMessage;
         }
 
         public static HistoryEvent GetHistoryEvent(this DbDataReader reader, bool isOrchestrationHistory = false)
@@ -195,6 +185,7 @@ namespace DurableTask.SqlServer
                         Input = GetPayloadText(reader),
                         Name = GetName(reader),
                         Version = GetVersion(reader),
+                        Tags = GetTags(reader),
                         ParentTraceContext = GetTraceContext(reader),
                     };
                     break;
@@ -531,7 +522,7 @@ namespace DurableTask.SqlServer
             return SqlString.Null;
         }
 
-        internal static SqlString GetOrchestrationExecutionContextTagsJson(TaskMessage msg, LogHelper logHelper)
+        internal static SqlString GetMergedTaskTagsJson(TaskMessage msg, LogHelper logHelper)
         {
             IDictionary<string, string>? orchestrationTags = msg.OrchestrationExecutionContext?.OrchestrationTags;
             IDictionary<string, string>? activityTags = (msg.Event as TaskScheduledEvent)?.Tags;

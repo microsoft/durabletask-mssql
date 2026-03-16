@@ -147,7 +147,7 @@ namespace DurableTask.SqlServer.SqlTypes
 
             record.SetSqlString(ColumnOrdinals.Version, SqlUtils.GetVersion(msg.Event));
             record.SetSqlString(ColumnOrdinals.TraceContext, SqlUtils.GetTraceContext(msg.Event));
-            record.SetSqlString(ColumnOrdinals.Tags, SqlUtils.GetOrchestrationExecutionContextTagsJson(msg, logHelper));
+            record.SetSqlString(ColumnOrdinals.Tags, SqlUtils.GetMergedTaskTagsJson(msg, logHelper));
             return record;
         }
     }
