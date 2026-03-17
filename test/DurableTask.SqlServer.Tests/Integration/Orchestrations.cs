@@ -784,8 +784,6 @@ namespace DurableTask.SqlServer.Tests.Integration
             Assert.NotNull(orchestratorSpan);
             Assert.Equal(clientSpan.TraceId, orchestratorSpan.TraceId);
             Assert.NotEqual(clientSpan.SpanId, orchestratorSpan.SpanId); // new span ID
-            // The orchestration modifies Activity.Current.TraceStateString in-flight, and Core v3.3.0
-            // reflects this mutation on the Server span (v3.0.0 did not).
             Assert.Equal("TestTraceState (modified!)", orchestratorSpan.TraceStateString);
             Assert.True(orchestratorSpan.StartTimeUtc >= clientSpan.StartTimeUtc);
             Assert.True(orchestratorSpan.Duration > delay * 2); // two sleeps
