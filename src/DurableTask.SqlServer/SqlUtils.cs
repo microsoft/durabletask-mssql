@@ -185,6 +185,7 @@ namespace DurableTask.SqlServer
                         Input = GetPayloadText(reader),
                         Name = GetName(reader),
                         Version = GetVersion(reader),
+                        Tags = GetTags(reader),
                         ParentTraceContext = GetTraceContext(reader),
                     };
                     break;
@@ -515,21 +516,56 @@ namespace DurableTask.SqlServer
         {
             if (e is ExecutionStartedEvent startedEvent && startedEvent.Tags != null && startedEvent.Tags.Count > 0)
             {
-                string json = DTUtils.SerializeToJson(startedEvent.Tags);
-                int utf8Bytes = Encoding.UTF8.GetByteCount(json);
-                if (utf8Bytes > MaxTagsPayloadSize)
-                {
-                    logHelper.GenericWarning(
-                        $"Dropping oversized tags ({utf8Bytes} bytes, max {MaxTagsPayloadSize}) for sub-orchestration. " +
-                        $"The merged parent+child tags exceed the allowed limit and will not be persisted.",
-                        instanceId: (e as ExecutionStartedEvent)?.ParentInstance?.OrchestrationInstance?.InstanceId);
-                    return SqlString.Null;
-                }
-
-                return json;
+                return SerializeTagsJson(startedEvent.Tags, logHelper, (e as ExecutionStartedEvent)?.ParentInstance?.OrchestrationInstance?.InstanceId);
             }
 
             return SqlString.Null;
+        }
+
+        internal static SqlString GetMergedTaskTagsJson(TaskMessage msg, LogHelper logHelper)
+        {
+            IDictionary<string, string>? orchestrationTags = msg.OrchestrationExecutionContext?.OrchestrationTags;
+            IDictionary<string, string>? activityTags = (msg.Event as TaskScheduledEvent)?.Tags;
+
+            bool hasOrchTags = orchestrationTags != null && orchestrationTags.Count > 0;
+            bool hasActTags = activityTags != null && activityTags.Count > 0;
+
+            if (!hasOrchTags && !hasActTags)
+            {
+                return SqlString.Null;
+            }
+
+            // Merge flat: orchestration tags as base, activity tags override on key collision.
+            if (hasOrchTags && hasActTags)
+            {
+                var merged = new Dictionary<string, string>(orchestrationTags!);
+                foreach (var kvp in activityTags!)
+                {
+                    merged[kvp.Key] = kvp.Value;
+                }
+                return SerializeTagsJson(merged, logHelper, msg.OrchestrationInstance?.InstanceId);
+            }
+
+            return SerializeTagsJson(
+                hasOrchTags ? orchestrationTags! : activityTags!,
+                logHelper,
+                msg.OrchestrationInstance?.InstanceId);
+        }
+
+        static SqlString SerializeTagsJson(IDictionary<string, string> tags, LogHelper logHelper, string? instanceId)
+        {
+            string json = DTUtils.SerializeToJson(tags);
+            int utf8Bytes = Encoding.UTF8.GetByteCount(json);
+            if (utf8Bytes > MaxTagsPayloadSize)
+            {
+                logHelper.GenericWarning(
+                    $"Dropping oversized tags ({utf8Bytes} bytes, max {MaxTagsPayloadSize}). " +
+                    $"The tags exceed the allowed limit and will not be persisted.",
+                    instanceId: instanceId);
+                return SqlString.Null;
+            }
+
+            return json;
         }
 
         internal static void AddTagsParameter(

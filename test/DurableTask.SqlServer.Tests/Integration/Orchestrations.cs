@@ -11,6 +11,8 @@ namespace DurableTask.SqlServer.Tests.Integration
     using System.Threading.Tasks;
     using DurableTask.Core;
     using DurableTask.Core.Exceptions;
+    using DurableTask.Core.History;
+    using DurableTask.Core.Middleware;
     using DurableTask.SqlServer.Tests.Logging;
     using DurableTask.SqlServer.Tests.Utils;
     using Moq;
@@ -769,26 +771,27 @@ namespace DurableTask.SqlServer.Tests.Integration
             foreach (Activity span in exportedItems)
             {
                 this.outputHelper.WriteLine(
-                    $"{span.Id}: Name={span.DisplayName}, Start={span.StartTimeUtc:o}, Duration={span.Duration}");
+                    $"{span.Id}: Name={span.DisplayName}, Kind={span.Kind}, Start={span.StartTimeUtc:o}, Duration={span.Duration}, TraceState={span.TraceStateString ?? "(null)"}");
             }
 
             Assert.True(exportedItems.Count >= 4);
 
             // Validate the orchestration trace activity/span. Specifically, the IDs and time range.
             // We need to verify these because we use custom logic to store and retrieve this data (not serialization).
+            // Filter by Server kind to get the actual execution span, not the client-side scheduling span.
             Activity orchestratorSpan = exportedItems.LastOrDefault(
-                span => span.OperationName == $"orchestration:{orchestrationName}");
+                span => span.OperationName == $"orchestration:{orchestrationName}" && span.Kind == ActivityKind.Server);
             Assert.NotNull(orchestratorSpan);
             Assert.Equal(clientSpan.TraceId, orchestratorSpan.TraceId);
             Assert.NotEqual(clientSpan.SpanId, orchestratorSpan.SpanId); // new span ID
-            Assert.Equal("TestTraceState", orchestratorSpan.TraceStateString);
+            Assert.Equal("TestTraceState (modified!)", orchestratorSpan.TraceStateString);
             Assert.True(orchestratorSpan.StartTimeUtc >= clientSpan.StartTimeUtc);
             Assert.True(orchestratorSpan.Duration > delay * 2); // two sleeps
             Assert.True(orchestratorSpan.StartTimeUtc + orchestratorSpan.Duration <= clientSpan.StartTimeUtc + clientSpan.Duration);
 
             // Validate the sub-orchestrator span, which should be a sub-set of the parent orchestration span.
             Activity subOrchestratorSpan = exportedItems.LastOrDefault(
-                span => span.OperationName == $"orchestration:{subOrchestrationName}");
+                span => span.OperationName == $"orchestration:{subOrchestrationName}" && span.Kind == ActivityKind.Server);
             Assert.NotNull(subOrchestratorSpan);
             Assert.Equal(clientSpan.TraceId, subOrchestratorSpan.TraceId);
             Assert.NotEqual(orchestratorSpan.SpanId, subOrchestratorSpan.SpanId); // new span ID
@@ -799,7 +802,7 @@ namespace DurableTask.SqlServer.Tests.Integration
 
             // Validate the activity span, which should be a subset of the sub-orchestration span
             Activity activitySpan = exportedItems.LastOrDefault(
-                span => span.OperationName == $"activity:{activityName}");
+                span => span.OperationName == $"activity:{activityName}" && span.Kind == ActivityKind.Server);
             Assert.NotNull(activitySpan);
             Assert.Equal(clientSpan.TraceId, activitySpan.TraceId);
             Assert.NotEqual(subOrchestratorSpan.SpanId, activitySpan.SpanId); // new span ID
@@ -1274,6 +1277,100 @@ namespace DurableTask.SqlServer.Tests.Integration
             }
 
             Assert.True(foundTaggedInstance, "Did not find the tagged orchestration instance in query results.");
+        }
+
+        /// <summary>
+        /// Verifies that orchestration tags propagate to the activity middleware context
+        /// via OrchestrationExecutionContext, surviving the SQL persistence round-trip
+        /// through the NewTasks table. This test exposes the gap where tags were
+        /// serialized by TaskOrchestrationDispatcher but never persisted/restored
+        /// by the MSSQL backend.
+        /// </summary>
+        [Fact]
+        public async Task ActivityReceivesOrchestrationTags()
+        {
+            var tags = new Dictionary<string, string>
+            {
+                { "env", "test" },
+                { "team", "platform" },
+            };
+
+            // Capture tags seen by activity middleware
+            IDictionary<string, string> capturedTags = null;
+
+            this.testService.AddActivityDispatcherMiddleware(async (context, next) =>
+            {
+                var scheduledEvent = context.GetProperty<TaskScheduledEvent>();
+                capturedTags = scheduledEvent?.Tags;
+                await next();
+            });
+
+            TestInstance<string> instance = await this.testService.RunOrchestrationWithTags(
+                input: "hello",
+                orchestrationName: "ActivityTagsPropagation",
+                tags: tags,
+                implementation: (ctx, input) => ctx.ScheduleTask<string>("Echo", "", input),
+                activities: new[]
+                {
+                    ("Echo", TestService.MakeActivity((TaskContext ctx, string input) => input)),
+                });
+
+            await instance.WaitForCompletion(expectedOutput: "hello");
+
+            // Verify the activity middleware received the orchestration's tags
+            Assert.NotNull(capturedTags);
+            Assert.Equal(2, capturedTags.Count);
+            Assert.Equal("test", capturedTags["env"]);
+            Assert.Equal("platform", capturedTags["team"]);
+        }
+
+        /// <summary>
+        /// Verifies that per-activity tags (via ScheduleTaskOptions.Tags) are merged flat
+        /// with orchestration-level tags, and that activity tags override on key collision.
+        /// Both OrchestrationExecutionContext and TaskScheduledEvent carry the merged result.
+        /// </summary>
+        [Fact]
+        public async Task ActivityTagsMergedWithOrchestrationTags()
+        {
+            var orchestrationTags = new Dictionary<string, string>
+            {
+                { "env", "prod" },
+                { "team", "platform" },
+            };
+
+            // Capture tags seen by activity middleware via TaskScheduledEvent.Tags
+            IDictionary<string, string> capturedTags = null;
+
+            this.testService.AddActivityDispatcherMiddleware(async (context, next) =>
+            {
+                var scheduledEvent = context.GetProperty<TaskScheduledEvent>();
+                capturedTags = scheduledEvent?.Tags;
+                await next();
+            });
+
+            var activityOptions = ScheduleTaskOptions.CreateBuilder()
+                .AddTag("priority", "high")
+                .AddTag("env", "staging") // overrides orchestration-level "env"
+                .Build();
+
+            TestInstance<string> instance = await this.testService.RunOrchestrationWithTags(
+                input: "hello",
+                orchestrationName: "MergedActivityTags",
+                tags: orchestrationTags,
+                implementation: (ctx, input) => ctx.ScheduleTask<string>("Echo", "", activityOptions, input),
+                activities: new[]
+                {
+                    ("Echo", TestService.MakeActivity((TaskContext ctx, string input) => input)),
+                });
+
+            await instance.WaitForCompletion(expectedOutput: "hello");
+
+            // Verify merged tags: activity "env=staging" overrides orchestration "env=prod"
+            Assert.NotNull(capturedTags);
+            Assert.Equal(3, capturedTags.Count);
+            Assert.Equal("staging", capturedTags["env"]);
+            Assert.Equal("platform", capturedTags["team"]);
+            Assert.Equal("high", capturedTags["priority"]);
         }
     }
 }

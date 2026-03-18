@@ -379,7 +379,8 @@ namespace DurableTask.SqlServer
                 "@NewTaskEvents",
                 outboundMessages,
                 currentWorkItem.EventPayloadMappings,
-                this.settings.SchemaName);
+                this.settings.SchemaName,
+                this.traceHelper);
 
             command.Parameters.AddHistoryEventsParameter(
                 "@NewHistoryEvents",
@@ -485,7 +486,7 @@ namespace DurableTask.SqlServer
             using SqlCommand command = this.GetSprocCommand(connection, $"{this.settings.SchemaName}._CompleteTasks");
 
             command.Parameters.AddMessageIdParameter("@CompletedTasks", workItem.TaskMessage, this.settings.SchemaName);
-            command.Parameters.AddTaskEventsParameter("@Results", responseMessage, this.settings.SchemaName);
+            command.Parameters.AddTaskEventsParameter("@Results", responseMessage, this.settings.SchemaName, this.traceHelper);
 
             OrchestrationInstance instance = workItem.TaskMessage.OrchestrationInstance;
             try
