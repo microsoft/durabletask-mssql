@@ -94,6 +94,13 @@ namespace DurableTask.SqlServer
         public int MaxActiveOrchestrations { get; set; } = Environment.ProcessorCount;
 
         /// <summary>
+        /// Gets or sets the maximum number of entity operation batches that can be processed concurrently on a single node.
+        /// The default value is 100.
+        /// </summary>
+        [JsonProperty("maxConcurrentTaskEntityWorkItems")]
+        public int MaxConcurrentTaskEntityWorkItems { get; set; } = 100;
+
+        /// <summary>
         /// Gets or sets the minimum interval to poll for orchestrations.
         /// Polling interval increases when no orchestrations or activities are found.
         /// The default value is 50 milliseconds.
@@ -140,6 +147,35 @@ namespace DurableTask.SqlServer
         /// </summary>
         [JsonProperty("deltaBackoffActivityPollingInterval")]
         public TimeSpan DeltaBackoffActivityPollingInterval { get; set; } = TimeSpan.FromMilliseconds(50);
+
+        /// <summary>
+        /// Gets or sets the limit on the number of entity operations that should be processed as a single batch.
+        /// A null value indicates that no particular limit should be enforced.
+        /// </summary>
+        /// <remarks>
+        /// Limiting the batch size can help to avoid timeouts in execution environments that impose time limitations on work items.
+        /// If set to 1, batching is disabled, and each operation executes as a separate work item.
+        /// </remarks>
+        /// <value>
+        /// A positive integer, or null.
+        /// </value>
+        [JsonProperty("maxEntityOperationBatchSize")]
+        public int? MaxEntityOperationBatchSize { get; set; } = null;
+
+        /// <summary>
+        /// Gets or sets the time window within which entity messages get deduplicated and reordered.
+        /// If set to zero, there is no sorting or deduplication, and all messages are just passed through.
+        /// </summary>
+        [JsonProperty("entityMessageReorderWindowInMinutes")]
+        public int EntityMessageReorderWindowInMinutes { get; set; } = 30;
+
+        /// <summary>
+        /// Whether to use separate work item queues for entities and orchestrators.
+        /// This defaults to false, to avoid issues when using this provider from code that does not support separate dispatch.
+        /// Consumers that require separate dispatch (such as the new out-of-proc v2 SDKs) must set this to true.
+        /// </summary>
+        [JsonProperty("useSeparateQueueForEntityWorkItems")]
+        public bool UseSeparateQueueForEntityWorkItems { get; set; } = false;
 
         /// <summary>
         /// Gets or sets a flag indicating whether the database should be automatically created if it does not exist.

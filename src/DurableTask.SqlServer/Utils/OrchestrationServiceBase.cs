@@ -9,10 +9,12 @@ namespace DurableTask.SqlServer.Utils
     using System.Threading;
     using System.Threading.Tasks;
     using DurableTask.Core;
+    using DurableTask.Core.Entities;
     using DurableTask.Core.Query;
 
     public abstract class OrchestrationServiceBase :
         IOrchestrationService,
+        IEntityOrchestrationService,
         IOrchestrationServiceClient,
         IOrchestrationServiceQueryClient,
         IOrchestrationServicePurgeClient
@@ -42,6 +44,12 @@ namespace DurableTask.SqlServer.Utils
 
         public virtual BehaviorOnContinueAsNew EventBehaviourForContinueAsNew
             => BehaviorOnContinueAsNew.Carryover;
+
+        public virtual EntityBackendProperties? EntityBackendProperties 
+            => null;
+
+        public virtual EntityBackendQueries? EntityBackendQueries 
+            => null;
 
         public virtual Task CreateAsync()
             => this.CreateAsync(recreateInstanceStore: false);
@@ -163,5 +171,9 @@ namespace DurableTask.SqlServer.Utils
         public abstract Task<OrchestrationQueryResult> GetOrchestrationWithQueryAsync(
             OrchestrationQuery query,
             CancellationToken cancellationToken);
+
+        public abstract Task<TaskOrchestrationWorkItem> LockNextOrchestrationWorkItemAsync(TimeSpan receiveTimeout, CancellationToken cancellationToken);
+
+        public abstract Task<TaskOrchestrationWorkItem> LockNextEntityWorkItemAsync(TimeSpan receiveTimeout, CancellationToken cancellationToken);
     }
 }

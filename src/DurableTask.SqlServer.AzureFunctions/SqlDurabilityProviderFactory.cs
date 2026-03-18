@@ -22,6 +22,8 @@ namespace DurableTask.SqlServer.AzureFunctions
         readonly ILoggerFactory loggerFactory;
         readonly IConnectionInfoResolver connectionInfoResolver;
 
+        readonly bool useSeparateQueueForEntityWorkItems = false;
+
         SqlDurabilityOptions? defaultOptions;
         SqlDurabilityProvider? defaultProvider;
 
@@ -37,11 +39,22 @@ namespace DurableTask.SqlServer.AzureFunctions
         public SqlDurabilityProviderFactory(
             IOptions<DurableTaskOptions> extensionOptions,
             ILoggerFactory loggerFactory,
-            IConnectionInfoResolver connectionInfoResolver)
+            IConnectionInfoResolver connectionInfoResolver,
+#pragma warning disable CS0612 // Type or member is obsolete
+            IPlatformInformation platformInfo)
+#pragma warning restore CS0612 // Type or member is obsolete
         {
             this.extensionOptions = extensionOptions?.Value ?? throw new ArgumentNullException(nameof(extensionOptions));
             this.loggerFactory = loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));
             this.connectionInfoResolver = connectionInfoResolver ?? throw new ArgumentNullException(nameof(connectionInfoResolver));
+
+            WorkerRuntimeType runtimeType = platformInfo.GetWorkerRuntimeType();
+            if (runtimeType == WorkerRuntimeType.DotNetIsolated ||
+                runtimeType == WorkerRuntimeType.Java ||
+                runtimeType == WorkerRuntimeType.Custom)
+            {
+                this.useSeparateQueueForEntityWorkItems = true;
+            }
         }
 
         // Called by the Durable trigger binding infrastructure
@@ -85,9 +98,11 @@ namespace DurableTask.SqlServer.AzureFunctions
 
         SqlOrchestrationService GetOrchestrationService(SqlDurabilityOptions clientOptions)
         {
-            return new (clientOptions.GetOrchestrationServiceSettings(
+            SqlOrchestrationServiceSettings sqlOrchestrationServiceSettings = clientOptions.GetOrchestrationServiceSettings(
                 this.extensionOptions,
-                this.connectionInfoResolver));
+                this.connectionInfoResolver);
+            sqlOrchestrationServiceSettings.UseSeparateQueueForEntityWorkItems = this.useSeparateQueueForEntityWorkItems;
+            return new(sqlOrchestrationServiceSettings);
         }
 
         static string GetDurabilityProviderKey(DurableClientAttribute attribute)
