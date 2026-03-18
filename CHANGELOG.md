@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.6.0
+
+### Updates
+
+* Add support for orchestration tags ([#299](https://github.com/microsoft/durabletask-mssql/pull/299) and [#304](https://github.com/microsoft/durabletask-mssql/pull/304))
+
 ## v1.5.3
 
 ### Updates
