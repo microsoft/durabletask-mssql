@@ -722,28 +722,38 @@ namespace DurableTask.SqlServer
 
         public override async Task<PurgeResult> PurgeInstanceStateAsync(PurgeInstanceFilter purgeInstanceFilter)
         {
-            var purgeQuery = new SqlOrchestrationQuery
-            {
-                PageSize = 1000,
-                CreatedTimeFrom = purgeInstanceFilter.CreatedTimeFrom,
-                FetchInput = false,
-                FetchOutput = false,
-            };
-            
+            using SqlConnection connection = await this.GetAndOpenConnectionAsync();
+            using SqlCommand command = this.GetSprocCommand(
+                connection, $"{this.settings.SchemaName}.PurgeInstanceStateByFilter");
+
+            SqlParameter instancesDeletedReturnValue = command.Parameters.Add("@InstancesDeleted", SqlDbType.Int);
+            instancesDeletedReturnValue.Direction = ParameterDirection.ReturnValue;
+
+            command.Parameters.Add("@CreatedTimeFrom", SqlDbType.DateTime2).Value = purgeInstanceFilter.CreatedTimeFrom;
+
             if (purgeInstanceFilter.CreatedTimeTo != null)
             {
-                purgeQuery.CreatedTimeTo = purgeInstanceFilter.CreatedTimeTo.Value;
+                command.Parameters.Add("@CreatedTimeTo", SqlDbType.DateTime2).Value = purgeInstanceFilter.CreatedTimeTo.Value;
             }
 
             if (purgeInstanceFilter.RuntimeStatus?.Any() == true)
             {
-                purgeQuery.StatusFilter = new HashSet<OrchestrationStatus>(purgeInstanceFilter.RuntimeStatus);
+                string filter = string.Join(",", purgeInstanceFilter.RuntimeStatus);
+                command.Parameters.Add("@RuntimeStatusFilter", SqlDbType.VarChar, size: 200).Value = filter;
             }
-            
-            IReadOnlyCollection<OrchestrationState> results = await this.GetManyOrchestrationsAsync(purgeQuery, CancellationToken.None);
-                                                                                                  
-            IEnumerable<string> instanceIds = results.Select(r => r.OrchestrationInstance.InstanceId);
-            int purgedInstanceCount = await this.PurgeOrchestrationHistoryAsync(instanceIds);
+
+            Stopwatch latencyStopwatch = Stopwatch.StartNew();
+            await SqlUtils.ExecuteNonQueryAsync(command, this.traceHelper);
+            int purgedInstanceCount = (int)instancesDeletedReturnValue.Value;
+
+            if (purgedInstanceCount > 0)
+            {
+                this.traceHelper.PurgedInstances(
+                    this.userId,
+                    purgedInstanceCount,
+                    latencyStopwatch);
+            }
+
             return new PurgeResult(purgedInstanceCount);
         }
 

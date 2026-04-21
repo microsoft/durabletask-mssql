@@ -107,6 +107,11 @@ namespace DurableTask.SqlServer.Tests.Utils
                 filterType);
         }
 
+        public Task<PurgeResult> PurgeAsync(PurgeInstanceFilter filter)
+        {
+            return this.OrchestrationServiceMock.Object.PurgeInstanceStateAsync(filter);
+        }
+
         public async Task DisposeAsync()
         {
             await this.worker.StopAsync(isForced: true);

@@ -607,6 +607,30 @@ BEGIN
 END
 GO
 
+
+CREATE OR ALTER PROCEDURE __SchemaNamePlaceholder__.PurgeInstanceStateByFilter
+    @CreatedTimeFrom datetime2 = NULL,
+    @CreatedTimeTo datetime2 = NULL,
+    @RuntimeStatusFilter varchar(200) = NULL
+AS
+BEGIN
+    DECLARE @TaskHub varchar(50) = __SchemaNamePlaceholder__.CurrentTaskHub()
+
+    DECLARE @instanceIDs InstanceIDs
+
+    INSERT INTO @instanceIDs
+        SELECT [InstanceID] FROM Instances
+        WHERE [TaskHub] = @TaskHub
+            AND (@CreatedTimeFrom IS NULL OR [CreatedTime] >= @CreatedTimeFrom)
+            AND (@CreatedTimeTo IS NULL OR [CreatedTime] <= @CreatedTimeTo)
+            AND (@RuntimeStatusFilter IS NULL OR [RuntimeStatus] IN (SELECT [value] FROM string_split(@RuntimeStatusFilter, ',')))
+
+    DECLARE @deletedInstances int
+    EXECUTE @deletedInstances = __SchemaNamePlaceholder__.PurgeInstanceStateByID @instanceIDs
+    RETURN @deletedInstances
+END
+GO
+
 CREATE OR ALTER PROCEDURE __SchemaNamePlaceholder__.SetGlobalSetting
     @Name varchar(300),
     @Value sql_variant

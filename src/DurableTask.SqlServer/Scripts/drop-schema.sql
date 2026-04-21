@@ -19,6 +19,7 @@ DROP PROCEDURE IF EXISTS __SchemaNamePlaceholder__.SetGlobalSetting
 DROP PROCEDURE IF EXISTS __SchemaNamePlaceholder__.TerminateInstance
 DROP PROCEDURE IF EXISTS __SchemaNamePlaceholder__.PurgeInstanceStateByID
 DROP PROCEDURE IF EXISTS __SchemaNamePlaceholder__.PurgeInstanceStateByTime
+DROP PROCEDURE IF EXISTS __SchemaNamePlaceholder__.PurgeInstanceStateByFilter
 
 -- Private sprocs
 DROP PROCEDURE IF EXISTS __SchemaNamePlaceholder__._AddOrchestrationEvents
