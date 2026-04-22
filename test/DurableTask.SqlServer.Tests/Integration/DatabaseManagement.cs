@@ -460,7 +460,6 @@ namespace DurableTask.SqlServer.Tests.Integration
                 $"{schemaName}.TerminateInstance",
                 $"{schemaName}.PurgeInstanceStateByID",
                 $"{schemaName}.PurgeInstanceStateByTime",
-                $"{schemaName}.PurgeInstanceStateByFilter",
                 $"{schemaName}._AddOrchestrationEvents",
                 $"{schemaName}._CheckpointOrchestration",
                 $"{schemaName}._CompleteTasks",

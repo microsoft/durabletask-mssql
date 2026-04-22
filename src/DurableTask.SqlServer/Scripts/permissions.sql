@@ -26,7 +26,6 @@ GRANT EXECUTE ON OBJECT::__SchemaNamePlaceholder__.RaiseEvent TO __SchemaNamePla
 GRANT EXECUTE ON OBJECT::__SchemaNamePlaceholder__.TerminateInstance TO __SchemaNamePlaceholder___runtime
 GRANT EXECUTE ON OBJECT::__SchemaNamePlaceholder__.PurgeInstanceStateByID TO __SchemaNamePlaceholder___runtime
 GRANT EXECUTE ON OBJECT::__SchemaNamePlaceholder__.PurgeInstanceStateByTime TO __SchemaNamePlaceholder___runtime
-GRANT EXECUTE ON OBJECT::__SchemaNamePlaceholder__.PurgeInstanceStateByFilter TO __SchemaNamePlaceholder___runtime
 
 -- Internal sprocs
 GRANT EXECUTE ON OBJECT::__SchemaNamePlaceholder__._AddOrchestrationEvents TO __SchemaNamePlaceholder___runtime
