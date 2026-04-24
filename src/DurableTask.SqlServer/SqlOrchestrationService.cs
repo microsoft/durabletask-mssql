@@ -729,7 +729,7 @@ namespace DurableTask.SqlServer
                 FetchInput = false,
                 FetchOutput = false,
             };
-            
+
             if (purgeInstanceFilter.CreatedTimeTo != null)
             {
                 purgeQuery.CreatedTimeTo = purgeInstanceFilter.CreatedTimeTo.Value;
@@ -739,12 +739,23 @@ namespace DurableTask.SqlServer
             {
                 purgeQuery.StatusFilter = new HashSet<OrchestrationStatus>(purgeInstanceFilter.RuntimeStatus);
             }
-            
-            IReadOnlyCollection<OrchestrationState> results = await this.GetManyOrchestrationsAsync(purgeQuery, CancellationToken.None);
-                                                                                                  
-            IEnumerable<string> instanceIds = results.Select(r => r.OrchestrationInstance.InstanceId);
-            int purgedInstanceCount = await this.PurgeOrchestrationHistoryAsync(instanceIds);
-            return new PurgeResult(purgedInstanceCount);
+
+            int totalPurgedCount = 0;
+            while (true)
+            {
+                IReadOnlyCollection<OrchestrationState> results =
+                    await this.GetManyOrchestrationsAsync(purgeQuery, CancellationToken.None);
+
+                if (results.Count == 0)
+                {
+                    break;
+                }
+
+                IEnumerable<string> instanceIds = results.Select(r => r.OrchestrationInstance.InstanceId);
+                totalPurgedCount += await this.PurgeOrchestrationHistoryAsync(instanceIds);
+            }
+
+            return new PurgeResult(totalPurgedCount);
         }
 
         public override async Task<OrchestrationQueryResult> GetOrchestrationWithQueryAsync(OrchestrationQuery query, CancellationToken cancellationToken)
