@@ -690,6 +690,12 @@ namespace DurableTask.SqlServer.Tests.Integration
             await parentInstance.WaitForCompletion(expectedOutput: true);
         }
 
+        // This regression locks down the expected DurableTask span shape for a simple
+        // parent orchestration -> sub-orchestration -> activity flow. The important
+        // nuance is that an activity under a sub-orchestration is nested via an
+        // activity client span, so the hierarchy is:
+        // parent orchestration server -> sub-orchestration client -> sub-orchestration server
+        // -> activity client -> activity server.
         [Fact]
         public async Task TraceContextFlowCorrectly()
         {
@@ -800,6 +806,15 @@ namespace DurableTask.SqlServer.Tests.Integration
             Assert.True(subOrchestratorSpan.Duration > delay, $"Unexpected duration: {subOrchestratorSpan.Duration}");
             Assert.True(subOrchestratorSpan.Duration < delay * 2, $"Unexpected duration: {subOrchestratorSpan.Duration}");
 
+            Activity subOrchestratorClientSpan = exportedItems.LastOrDefault(
+                span => span.OperationName == $"orchestration:{subOrchestrationName}" && span.Kind == ActivityKind.Client);
+            Assert.NotNull(subOrchestratorClientSpan);
+
+            // The sub-orchestration execution span hangs off the sub-orchestration client span,
+            // which in turn hangs off the parent orchestration execution span.
+            Assert.Equal(orchestratorSpan.SpanId, subOrchestratorClientSpan.ParentSpanId);
+            Assert.Equal(subOrchestratorClientSpan.SpanId, subOrchestratorSpan.ParentSpanId);
+
             // Validate the activity span, which should be a subset of the sub-orchestration span
             Activity activitySpan = exportedItems.LastOrDefault(
                 span => span.OperationName == $"activity:{activityName}" && span.Kind == ActivityKind.Server);
@@ -811,6 +826,299 @@ namespace DurableTask.SqlServer.Tests.Integration
             Assert.True(activitySpan.Duration < subOrchestratorSpan.Duration);
             Assert.True(activitySpan.Duration > delay);
             Assert.True(activitySpan.Duration < delay * 2);
+
+            Activity activityClientSpan = exportedItems.LastOrDefault(
+                span => span.OperationName == $"activity:{activityName}" && span.Kind == ActivityKind.Client);
+            Assert.NotNull(activityClientSpan);
+
+            // This is the key shape for selling the trace fix: an activity scheduled by a
+            // sub-orchestrator must remain inside that sub-orchestrator's execution span
+            // hierarchy rather than floating at the root with a dangling parent.
+            Assert.Equal(subOrchestratorSpan.SpanId, activityClientSpan.ParentSpanId);
+            Assert.Equal(activityClientSpan.SpanId, activitySpan.ParentSpanId);
+        }
+
+        // This regression protects the SQL-specific bug where an orchestration reload could
+        // generate a fresh execution span ID, leaving later activity completion and timer
+        // spans pointing at a parent that no longer exists in the exported trace.
+        [Fact]
+        public async Task TraceContextMaintainsStableOrchestrationSpanAcrossContinuations()
+        {
+            string traceSourceName = "MyTraceSource";
+            string orchestrationName = "ContinuationTraceContextOrchestration";
+            string[] activityNames = { "FirstActivity", "SecondActivity" };
+            TimeSpan delay = TimeSpan.FromMilliseconds(250);
+
+            var exportedItems = new List<Activity>();
+            using TracerProvider tracerProvider = Sdk.CreateTracerProviderBuilder()
+                .AddSource(traceSourceName, "DurableTask.Core")
+                .ConfigureResource(r => r.AddService("Test"))
+                .AddInMemoryExporter(exportedItems)
+                .Build();
+
+            using var traceSource = new ActivitySource(traceSourceName);
+            using var clientSpan = traceSource.StartActivity("TestSpan");
+            clientSpan.TraceStateString = "TestTraceState";
+
+            TestInstance<string> instance = await this.testService.RunOrchestration<string, string>(
+                input: "input",
+                orchestrationName: orchestrationName,
+                implementation: async (ctx, input) =>
+                {
+                    string first = await ctx.ScheduleTask<string>(activityNames[0], "", input);
+                    await ctx.CreateTimer(ctx.CurrentUtcDateTime.Add(delay), "");
+                    string second = await ctx.ScheduleTask<string>(activityNames[1], "", input);
+                    await ctx.CreateTimer(ctx.CurrentUtcDateTime.Add(delay), "");
+                    return string.Join(",", first, second);
+                },
+                activities: new[]
+                {
+                    (activityNames[0], TestService.MakeActivity((TaskContext ctx, string input) => $"first-{input}")),
+                    (activityNames[1], TestService.MakeActivity((TaskContext ctx, string input) => $"second-{input}")),
+                });
+
+            await instance.WaitForCompletion(expectedOutput: "first-input,second-input");
+
+            clientSpan.Stop();
+            tracerProvider.ForceFlush();
+
+            Activity[] orchestrationSpans = exportedItems
+                .Where(span => span.OperationName == $"orchestration:{orchestrationName}" && span.Kind == ActivityKind.Server)
+                .ToArray();
+            Assert.NotEmpty(orchestrationSpans);
+
+            ActivitySpanId[] orchestrationSpanIds = orchestrationSpans
+                .Select(span => span.SpanId)
+                .Distinct()
+                .ToArray();
+            Assert.Single(orchestrationSpanIds);
+
+            ActivitySpanId orchestrationSpanId = orchestrationSpanIds[0];
+            var activityOperationNames = new HashSet<string>(activityNames.Select(name => $"activity:{name}"));
+
+            Activity[] completionSpans = exportedItems
+                .Where(span => span.Kind == ActivityKind.Client && activityOperationNames.Contains(span.OperationName))
+                .ToArray();
+            Assert.Equal(2, completionSpans.Length);
+            Assert.All(completionSpans, span => Assert.Equal(orchestrationSpanId, span.ParentSpanId));
+
+            Activity[] timerSpans = exportedItems
+                .Where(span => span.Kind == ActivityKind.Internal && span.OperationName == $"orchestration:{orchestrationName}:timer")
+                .ToArray();
+            Assert.Equal(2, timerSpans.Length);
+            Assert.All(timerSpans, span => Assert.Equal(orchestrationSpanId, span.ParentSpanId));
+        }
+
+        // This test observes raw Activity objects directly, without relying on exporter
+        // behavior, so it can fail fast if any emitted ParentSpanId refers to a span that
+        // was never actually produced. The hierarchy intentionally exercises nested
+        // sub-orchestrations plus an activity at the deepest level.
+        [Fact]
+        public async Task ActivityListenerCapturesNestedSubOrchestrationHierarchyWithoutMissingParents()
+        {
+            string traceSourceName = "ActivityListenerNestedTraceSource";
+            string parentOrchestrationName = "ActivityListenerParentOrchestration";
+            string childOrchestrationName = "ActivityListenerChildOrchestration";
+            string grandchildOrchestrationName = "ActivityListenerGrandchildOrchestration";
+            string[] activityNames =
+            {
+                "ActivityListenerParentActivity",
+                "ActivityListenerChildActivity",
+                "ActivityListenerGrandchildActivity",
+                "ActivityListenerAfterSubOrchestrationActivity",
+            };
+            TimeSpan delay = TimeSpan.FromMilliseconds(150);
+
+            using var listener = new ActivityCaptureListener(traceSourceName, "DurableTask.Core");
+            using var traceSource = new ActivitySource(traceSourceName);
+            using Activity incomingRequest = traceSource.StartActivity("IncomingRequest") ??
+                throw new InvalidOperationException("Failed to start the incoming request activity.");
+
+            this.testService.RegisterInlineOrchestration<string, string>(
+                grandchildOrchestrationName,
+                implementation: async (ctx, input) =>
+                {
+                    await ctx.CreateTimer(ctx.CurrentUtcDateTime.Add(delay), string.Empty);
+                    return await ctx.ScheduleTask<string>(activityNames[2], version: string.Empty, input);
+                });
+
+            this.testService.RegisterInlineOrchestration<string, string>(
+                childOrchestrationName,
+                implementation: async (ctx, input) =>
+                {
+                    string childActivity = await ctx.ScheduleTask<string>(activityNames[1], version: string.Empty, input);
+                    await ctx.CreateTimer(ctx.CurrentUtcDateTime.Add(delay), string.Empty);
+                    string grandchild = await ctx.CreateSubOrchestrationInstance<string>(grandchildOrchestrationName, version: string.Empty, input);
+                    return string.Join("|", childActivity, grandchild);
+                });
+
+            TestInstance<string> instance = await this.testService.RunOrchestration<string, string>(
+                input: "payload",
+                orchestrationName: parentOrchestrationName,
+                implementation: async (ctx, input) =>
+                {
+                    string parentActivity = await ctx.ScheduleTask<string>(activityNames[0], version: string.Empty, input);
+                    await ctx.CreateTimer(ctx.CurrentUtcDateTime.Add(delay), string.Empty);
+                    string child = await ctx.CreateSubOrchestrationInstance<string>(childOrchestrationName, version: string.Empty, input);
+                    await ctx.CreateTimer(ctx.CurrentUtcDateTime.Add(delay), string.Empty);
+                    string afterChild = await ctx.ScheduleTask<string>(activityNames[3], version: string.Empty, input);
+                    return string.Join("|", parentActivity, child, afterChild);
+                },
+                activities: new[]
+                {
+                    (activityNames[0], TestService.MakeActivity((TaskContext ctx, string input) => $"parent-{input}")),
+                    (activityNames[1], TestService.MakeActivity((TaskContext ctx, string input) => $"child-{input}")),
+                    (activityNames[2], TestService.MakeActivity((TaskContext ctx, string input) => $"grandchild-{input}")),
+                    (activityNames[3], TestService.MakeActivity((TaskContext ctx, string input) => $"after-{input}")),
+                });
+
+            await instance.WaitForCompletion(expectedOutput: "parent-payload|child-payload|grandchild-payload|after-payload");
+
+            incomingRequest.Stop();
+
+            CapturedActivity[] traceActivities = listener.GetActivities(incomingRequest.TraceId);
+            this.WriteCapturedActivities(traceActivities);
+
+            // The bug we are guarding against is "parentSpanId emitted, but the parent span
+            // does not exist". This assertion checks exactly that against the raw listener feed.
+            AssertNoMissingParents(traceActivities);
+
+            CapturedActivity parentOrchestration = GetUniqueSpan(
+                traceActivities,
+                $"orchestration:{parentOrchestrationName}",
+                ActivityKind.Server);
+            CapturedActivity childOrchestrationClient = GetUniqueSpan(
+                traceActivities,
+                $"orchestration:{childOrchestrationName}",
+                ActivityKind.Client);
+            CapturedActivity childOrchestrationServer = GetUniqueSpan(
+                traceActivities,
+                $"orchestration:{childOrchestrationName}",
+                ActivityKind.Server);
+            CapturedActivity grandchildOrchestrationClient = GetUniqueSpan(
+                traceActivities,
+                $"orchestration:{grandchildOrchestrationName}",
+                ActivityKind.Client);
+            CapturedActivity grandchildOrchestrationServer = GetUniqueSpan(
+                traceActivities,
+                $"orchestration:{grandchildOrchestrationName}",
+                ActivityKind.Server);
+            CapturedActivity grandchildActivityClient = GetUniqueSpan(
+                traceActivities,
+                $"activity:{activityNames[2]}",
+                ActivityKind.Client);
+            CapturedActivity grandchildActivityServer = GetUniqueSpan(
+                traceActivities,
+                $"activity:{activityNames[2]}",
+                ActivityKind.Server);
+
+            // Expected nesting:
+            // parent orchestration server
+            //   -> child sub-orchestration client
+            //     -> child sub-orchestration server
+            //       -> grandchild sub-orchestration client
+            //         -> grandchild sub-orchestration server
+            //           -> grandchild activity client
+            //             -> grandchild activity server
+            Assert.Equal(parentOrchestration.SpanId, childOrchestrationClient.ParentSpanId);
+            Assert.Equal(childOrchestrationClient.SpanId, childOrchestrationServer.ParentSpanId);
+            Assert.Equal(childOrchestrationServer.SpanId, grandchildOrchestrationClient.ParentSpanId);
+            Assert.Equal(grandchildOrchestrationClient.SpanId, grandchildOrchestrationServer.ParentSpanId);
+            Assert.Equal(grandchildOrchestrationServer.SpanId, grandchildActivityClient.ParentSpanId);
+            Assert.Equal(grandchildActivityClient.SpanId, grandchildActivityServer.ParentSpanId);
+        }
+
+        // This test covers sibling sub-orchestrations that run under the same parent. It
+        // ensures each invocation gets its own client/server pair and that the activities
+        // inside each child orchestration remain attached to the corresponding child span
+        // instead of pointing to a missing or reused parent.
+        [Fact]
+        public async Task ActivityListenerCapturesRepeatedSubOrchestrationsWithoutMissingParents()
+        {
+            string traceSourceName = "ActivityListenerRepeatedTraceSource";
+            string parentOrchestrationName = "ActivityListenerRepeatedParentOrchestration";
+            string childOrchestrationName = "ActivityListenerRepeatedChildOrchestration";
+            string childActivityName = "ActivityListenerRepeatedChildActivity";
+            TimeSpan delay = TimeSpan.FromMilliseconds(125);
+
+            using var listener = new ActivityCaptureListener(traceSourceName, "DurableTask.Core");
+            using var traceSource = new ActivitySource(traceSourceName);
+            using Activity incomingRequest = traceSource.StartActivity("IncomingRequest") ??
+                throw new InvalidOperationException("Failed to start the incoming request activity.");
+
+            this.testService.RegisterInlineOrchestration<string, string>(
+                childOrchestrationName,
+                implementation: async (ctx, input) =>
+                {
+                    string activityResult = await ctx.ScheduleTask<string>(childActivityName, version: string.Empty, input);
+                    await ctx.CreateTimer(ctx.CurrentUtcDateTime.Add(delay), string.Empty);
+                    return activityResult;
+                });
+
+            TestInstance<string> instance = await this.testService.RunOrchestration<string, string>(
+                input: "payload",
+                orchestrationName: parentOrchestrationName,
+                implementation: async (ctx, input) =>
+                {
+                    string first = await ctx.CreateSubOrchestrationInstance<string>(childOrchestrationName, version: string.Empty, input: $"{input}-1");
+                    await ctx.CreateTimer(ctx.CurrentUtcDateTime.Add(delay), string.Empty);
+                    string second = await ctx.CreateSubOrchestrationInstance<string>(childOrchestrationName, version: string.Empty, input: $"{input}-2");
+                    return string.Join("|", first, second);
+                },
+                activities: new[]
+                {
+                    (childActivityName, TestService.MakeActivity((TaskContext ctx, string input) => $"child-{input}")),
+                });
+
+            await instance.WaitForCompletion(expectedOutput: "child-payload-1|child-payload-2");
+
+            incomingRequest.Stop();
+
+            CapturedActivity[] traceActivities = listener.GetActivities(incomingRequest.TraceId);
+            this.WriteCapturedActivities(traceActivities);
+
+            // Every non-root ParentSpanId emitted for this trace must resolve to another
+            // captured span, otherwise Geneva can show the child span at the root.
+            AssertNoMissingParents(traceActivities);
+
+            CapturedActivity parentOrchestration = GetUniqueSpan(
+                traceActivities,
+                $"orchestration:{parentOrchestrationName}",
+                ActivityKind.Server);
+            CapturedActivity[] childOrchestrationClientSpans = GetDistinctSpans(
+                traceActivities,
+                $"orchestration:{childOrchestrationName}",
+                ActivityKind.Client);
+            CapturedActivity[] childOrchestrationServerSpans = GetDistinctSpans(
+                traceActivities,
+                $"orchestration:{childOrchestrationName}",
+                ActivityKind.Server);
+            CapturedActivity[] childActivityClientSpans = GetDistinctSpans(
+                traceActivities,
+                $"activity:{childActivityName}",
+                ActivityKind.Client);
+            CapturedActivity[] childActivityServerSpans = GetDistinctSpans(
+                traceActivities,
+                $"activity:{childActivityName}",
+                ActivityKind.Server);
+
+            Assert.Equal(2, childOrchestrationClientSpans.Length);
+            Assert.Equal(2, childOrchestrationServerSpans.Length);
+            Assert.Equal(2, childActivityClientSpans.Length);
+            Assert.Equal(2, childActivityServerSpans.Length);
+
+            // Each sibling sub-orchestration should attach to the same parent orchestration,
+            // but keep its own distinct client/server/activity chain below that parent.
+            Assert.All(childOrchestrationClientSpans, span => Assert.Equal(parentOrchestration.SpanId, span.ParentSpanId));
+
+            var childOrchestrationClientIds = childOrchestrationClientSpans.Select(span => span.SpanId).ToHashSet();
+            Assert.All(childOrchestrationServerSpans, span => Assert.Contains(span.ParentSpanId, childOrchestrationClientIds));
+
+            var childOrchestrationServerIds = childOrchestrationServerSpans.Select(span => span.SpanId).ToHashSet();
+            Assert.All(childActivityClientSpans, span => Assert.Contains(span.ParentSpanId, childOrchestrationServerIds));
+
+            var childActivityClientIds = childActivityClientSpans.Select(span => span.SpanId).ToHashSet();
+            Assert.All(childActivityServerSpans, span => Assert.Contains(span.ParentSpanId, childActivityClientIds));
         }
 
         [Fact]
@@ -1371,6 +1679,115 @@ namespace DurableTask.SqlServer.Tests.Integration
             Assert.Equal("staging", capturedTags["env"]);
             Assert.Equal("platform", capturedTags["team"]);
             Assert.Equal("high", capturedTags["priority"]);
+        }
+
+        void WriteCapturedActivities(IEnumerable<CapturedActivity> activities)
+        {
+            foreach (CapturedActivity activity in activities.OrderBy(a => a.StartTimeUtc))
+            {
+                this.outputHelper.WriteLine(
+                    $"{activity.TraceId}/{activity.SpanId} parent={activity.ParentSpanId} kind={activity.Kind} source={activity.SourceName} op={activity.OperationName}");
+            }
+        }
+
+        static void AssertNoMissingParents(IReadOnlyCollection<CapturedActivity> activities)
+        {
+            var knownSpanIds = activities.Select(activity => activity.SpanId).ToHashSet();
+            CapturedActivity[] missingParents = activities
+                .Where(activity => activity.ParentSpanId != default && !knownSpanIds.Contains(activity.ParentSpanId))
+                .ToArray();
+
+            Assert.True(
+                missingParents.Length == 0,
+                "Captured activities have missing parents:" + Environment.NewLine +
+                string.Join(
+                    Environment.NewLine,
+                    missingParents.Select(activity =>
+                        $"{activity.OperationName} [{activity.Kind}] span={activity.SpanId} parent={activity.ParentSpanId}")));
+        }
+
+        static CapturedActivity GetUniqueSpan(
+            IEnumerable<CapturedActivity> activities,
+            string operationName,
+            ActivityKind kind)
+        {
+            CapturedActivity[] matchingSpans = GetDistinctSpans(activities, operationName, kind);
+            Assert.Single(matchingSpans);
+            return matchingSpans[0];
+        }
+
+        static CapturedActivity[] GetDistinctSpans(
+            IEnumerable<CapturedActivity> activities,
+            string operationName,
+            ActivityKind kind)
+        {
+            return activities
+                .Where(activity => activity.OperationName == operationName && activity.Kind == kind)
+                .GroupBy(activity => activity.SpanId)
+                .Select(group => group.OrderByDescending(activity => activity.Duration).First())
+                .ToArray();
+        }
+
+        sealed class ActivityCaptureListener : IDisposable
+        {
+            readonly object sync = new object();
+            readonly HashSet<string> sourceNames;
+            readonly List<CapturedActivity> activities = new List<CapturedActivity>();
+            readonly ActivityListener listener;
+
+            public ActivityCaptureListener(params string[] sourceNames)
+            {
+                this.sourceNames = new HashSet<string>(sourceNames, StringComparer.Ordinal);
+                this.listener = new ActivityListener
+                {
+                    ShouldListenTo = source => this.sourceNames.Contains(source.Name),
+                    Sample = static (ref ActivityCreationOptions<ActivityContext> options) => ActivitySamplingResult.AllDataAndRecorded,
+                    SampleUsingParentId = static (ref ActivityCreationOptions<string> options) => ActivitySamplingResult.AllDataAndRecorded,
+                    ActivityStopped = activity =>
+                    {
+                        lock (this.sync)
+                        {
+                            this.activities.Add(CapturedActivity.From(activity));
+                        }
+                    },
+                };
+
+                ActivitySource.AddActivityListener(this.listener);
+            }
+
+            public CapturedActivity[] GetActivities(ActivityTraceId traceId)
+            {
+                lock (this.sync)
+                {
+                    return this.activities.Where(activity => activity.TraceId == traceId).ToArray();
+                }
+            }
+
+            public void Dispose() => this.listener.Dispose();
+        }
+
+        sealed record CapturedActivity(
+            string SourceName,
+            string OperationName,
+            ActivityKind Kind,
+            ActivityTraceId TraceId,
+            ActivitySpanId SpanId,
+            ActivitySpanId ParentSpanId,
+            DateTime StartTimeUtc,
+            TimeSpan Duration)
+        {
+            public static CapturedActivity From(Activity activity)
+            {
+                return new CapturedActivity(
+                    activity.Source.Name,
+                    activity.OperationName,
+                    activity.Kind,
+                    activity.TraceId,
+                    activity.SpanId,
+                    activity.ParentSpanId,
+                    activity.StartTimeUtc,
+                    activity.Duration);
+            }
         }
     }
 }

@@ -24,6 +24,10 @@ namespace DurableTask.SqlServer
     {
         static readonly Random random = new Random();
         static readonly char[] TraceContextSeparators = new char[] { '\n' };
+        const string TraceContextTraceStatePrefix = "@tracestate=";
+        const string TraceContextIdPrefix = "@id=";
+        const string TraceContextSpanIdPrefix = "@spanid=";
+        const string TraceContextClientSpanIdPrefix = "@clientspanid=";
         const int MaxTagsPayloadSize = 8000;
 
         public static string? GetStringOrNull(this DbDataReader reader, int columnIndex)
@@ -135,6 +139,7 @@ namespace DurableTask.SqlServer
                     {
                         Input = GetPayloadText(reader),
                         InstanceId = "", // Placeholder - shouldn't technically be needed (adding it requires a SQL schema change)
+                        ClientSpanId = GetSubOrchestrationClientSpanId(reader),
                         Name = GetName(reader),
                         Version = null,
                     };
@@ -441,6 +446,16 @@ namespace DurableTask.SqlServer
 
         internal static SqlString GetTraceContext(HistoryEvent e)
         {
+            if (e is SubOrchestrationInstanceCreatedEvent subOrchestrationEvent)
+            {
+                if (string.IsNullOrEmpty(subOrchestrationEvent.ClientSpanId))
+                {
+                    return SqlString.Null;
+                }
+
+                return new SqlString($"{TraceContextClientSpanIdPrefix}{subOrchestrationEvent.ClientSpanId}");
+            }
+
             if (e is not ISupportsDurableTraceContext eventWithTraceContext ||
                 eventWithTraceContext.ParentTraceContext == null)
             {
@@ -452,7 +467,24 @@ namespace DurableTask.SqlServer
             // We prefer a simple format instead of JSON because external callers may interact with this
             // data and we don't want to expose them to some internal JSON serialization format.
             var sb = new StringBuilder(traceContext.TraceParent, capacity: 800);
-            if (!string.IsNullOrEmpty(traceContext.TraceState))
+            if (!string.IsNullOrEmpty(traceContext.Id) || !string.IsNullOrEmpty(traceContext.SpanId))
+            {
+                if (!string.IsNullOrEmpty(traceContext.TraceState))
+                {
+                    sb.Append('\n').Append(TraceContextTraceStatePrefix).Append(traceContext.TraceState);
+                }
+
+                if (!string.IsNullOrEmpty(traceContext.Id))
+                {
+                    sb.Append('\n').Append(TraceContextIdPrefix).Append(traceContext.Id);
+                }
+
+                if (!string.IsNullOrEmpty(traceContext.SpanId))
+                {
+                    sb.Append('\n').Append(TraceContextSpanIdPrefix).Append(traceContext.SpanId);
+                }
+            }
+            else if (!string.IsNullOrEmpty(traceContext.TraceState))
             {
                 sb.Append('\n').Append(traceContext.TraceState);
             }
@@ -474,16 +506,64 @@ namespace DurableTask.SqlServer
                 return null;
             }
 
-            string[] parts = text.Split(TraceContextSeparators, count: 2, StringSplitOptions.RemoveEmptyEntries);
+            string[] parts = text.Split(TraceContextSeparators, StringSplitOptions.None);
             var traceContext = new DistributedTraceContext(traceParent: parts[0]);
 
-            if (parts.Length > 1)
+            for (int i = 1; i < parts.Length; i++)
             {
-                traceContext.TraceState = parts[1];
+                string part = parts[i];
+                if (string.IsNullOrEmpty(part))
+                {
+                    continue;
+                }
+
+                if (part.StartsWith(TraceContextTraceStatePrefix, StringComparison.Ordinal))
+                {
+                    traceContext.TraceState = part.Substring(TraceContextTraceStatePrefix.Length);
+                }
+                else if (part.StartsWith(TraceContextIdPrefix, StringComparison.Ordinal))
+                {
+                    traceContext.Id = part.Substring(TraceContextIdPrefix.Length);
+                }
+                else if (part.StartsWith(TraceContextSpanIdPrefix, StringComparison.Ordinal))
+                {
+                    traceContext.SpanId = part.Substring(TraceContextSpanIdPrefix.Length);
+                }
+                else if (traceContext.TraceState == null)
+                {
+                    // Preserve the legacy format, where the optional second line stored only tracestate.
+                    traceContext.TraceState = part;
+                }
             }
 
             traceContext.ActivityStartTime = GetTimestamp(reader);
             return traceContext;
+        }
+
+        static string? GetSubOrchestrationClientSpanId(DbDataReader reader)
+        {
+            int ordinal = reader.GetOrdinal("TraceContext");
+            if (reader.IsDBNull(ordinal))
+            {
+                return null;
+            }
+
+            string text = reader.GetString(ordinal);
+            if (string.IsNullOrEmpty(text))
+            {
+                return null;
+            }
+
+            string[] parts = text.Split(TraceContextSeparators, StringSplitOptions.None);
+            foreach (string part in parts)
+            {
+                if (part.StartsWith(TraceContextClientSpanIdPrefix, StringComparison.Ordinal))
+                {
+                    return part.Substring(TraceContextClientSpanIdPrefix.Length);
+                }
+            }
+
+            return null;
         }
 
         internal static IDictionary<string, string>? GetTags(DbDataReader reader)
