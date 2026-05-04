@@ -54,7 +54,7 @@ namespace DurableTask.SqlServer
                 {
                     messages = await this.FetchAsync(newLockExpiration);
                 }
-                catch (SqlException e) when (HasErrorNumber(e, LockLostErrorNumber))
+                catch (SqlException e) when (SqlUtils.HasErrorNumber(e, LockLostErrorNumber))
                 {
                     throw new SessionAbortedException(
                         $"Lost the lock for instance '{this.instanceId}'.", e);
@@ -143,19 +143,6 @@ namespace DurableTask.SqlServer
             }
 
             return messages;
-        }
-
-        static bool HasErrorNumber(SqlException ex, int errorNumber)
-        {
-            foreach (SqlError error in ex.Errors)
-            {
-                if (error.Number == errorNumber)
-                {
-                    return true;
-                }
-            }
-
-            return false;
         }
     }
 }

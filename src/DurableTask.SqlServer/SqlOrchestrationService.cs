@@ -421,7 +421,7 @@ namespace DurableTask.SqlServer
                 this.traceHelper.DuplicateExecutionDetected(instance, orchestrationState.Name);
                 return;
             }
-            catch (SqlException e) when (keepLocked && HasErrorNumber(e, SqlOrchestrationSession.LockLostErrorNumber))
+            catch (SqlException e) when (keepLocked && SqlUtils.HasErrorNumber(e, SqlOrchestrationSession.LockLostErrorNumber))
             {
                 throw new SessionAbortedException(
                     $"Lost the lock for instance '{instance.InstanceId}' during checkpoint.", e);
@@ -450,19 +450,6 @@ namespace DurableTask.SqlServer
             status == OrchestrationStatus.Completed ||
             status == OrchestrationStatus.Failed ||
             status == OrchestrationStatus.Terminated;
-
-        static bool HasErrorNumber(SqlException ex, int errorNumber)
-        {
-            foreach (SqlError error in ex.Errors)
-            {
-                if (error.Number == errorNumber)
-                {
-                    return true;
-                }
-            }
-
-            return false;
-        }
 
         // We abandon work items by just letting their locks expire. The benefit of this "lazy" approach is that it
         // removes the need for a DB access and also ensures that a work-item can't spam the error logs in a tight loop.
