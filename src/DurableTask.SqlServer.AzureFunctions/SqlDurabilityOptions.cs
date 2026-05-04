@@ -77,6 +77,13 @@ namespace DurableTask.SqlServer.AzureFunctions
                 settings.MaxActiveOrchestrations = extensionOptions.MaxConcurrentOrchestratorFunctions.Value;
             }
 
+            settings.ExtendedSessionsEnabled = extensionOptions.ExtendedSessionsEnabled;
+            if (extensionOptions.ExtendedSessionIdleTimeoutInSeconds > 0)
+            {
+                settings.ExtendedSessionIdleTimeout =
+                    TimeSpan.FromSeconds(extensionOptions.ExtendedSessionIdleTimeoutInSeconds);
+            }
+
             return settings;
         }
     }

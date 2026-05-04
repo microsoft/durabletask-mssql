@@ -758,7 +758,10 @@ CREATE OR ALTER PROCEDURE __SchemaNamePlaceholder__._CheckpointOrchestration
     @DeletedEvents MessageIDs READONLY,
     @NewHistoryEvents HistoryEvents READONLY,
     @NewOrchestrationEvents OrchestrationEvents READONLY,
-    @NewTaskEvents TaskEvents READONLY
+    @NewTaskEvents TaskEvents READONLY,
+    @KeepLocked bit = 0,
+    @LockedBy varchar(100) = NULL,
+    @NewLockExpiration datetime2 = NULL
 AS
 BEGIN
     BEGIN TRANSACTION
@@ -869,17 +872,31 @@ BEGIN
         [RuntimeStatus] = @RuntimeStatus,
         [LastUpdatedTime] = SYSUTCDATETIME(),
         [CompletedTime] = (CASE WHEN @IsCompleted = 1 THEN SYSUTCDATETIME() ELSE NULL END),
-        [LockExpiration] = NULL, -- release the lock
+        -- Release the lock unless the caller asked to keep it for an extended session and the instance is not in a terminal state.
+        [LockExpiration] = (CASE WHEN @KeepLocked = 1 AND @IsCompleted = 0 THEN @NewLockExpiration ELSE NULL END),
+        [LockedBy]       = (CASE WHEN @KeepLocked = 1 AND @IsCompleted = 0 THEN @LockedBy          ELSE NULL END),
         [CustomStatusPayloadID] = @CustomStatusPayloadID,
         [InputPayloadID] = @InputPayloadID,
         [OutputPayloadID] = @OutputPayloadID
     FROM Instances
-    WHERE [TaskHub] = @TaskHub and [InstanceID] = @InstanceID
+    WHERE
+        [TaskHub] = @TaskHub
+        AND [InstanceID] = @InstanceID
+        -- Do not overwrite a row that was taken over by a different worker after our lock expired.
+        AND (@KeepLocked = 0 OR [LockedBy] = @LockedBy)
 
     IF @@ROWCOUNT = 0
     BEGIN
-        ROLLBACK TRANSACTION;
-        THROW 50000, 'The instance does not exist.', 1;
+        IF @KeepLocked = 1
+        BEGIN
+            ROLLBACK TRANSACTION;
+            THROW 50003, 'Lock lost.', 1;
+        END
+        ELSE
+        BEGIN
+            ROLLBACK TRANSACTION;
+            THROW 50000, 'The instance does not exist.', 1;
+        END
     END
     -- External event messages can create new instances
     -- NOTE: There is a chance this could result in deadlocks if two 
@@ -1333,6 +1350,93 @@ BEGIN
     UPDATE Instances
     SET [LockExpiration] = @LockExpiration
     WHERE [TaskHub] = @TaskHub AND [InstanceID] = @InstanceID
+END
+GO
+
+
+-- Used by extended sessions to fetch any new events for an already-locked
+-- instance without going through the normal lock-acquisition flow.
+CREATE OR ALTER PROCEDURE __SchemaNamePlaceholder__._FetchOrchestrationMessages
+    @InstanceID varchar(100),
+    @LockedBy varchar(100),
+    @LockExpiration datetime2,
+    @BatchSize int
+AS
+BEGIN
+    DECLARE @now datetime2 = SYSUTCDATETIME()
+    DECLARE @TaskHub varchar(50) = __SchemaNamePlaceholder__.CurrentTaskHub()
+    DECLARE @parentInstanceID varchar(100)
+    DECLARE @version varchar(100)
+    DECLARE @runtimeStatus varchar(30)
+    DECLARE @tags varchar(8000)
+
+    UPDATE Instances
+    SET
+        [LockExpiration] = @LockExpiration,
+        @parentInstanceID = [ParentInstanceID],
+        @version = [Version],
+        @runtimeStatus = [RuntimeStatus],
+        @tags = [Tags]
+    WHERE
+        [TaskHub] = @TaskHub
+        AND [InstanceID] = @InstanceID
+        AND [LockedBy] = @LockedBy
+        AND [LockExpiration] IS NOT NULL
+        AND [LockExpiration] > @now
+
+    IF @@ROWCOUNT = 0
+        THROW 50003, 'Lock lost.', 1;
+
+    IF @runtimeStatus IN ('Completed', 'Failed', 'Terminated')
+        RETURN
+
+    -- Same column shape as the first result-set of _LockNextOrchestration
+    SELECT TOP (@BatchSize)
+        N.[SequenceNumber],
+        N.[Timestamp],
+        N.[VisibleTime],
+        N.[DequeueCount],
+        N.[InstanceID],
+        N.[ExecutionID],
+        N.[EventType],
+        N.[Name],
+        N.[RuntimeStatus],
+        N.[TaskID],
+        P.[Reason],
+        P.[Text] AS [PayloadText],
+        P.[PayloadID],
+        DATEDIFF(SECOND, [Timestamp], @now) AS [WaitTime],
+        @parentInstanceID as [ParentInstanceID],
+        @version as [Version],
+        N.[TraceContext],
+        @tags as [Tags]
+    FROM NewEvents N
+        LEFT OUTER JOIN __SchemaNamePlaceholder__.[Payloads] P ON
+            P.[TaskHub] = @TaskHub AND
+            P.[InstanceID] = N.[InstanceID] AND
+            P.[PayloadID] = N.[PayloadID]
+    WHERE
+        N.[TaskHub] = @TaskHub AND
+        N.[InstanceID] = @InstanceID AND
+        (N.[VisibleTime] IS NULL OR N.[VisibleTime] < @now)
+END
+GO
+
+
+-- Releases an instance lock that was kept across an extended session.
+CREATE OR ALTER PROCEDURE __SchemaNamePlaceholder__._ReleaseOrchestrationLock
+    @InstanceID varchar(100),
+    @LockedBy varchar(100)
+AS
+BEGIN
+    DECLARE @TaskHub varchar(50) = __SchemaNamePlaceholder__.CurrentTaskHub()
+
+    UPDATE Instances
+    SET [LockExpiration] = NULL, [LockedBy] = NULL
+    WHERE
+        [TaskHub] = @TaskHub
+        AND [InstanceID] = @InstanceID
+        AND [LockedBy] = @LockedBy
 END
 GO
 

@@ -94,6 +94,18 @@ namespace DurableTask.SqlServer
         public int MaxActiveOrchestrations { get; set; } = Environment.ProcessorCount;
 
         /// <summary>
+        /// Gets or sets a flag indicating whether to enable extended sessions.
+        /// </summary>
+        [JsonProperty("extendedSessionsEnabled")]
+        public bool ExtendedSessionsEnabled { get; set; } = false;
+
+        /// <summary>
+        /// Gets or sets the number of seconds before an idle session times out.
+        /// </summary>
+        [JsonProperty("extendedSessionIdleTimeout")]
+        public TimeSpan ExtendedSessionIdleTimeout { get; set; } = TimeSpan.FromSeconds(30);
+
+        /// <summary>
         /// Gets or sets the minimum interval to poll for orchestrations.
         /// Polling interval increases when no orchestrations or activities are found.
         /// The default value is 50 milliseconds.
