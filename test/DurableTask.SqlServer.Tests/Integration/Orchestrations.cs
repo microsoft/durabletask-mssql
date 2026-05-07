@@ -806,8 +806,11 @@ namespace DurableTask.SqlServer.Tests.Integration
             Assert.True(subOrchestratorSpan.Duration > delay, $"Unexpected duration: {subOrchestratorSpan.Duration}");
             Assert.True(subOrchestratorSpan.Duration < delay * 2, $"Unexpected duration: {subOrchestratorSpan.Duration}");
 
-            Activity subOrchestratorClientSpan = exportedItems.LastOrDefault(
-                span => span.OperationName == $"orchestration:{subOrchestrationName}" && span.Kind == ActivityKind.Client);
+            // The test schedules exactly one sub-orchestration, so there must be exactly one
+            // matching client span. Asserting uniqueness (instead of LastOrDefault) makes this
+            // regression fail loudly if a future change ever causes a duplicate emission.
+            Activity subOrchestratorClientSpan = Assert.Single(exportedItems.Where(
+                span => span.OperationName == $"orchestration:{subOrchestrationName}" && span.Kind == ActivityKind.Client));
             Assert.NotNull(subOrchestratorClientSpan);
 
             // The sub-orchestration execution span hangs off the sub-orchestration client span,
@@ -827,8 +830,10 @@ namespace DurableTask.SqlServer.Tests.Integration
             Assert.True(activitySpan.Duration > delay);
             Assert.True(activitySpan.Duration < delay * 2);
 
-            Activity activityClientSpan = exportedItems.LastOrDefault(
-                span => span.OperationName == $"activity:{activityName}" && span.Kind == ActivityKind.Client);
+            // Same uniqueness rationale as the sub-orchestration client span above: the test
+            // schedules a single activity, so any duplicate client span would be a regression.
+            Activity activityClientSpan = Assert.Single(exportedItems.Where(
+                span => span.OperationName == $"activity:{activityName}" && span.Kind == ActivityKind.Client));
             Assert.NotNull(activityClientSpan);
 
             // This is the key shape for selling the trace fix: an activity scheduled by a

@@ -453,7 +453,10 @@ namespace DurableTask.SqlServer
                     return SqlString.Null;
                 }
 
-                return new SqlString($"{TraceContextClientSpanIdPrefix}{subOrchestrationEvent.ClientSpanId}");
+                // Reserve line 1 for traceparent (empty here) so all TraceContext payloads share
+                // a single parsing contract: parts[0] is always traceparent (possibly empty),
+                // and subsequent lines carry typed @key=value fields like @clientspanid=.
+                return new SqlString($"\n{TraceContextClientSpanIdPrefix}{subOrchestrationEvent.ClientSpanId}");
             }
 
             if (e is not ISupportsDurableTraceContext eventWithTraceContext ||
@@ -492,7 +495,21 @@ namespace DurableTask.SqlServer
             return sb.ToString();
         }
 
-        static DistributedTraceContext? GetTraceContext(DbDataReader reader)
+        /// <summary>
+        /// Parsed result of a TraceContext column payload. Centralizes the on-the-wire format
+        /// (line 1 = traceparent, subsequent lines = typed @key=value fields) so all callers
+        /// share the same parsing contract.
+        /// </summary>
+        struct ParsedTraceContext
+        {
+            public string? TraceParent { get; set; }
+            public string? TraceState { get; set; }
+            public string? Id { get; set; }
+            public string? SpanId { get; set; }
+            public string? ClientSpanId { get; set; }
+        }
+
+        static ParsedTraceContext? ParseTraceContext(DbDataReader reader)
         {
             int ordinal = reader.GetOrdinal("TraceContext");
             if (reader.IsDBNull(ordinal))
@@ -507,9 +524,28 @@ namespace DurableTask.SqlServer
             }
 
             string[] parts = text.Split(TraceContextSeparators, StringSplitOptions.None);
-            var traceContext = new DistributedTraceContext(traceParent: parts[0]);
 
-            for (int i = 1; i < parts.Length; i++)
+            string? traceParent = null;
+            string? traceState = null;
+            string? id = null;
+            string? spanId = null;
+            string? clientSpanId = null;
+
+            // Line 1 is reserved for traceparent. Older histories may have written a typed
+            // "@key=value" prefix on line 1 (legacy sub-orchestration payload). Detect that
+            // case by checking for the @ sentinel; otherwise treat parts[0] as traceparent.
+            int startIndex;
+            if (!string.IsNullOrEmpty(parts[0]) && parts[0][0] != '@')
+            {
+                traceParent = parts[0];
+                startIndex = 1;
+            }
+            else
+            {
+                startIndex = 0;
+            }
+
+            for (int i = startIndex; i < parts.Length; i++)
             {
                 string part = parts[i];
                 if (string.IsNullOrEmpty(part))
@@ -519,51 +555,61 @@ namespace DurableTask.SqlServer
 
                 if (part.StartsWith(TraceContextTraceStatePrefix, StringComparison.Ordinal))
                 {
-                    traceContext.TraceState = part.Substring(TraceContextTraceStatePrefix.Length);
+                    traceState = part.Substring(TraceContextTraceStatePrefix.Length);
                 }
                 else if (part.StartsWith(TraceContextIdPrefix, StringComparison.Ordinal))
                 {
-                    traceContext.Id = part.Substring(TraceContextIdPrefix.Length);
+                    id = part.Substring(TraceContextIdPrefix.Length);
                 }
                 else if (part.StartsWith(TraceContextSpanIdPrefix, StringComparison.Ordinal))
                 {
-                    traceContext.SpanId = part.Substring(TraceContextSpanIdPrefix.Length);
+                    spanId = part.Substring(TraceContextSpanIdPrefix.Length);
                 }
-                else if (traceContext.TraceState == null)
+                else if (part.StartsWith(TraceContextClientSpanIdPrefix, StringComparison.Ordinal))
+                {
+                    clientSpanId = part.Substring(TraceContextClientSpanIdPrefix.Length);
+                }
+                else if (traceState == null && i > 0)
                 {
                     // Preserve the legacy format, where the optional second line stored only tracestate.
-                    traceContext.TraceState = part;
+                    traceState = part;
                 }
             }
 
-            traceContext.ActivityStartTime = GetTimestamp(reader);
+            return new ParsedTraceContext
+            {
+                TraceParent = traceParent,
+                TraceState = traceState,
+                Id = id,
+                SpanId = spanId,
+                ClientSpanId = clientSpanId,
+            };
+        }
+
+        static DistributedTraceContext? GetTraceContext(DbDataReader reader)
+        {
+            ParsedTraceContext? parsed = ParseTraceContext(reader);
+            if (parsed == null || string.IsNullOrEmpty(parsed.Value.TraceParent))
+            {
+                // No traceparent means this row carries only sub-orchestration-specific data
+                // (e.g. @clientspanid=...) which is not a DistributedTraceContext.
+                return null;
+            }
+
+            ParsedTraceContext value = parsed.Value;
+            var traceContext = new DistributedTraceContext(traceParent: value.TraceParent!)
+            {
+                TraceState = value.TraceState,
+                Id = value.Id,
+                SpanId = value.SpanId,
+                ActivityStartTime = GetTimestamp(reader),
+            };
             return traceContext;
         }
 
         static string? GetSubOrchestrationClientSpanId(DbDataReader reader)
         {
-            int ordinal = reader.GetOrdinal("TraceContext");
-            if (reader.IsDBNull(ordinal))
-            {
-                return null;
-            }
-
-            string text = reader.GetString(ordinal);
-            if (string.IsNullOrEmpty(text))
-            {
-                return null;
-            }
-
-            string[] parts = text.Split(TraceContextSeparators, StringSplitOptions.None);
-            foreach (string part in parts)
-            {
-                if (part.StartsWith(TraceContextClientSpanIdPrefix, StringComparison.Ordinal))
-                {
-                    return part.Substring(TraceContextClientSpanIdPrefix.Length);
-                }
-            }
-
-            return null;
+            return ParseTraceContext(reader)?.ClientSpanId;
         }
 
         internal static IDictionary<string, string>? GetTags(DbDataReader reader)

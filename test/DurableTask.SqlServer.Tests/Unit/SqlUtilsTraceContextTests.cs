@@ -90,9 +90,31 @@ namespace DurableTask.SqlServer.Tests.Unit
 
             SqlString serialized = SqlUtils.GetTraceContext(createdEvent);
             Assert.False(serialized.IsNull);
-            Assert.Equal("@clientspanid=fedcba9876543210", serialized.Value);
+            // Line 1 is reserved for traceparent (empty for sub-orchestration payloads)
+            // so all TraceContext payloads share the same parsing contract.
+            Assert.Equal("\n@clientspanid=fedcba9876543210", serialized.Value);
 
             using var reader = CreateSubOrchestrationCreatedReader(serialized.Value, timestamp);
+            Assert.True(reader.Read());
+
+            var roundTrippedEvent = Assert.IsType<SubOrchestrationInstanceCreatedEvent>(reader.GetHistoryEvent());
+            Assert.Equal(clientSpanId, roundTrippedEvent.ClientSpanId);
+        }
+
+        // Older histories may still contain the legacy single-line "@clientspanid=..." payload
+        // that was written before line 1 was reserved for traceparent. This regression makes sure
+        // the reader keeps parsing such rows correctly, so an upgrade does not break running
+        // orchestrations whose history was persisted by an older build.
+        [Fact]
+        public void GetHistoryEvent_ParsesLegacyClientSpanIdPayloadWithoutLeadingNewline()
+        {
+            DateTime timestamp = new DateTime(2026, 04, 15, 23, 00, 00, DateTimeKind.Utc);
+            const string clientSpanId = "abcdef0123456789";
+
+            // Legacy on-the-wire format: the @clientspanid= prefix sits on line 1.
+            string legacyPayload = "@clientspanid=" + clientSpanId;
+
+            using var reader = CreateSubOrchestrationCreatedReader(legacyPayload, timestamp);
             Assert.True(reader.Read());
 
             var roundTrippedEvent = Assert.IsType<SubOrchestrationInstanceCreatedEvent>(reader.GetHistoryEvent());
