@@ -453,10 +453,13 @@ namespace DurableTask.SqlServer
                     return SqlString.Null;
                 }
 
-                // Reserve line 1 for traceparent (empty here) so all TraceContext payloads share
-                // a single parsing contract: parts[0] is always traceparent (possibly empty),
-                // and subsequent lines carry typed @key=value fields like @clientspanid=.
-                return new SqlString($"\n{TraceContextClientSpanIdPrefix}{subOrchestrationEvent.ClientSpanId}");
+                // Rolling-upgrade safe layout:
+                //   line 1: empty (no traceparent for a sub-orch-only payload)
+                //   line 2: empty (reserved tracestate slot — older readers see "" here, not @clientspanid=)
+                //   line 3: @clientspanid=...
+                // Older workers, which only inspect parts[0]/parts[1], will see empty traceparent
+                // and empty tracestate and therefore not produce a malformed DistributedTraceContext.
+                return new SqlString($"\n\n{TraceContextClientSpanIdPrefix}{subOrchestrationEvent.ClientSpanId}");
             }
 
             if (e is not ISupportsDurableTraceContext eventWithTraceContext ||
@@ -467,29 +470,42 @@ namespace DurableTask.SqlServer
 
             DistributedTraceContext traceContext = eventWithTraceContext.ParentTraceContext;
 
-            // We prefer a simple format instead of JSON because external callers may interact with this
-            // data and we don't want to expose them to some internal JSON serialization format.
+            // Wire format (rolling-upgrade safe):
+            //   line 1: traceparent
+            //   line 2 (optional): tracestate, RAW with no prefix — matches the legacy format
+            //                      so older workers reading new rows still extract tracestate correctly.
+            //                      An empty placeholder line is written when tracestate is empty but
+            //                      Id/SpanId follow, so newer @-prefixed lines never land on line 2.
+            //   line 3+ (optional): @id=..., @spanid=... (and @clientspanid= for sub-orchestration rows)
+            //                      Older workers ignore lines beyond the second one.
+            // We prefer this simple line-based format over JSON because external callers may interact
+            // with this data and we don't want to expose them to some internal serialization format.
             var sb = new StringBuilder(traceContext.TraceParent, capacity: 800);
-            if (!string.IsNullOrEmpty(traceContext.Id) || !string.IsNullOrEmpty(traceContext.SpanId))
+
+            bool hasId = !string.IsNullOrEmpty(traceContext.Id);
+            bool hasSpanId = !string.IsNullOrEmpty(traceContext.SpanId);
+            bool hasTraceState = !string.IsNullOrEmpty(traceContext.TraceState);
+
+            if (hasTraceState || hasId || hasSpanId)
             {
-                if (!string.IsNullOrEmpty(traceContext.TraceState))
+                // Always reserve line 2 for tracestate (raw, possibly empty) so older readers,
+                // which only look at parts[0]/parts[1], never see an "@key=" prefix line and
+                // misinterpret it as the tracestate value during a rolling upgrade.
+                sb.Append('\n');
+                if (hasTraceState)
                 {
-                    sb.Append('\n').Append(TraceContextTraceStatePrefix).Append(traceContext.TraceState);
+                    sb.Append(traceContext.TraceState);
                 }
 
-                if (!string.IsNullOrEmpty(traceContext.Id))
+                if (hasId)
                 {
                     sb.Append('\n').Append(TraceContextIdPrefix).Append(traceContext.Id);
                 }
 
-                if (!string.IsNullOrEmpty(traceContext.SpanId))
+                if (hasSpanId)
                 {
                     sb.Append('\n').Append(TraceContextSpanIdPrefix).Append(traceContext.SpanId);
                 }
-            }
-            else if (!string.IsNullOrEmpty(traceContext.TraceState))
-            {
-                sb.Append('\n').Append(traceContext.TraceState);
             }
 
             return sb.ToString();

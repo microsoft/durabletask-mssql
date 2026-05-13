@@ -39,8 +39,11 @@ namespace DurableTask.SqlServer.Tests.Unit
 
             SqlString serialized = SqlUtils.GetTraceContext(startedEvent);
             Assert.False(serialized.IsNull);
+            // Wire format is rolling-upgrade safe: line 2 is RAW tracestate (no @tracestate= prefix)
+            // so older workers reading new rows continue to extract tracestate correctly. Newer
+            // @-prefixed fields go on lines 3+ and are ignored by older readers.
             Assert.Equal(
-                "00-0123456789abcdef0123456789abcdef-0123456789abcdef-01\n@tracestate=vendor=value\n@id=00-0123456789abcdef0123456789abcdef-fedcba9876543210-01\n@spanid=fedcba9876543210",
+                "00-0123456789abcdef0123456789abcdef-0123456789abcdef-01\nvendor=value\n@id=00-0123456789abcdef0123456789abcdef-fedcba9876543210-01\n@spanid=fedcba9876543210",
                 serialized.Value);
 
             using var reader = CreateExecutionStartedReader(serialized.Value, timestamp);
@@ -53,6 +56,81 @@ namespace DurableTask.SqlServer.Tests.Unit
             Assert.Equal(traceContext.Id, roundTrippedEvent.ParentTraceContext.Id);
             Assert.Equal(traceContext.SpanId, roundTrippedEvent.ParentTraceContext.SpanId);
             Assert.Equal(new DateTimeOffset(timestamp), roundTrippedEvent.ParentTraceContext.ActivityStartTime);
+        }
+
+        // Rolling-upgrade safety: a worker running the old code (which only knows about
+        // line 1 = traceparent and line 2 = raw tracestate) must still extract the correct
+        // traceparent and tracestate when it reads a row written by a worker running the
+        // new code. The new code adds @id= / @spanid= on lines 3+, but those lines must NOT
+        // contaminate the tracestate slot on line 2. This test asserts the wire-format
+        // contract that protects that invariant.
+        [Fact]
+        public void GetTraceContext_NewWriterPlacesRawTraceStateOnLineTwo_ForOldReaderCompat()
+        {
+            var traceContext = new DistributedTraceContext(
+                traceParent: "00-0123456789abcdef0123456789abcdef-0123456789abcdef-01",
+                traceState: "vendor=value")
+            {
+                Id = "00-0123456789abcdef0123456789abcdef-fedcba9876543210-01",
+                SpanId = "fedcba9876543210",
+            };
+
+            var startedEvent = new ExecutionStartedEvent(-1, input: null)
+            {
+                Name = "TestOrchestration",
+                OrchestrationInstance = new OrchestrationInstance
+                {
+                    InstanceId = "instance",
+                    ExecutionId = "execution",
+                },
+                ParentTraceContext = traceContext,
+            };
+
+            string payload = SqlUtils.GetTraceContext(startedEvent).Value;
+            string[] parts = payload.Split('\n');
+
+            // Simulate the legacy reader: parts[0] = traceparent, parts[1] = tracestate (raw).
+            Assert.Equal("00-0123456789abcdef0123456789abcdef-0123456789abcdef-01", parts[0]);
+            Assert.Equal("vendor=value", parts[1]);
+            // The legacy reader stops at parts[1]; everything beyond is ignored.
+            Assert.DoesNotContain(parts[1], "@");
+        }
+
+        // Rolling-upgrade safety for the empty-tracestate case: when the new writer has no
+        // tracestate but does have Id/SpanId, line 2 must still exist as an empty placeholder
+        // so the @-prefixed lines that follow never land in the tracestate slot.
+        [Fact]
+        public void GetTraceContext_NewWriterEmitsEmptyTraceStateLine_WhenOnlyIdAndSpanIdSet()
+        {
+            var traceContext = new DistributedTraceContext(
+                traceParent: "00-0123456789abcdef0123456789abcdef-0123456789abcdef-01")
+            {
+                Id = "00-0123456789abcdef0123456789abcdef-fedcba9876543210-01",
+                SpanId = "fedcba9876543210",
+            };
+
+            var startedEvent = new ExecutionStartedEvent(-1, input: null)
+            {
+                Name = "TestOrchestration",
+                OrchestrationInstance = new OrchestrationInstance
+                {
+                    InstanceId = "instance",
+                    ExecutionId = "execution",
+                },
+                ParentTraceContext = traceContext,
+            };
+
+            string payload = SqlUtils.GetTraceContext(startedEvent).Value;
+            string[] parts = payload.Split('\n');
+
+            Assert.Equal("00-0123456789abcdef0123456789abcdef-0123456789abcdef-01", parts[0]);
+            // Line 2 is an empty placeholder. An older reader will set TraceState = string.Empty,
+            // which is functionally indistinguishable from "no tracestate". Without this empty
+            // placeholder, the older reader would see "@id=..." on line 2 and store that bogus
+            // value as the tracestate.
+            Assert.Equal(string.Empty, parts[1]);
+            Assert.StartsWith("@id=", parts[2]);
+            Assert.StartsWith("@spanid=", parts[3]);
         }
 
         [Fact]
@@ -90,9 +168,12 @@ namespace DurableTask.SqlServer.Tests.Unit
 
             SqlString serialized = SqlUtils.GetTraceContext(createdEvent);
             Assert.False(serialized.IsNull);
-            // Line 1 is reserved for traceparent (empty for sub-orchestration payloads)
-            // so all TraceContext payloads share the same parsing contract.
-            Assert.Equal("\n@clientspanid=fedcba9876543210", serialized.Value);
+            // Wire format is rolling-upgrade safe:
+            //   line 1: empty (no traceparent for a sub-orch-only payload)
+            //   line 2: empty placeholder (reserved tracestate slot — older readers see "",
+            //           not "@clientspanid=", so they don't misinterpret it as tracestate)
+            //   line 3: @clientspanid=...
+            Assert.Equal("\n\n@clientspanid=fedcba9876543210", serialized.Value);
 
             using var reader = CreateSubOrchestrationCreatedReader(serialized.Value, timestamp);
             Assert.True(reader.Read());
