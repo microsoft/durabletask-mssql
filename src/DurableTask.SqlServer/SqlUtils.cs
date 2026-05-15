@@ -24,10 +24,21 @@ namespace DurableTask.SqlServer
     {
         static readonly Random random = new Random();
         static readonly char[] TraceContextSeparators = new char[] { '\n' };
-        const string TraceContextTraceStatePrefix = "@tracestate=";
-        const string TraceContextIdPrefix = "@id=";
-        const string TraceContextSpanIdPrefix = "@spanid=";
-        const string TraceContextClientSpanIdPrefix = "@clientspanid=";
+
+        // Durable Task MSSQL provider's W3C tracestate vendor key. The extended trace-context
+        // fields (durable orchestration span identity, sub-orchestration client span id) are
+        // carried as values of this single tracestate entry so the on-the-wire payload is
+        // rolling-upgrade safe: older workers preserve the entire tracestate string (W3C spec
+        // requires unknown vendor keys to be propagated unchanged), and newer workers know
+        // to extract our fields out of it.
+        const string TracestateVendorKey = "durabletask-mssql";
+        const string TracestateVendorKeyEquals = TracestateVendorKey + "=";
+
+        // Field names inside the vendor key's value. Format: "id:...;span:...;client:..."
+        const string VendorFieldId = "id";
+        const string VendorFieldSpanId = "span";
+        const string VendorFieldClientSpanId = "client";
+
         const int MaxTagsPayloadSize = 8000;
 
         public static string? GetStringOrNull(this DbDataReader reader, int columnIndex)
@@ -453,13 +464,14 @@ namespace DurableTask.SqlServer
                     return SqlString.Null;
                 }
 
-                // Rolling-upgrade safe layout:
-                //   line 1: empty (no traceparent for a sub-orch-only payload)
-                //   line 2: empty (reserved tracestate slot — older readers see "" here, not @clientspanid=)
-                //   line 3: @clientspanid=...
-                // Older workers, which only inspect parts[0]/parts[1], will see empty traceparent
-                // and empty tracestate and therefore not produce a malformed DistributedTraceContext.
-                return new SqlString($"\n\n{TraceContextClientSpanIdPrefix}{subOrchestrationEvent.ClientSpanId}");
+                // Wire format for sub-orchestration rows:
+                //   "durabletask-mssql=client:<spanId>"
+                // This is a single line — no traceparent, no newlines. The pre-PR reader never
+                // inspected the TraceContext column for sub-orchestration rows (only the new
+                // SqlUtils.GetSubOrchestrationClientSpanId helper does), so this payload is
+                // only ever parsed by code that knows about the vendor key.
+                return new SqlString(
+                    BuildVendorKeyValue(id: null, spanId: null, clientSpanId: subOrchestrationEvent.ClientSpanId));
             }
 
             if (e is not ISupportsDurableTraceContext eventWithTraceContext ||
@@ -470,41 +482,48 @@ namespace DurableTask.SqlServer
 
             DistributedTraceContext traceContext = eventWithTraceContext.ParentTraceContext;
 
-            // Wire format (rolling-upgrade safe):
-            //   line 1: traceparent
-            //   line 2 (optional): tracestate, RAW with no prefix — matches the legacy format
-            //                      so older workers reading new rows still extract tracestate correctly.
-            //                      An empty placeholder line is written when tracestate is empty but
-            //                      Id/SpanId follow, so newer @-prefixed lines never land on line 2.
-            //   line 3+ (optional): @id=..., @spanid=... (and @clientspanid= for sub-orchestration rows)
-            //                      Older workers ignore lines beyond the second one.
-            // We prefer this simple line-based format over JSON because external callers may interact
-            // with this data and we don't want to expose them to some internal serialization format.
+            // Wire format (rolling-upgrade safe, fully W3C-compatible):
+            //   line 1: traceparent (unchanged)
+            //   line 2: tracestate, optionally with our "durabletask-mssql=..." vendor key
+            //           prepended. The legacy reader uses
+            //           Split({'\n'}, count: 2, RemoveEmptyEntries) and assigns parts[1] to
+            //           TraceState wholesale, so the line MUST be a single W3C-valid tracestate
+            //           (no embedded newlines, no equals/comma except at the standard positions).
+            //
+            // The Id, SpanId, and (for sub-orch rows) ClientSpanId fields ride inside the
+            // vendor key's value. W3C tracestate explicitly requires unknown vendor keys to
+            // be preserved and propagated, so an older worker on a new row reads the entire
+            // tracestate string (vendor key included), assigns it to Activity.TraceStateString,
+            // and forwards it downstream untouched.
+            //
+            // Format of the vendor key value:
+            //   id:<durable-id>;span:<durable-spanid>[;client:<client-span-id>]
+            // Field separator is ';' (allowed in W3C tracestate values).
             var sb = new StringBuilder(traceContext.TraceParent, capacity: 800);
 
             bool hasId = !string.IsNullOrEmpty(traceContext.Id);
             bool hasSpanId = !string.IsNullOrEmpty(traceContext.SpanId);
-            bool hasTraceState = !string.IsNullOrEmpty(traceContext.TraceState);
+            bool hasUserTraceState = !string.IsNullOrEmpty(traceContext.TraceState);
 
-            if (hasTraceState || hasId || hasSpanId)
+            string? vendorValue = (hasId || hasSpanId)
+                ? BuildVendorKeyValue(traceContext.Id, traceContext.SpanId, clientSpanId: null)
+                : null;
+
+            if (vendorValue != null || hasUserTraceState)
             {
-                // Always reserve line 2 for tracestate (raw, possibly empty) so older readers,
-                // which only look at parts[0]/parts[1], never see an "@key=" prefix line and
-                // misinterpret it as the tracestate value during a rolling upgrade.
                 sb.Append('\n');
-                if (hasTraceState)
+                if (vendorValue != null)
+                {
+                    sb.Append(vendorValue);
+                    if (hasUserTraceState)
+                    {
+                        // Multiple tracestate entries are comma-separated per W3C spec.
+                        sb.Append(',').Append(traceContext.TraceState);
+                    }
+                }
+                else
                 {
                     sb.Append(traceContext.TraceState);
-                }
-
-                if (hasId)
-                {
-                    sb.Append('\n').Append(TraceContextIdPrefix).Append(traceContext.Id);
-                }
-
-                if (hasSpanId)
-                {
-                    sb.Append('\n').Append(TraceContextSpanIdPrefix).Append(traceContext.SpanId);
                 }
             }
 
@@ -512,9 +531,52 @@ namespace DurableTask.SqlServer
         }
 
         /// <summary>
-        /// Parsed result of a TraceContext column payload. Centralizes the on-the-wire format
-        /// (line 1 = traceparent, subsequent lines = typed @key=value fields) so all callers
-        /// share the same parsing contract.
+        /// Builds the value portion of the "durabletask-mssql=..." W3C tracestate vendor key.
+        /// Output looks like one of:
+        ///   durabletask-mssql=id:...;span:...
+        ///   durabletask-mssql=id:...;span:...;client:...
+        ///   durabletask-mssql=client:...
+        /// </summary>
+        static string BuildVendorKeyValue(string? id, string? spanId, string? clientSpanId)
+        {
+            var sb = new StringBuilder(TracestateVendorKeyEquals, capacity: 200);
+            bool first = true;
+
+            void AppendField(string fieldName, string value)
+            {
+                if (!first)
+                {
+                    sb.Append(';');
+                }
+
+                sb.Append(fieldName).Append(':').Append(value);
+                first = false;
+            }
+
+            if (!string.IsNullOrEmpty(id))
+            {
+                AppendField(VendorFieldId, id!);
+            }
+
+            if (!string.IsNullOrEmpty(spanId))
+            {
+                AppendField(VendorFieldSpanId, spanId!);
+            }
+
+            if (!string.IsNullOrEmpty(clientSpanId))
+            {
+                AppendField(VendorFieldClientSpanId, clientSpanId!);
+            }
+
+            return sb.ToString();
+        }
+
+        /// <summary>
+        /// Parsed result of a TraceContext column payload. The on-the-wire format mirrors the
+        /// legacy "traceparent\ntracestate" layout, with the extended Durable Task MSSQL fields
+        /// (Id, SpanId, ClientSpanId) carried inside the tracestate as a single W3C vendor key
+        /// named "durabletask-mssql". Centralizing parsing here keeps every reader in lock-step
+        /// with the writer's wire-format contract.
         /// </summary>
         struct ParsedTraceContext
         {
@@ -539,67 +601,135 @@ namespace DurableTask.SqlServer
                 return null;
             }
 
-            string[] parts = text.Split(TraceContextSeparators, StringSplitOptions.None);
+            // Use the same split semantics as the pre-PR reader so all readers (old and new)
+            // see identical (traceparent, tracestate) pairs for any given on-the-wire payload.
+            string[] parts = text.Split(TraceContextSeparators, count: 2, StringSplitOptions.RemoveEmptyEntries);
 
             string? traceParent = null;
-            string? traceState = null;
+            string? rawTraceState = null;
+
+            if (parts.Length == 0)
+            {
+                return null;
+            }
+            else if (parts.Length == 1)
+            {
+                // Either a single-line "durabletask-mssql=client:..." payload (new sub-orchestration
+                // wire format) or a one-line legacy payload that only contained a traceparent.
+                if (parts[0].StartsWith(TracestateVendorKeyEquals, StringComparison.Ordinal))
+                {
+                    rawTraceState = parts[0];
+                }
+                else
+                {
+                    traceParent = parts[0];
+                }
+            }
+            else
+            {
+                traceParent = parts[0];
+                rawTraceState = parts[1];
+            }
+
+            // Extract the durabletask-mssql vendor key from the tracestate, leaving any
+            // user-supplied tracestate entries intact in the returned TraceState value.
+            string? userTraceState = rawTraceState;
             string? id = null;
             string? spanId = null;
             string? clientSpanId = null;
 
-            // Line 1 is reserved for traceparent. Older histories may have written a typed
-            // "@key=value" prefix on line 1 (legacy sub-orchestration payload). Detect that
-            // case by checking for the @ sentinel; otherwise treat parts[0] as traceparent.
-            int startIndex;
-            if (!string.IsNullOrEmpty(parts[0]) && parts[0][0] != '@')
+            if (!string.IsNullOrEmpty(rawTraceState))
             {
-                traceParent = parts[0];
-                startIndex = 1;
-            }
-            else
-            {
-                startIndex = 0;
-            }
-
-            for (int i = startIndex; i < parts.Length; i++)
-            {
-                string part = parts[i];
-                if (string.IsNullOrEmpty(part))
-                {
-                    continue;
-                }
-
-                if (part.StartsWith(TraceContextTraceStatePrefix, StringComparison.Ordinal))
-                {
-                    traceState = part.Substring(TraceContextTraceStatePrefix.Length);
-                }
-                else if (part.StartsWith(TraceContextIdPrefix, StringComparison.Ordinal))
-                {
-                    id = part.Substring(TraceContextIdPrefix.Length);
-                }
-                else if (part.StartsWith(TraceContextSpanIdPrefix, StringComparison.Ordinal))
-                {
-                    spanId = part.Substring(TraceContextSpanIdPrefix.Length);
-                }
-                else if (part.StartsWith(TraceContextClientSpanIdPrefix, StringComparison.Ordinal))
-                {
-                    clientSpanId = part.Substring(TraceContextClientSpanIdPrefix.Length);
-                }
-                else if (traceState == null && i > 0)
-                {
-                    // Preserve the legacy format, where the optional second line stored only tracestate.
-                    traceState = part;
-                }
+                userTraceState = ExtractVendorFields(
+                    rawTraceState!,
+                    out id,
+                    out spanId,
+                    out clientSpanId);
             }
 
             return new ParsedTraceContext
             {
                 TraceParent = traceParent,
-                TraceState = traceState,
+                TraceState = string.IsNullOrEmpty(userTraceState) ? null : userTraceState,
                 Id = id,
                 SpanId = spanId,
                 ClientSpanId = clientSpanId,
             };
+        }
+
+        /// <summary>
+        /// Scans a W3C tracestate string for the "durabletask-mssql=..." vendor key, splits its
+        /// value into id/span/client fields, and returns the tracestate with that vendor key
+        /// removed (so the caller can hand the unmodified user tracestate downstream).
+        /// </summary>
+        static string? ExtractVendorFields(
+            string tracestate,
+            out string? id,
+            out string? spanId,
+            out string? clientSpanId)
+        {
+            id = null;
+            spanId = null;
+            clientSpanId = null;
+
+            // W3C tracestate entries are comma-separated. Use a List<string> so the order of
+            // user-supplied entries is preserved when reconstructing the user tracestate.
+            string[] entries = tracestate.Split(',');
+            List<string>? userEntries = null;
+
+            for (int i = 0; i < entries.Length; i++)
+            {
+                string entry = entries[i].Trim();
+                if (entry.Length == 0)
+                {
+                    continue;
+                }
+
+                if (entry.StartsWith(TracestateVendorKeyEquals, StringComparison.Ordinal))
+                {
+                    string vendorValue = entry.Substring(TracestateVendorKeyEquals.Length);
+                    ParseVendorFields(vendorValue, out id, out spanId, out clientSpanId);
+                }
+                else
+                {
+                    userEntries ??= new List<string>(entries.Length);
+                    userEntries.Add(entry);
+                }
+            }
+
+            return userEntries != null ? string.Join(",", userEntries) : null;
+        }
+
+        static void ParseVendorFields(string vendorValue, out string? id, out string? spanId, out string? clientSpanId)
+        {
+            id = null;
+            spanId = null;
+            clientSpanId = null;
+
+            foreach (string field in vendorValue.Split(';'))
+            {
+                int colonIndex = field.IndexOf(':');
+                if (colonIndex <= 0)
+                {
+                    continue;
+                }
+
+                string fieldName = field.Substring(0, colonIndex);
+                string fieldValue = field.Substring(colonIndex + 1);
+
+                if (string.Equals(fieldName, VendorFieldId, StringComparison.Ordinal))
+                {
+                    id = fieldValue;
+                }
+                else if (string.Equals(fieldName, VendorFieldSpanId, StringComparison.Ordinal))
+                {
+                    spanId = fieldValue;
+                }
+                else if (string.Equals(fieldName, VendorFieldClientSpanId, StringComparison.Ordinal))
+                {
+                    clientSpanId = fieldValue;
+                }
+            }
         }
 
         static DistributedTraceContext? GetTraceContext(DbDataReader reader)
