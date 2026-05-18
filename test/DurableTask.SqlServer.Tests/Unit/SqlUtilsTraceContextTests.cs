@@ -202,7 +202,7 @@ namespace DurableTask.SqlServer.Tests.Unit
         {
             DateTime timestamp = new DateTime(2026, 04, 15, 22, 45, 00, DateTimeKind.Utc);
             const string traceParent = "00-0123456789abcdef0123456789abcdef-0123456789abcdef-01";
-            const string traceState = "rojo=00f067aa0ba902b7,congo=t61rcWkgMzE";
+            const string traceState = "rojo=00f067aa0ba902b7, congo=t61rcWkgMzE";
 
             using var reader = CreateExecutionStartedReader($"{traceParent}\n{traceState}", timestamp);
             Assert.True(reader.Read());
@@ -232,10 +232,10 @@ namespace DurableTask.SqlServer.Tests.Unit
 
             SqlString serialized = SqlUtils.GetTraceContext(createdEvent);
             Assert.False(serialized.IsNull);
-            // Sub-orchestration rows had no TraceContext column populated on `main`, so the
-            // legacy reader never inspects this column for SubOrchestrationInstanceCreated
-            // events. The wire format is therefore optimized for the new reader and uses the
-            // same vendor-key encoding so that all readers share a single parser.
+            // The SQL history row keeps EventType=SubOrchestrationInstanceCreated next to this
+            // TraceContext value. Legacy readers dispatch on that event type and never call their
+            // DistributedTraceContext parser for this row, so they do not treat this single-line
+            // vendor key as a traceparent.
             Assert.Equal(
                 "durabletask-mssql=client:fedcba9876543210",
                 serialized.Value);
@@ -300,8 +300,8 @@ namespace DurableTask.SqlServer.Tests.Unit
             "abc",
             "def")]
         [InlineData(
-            "user=val, durabletask-mssql=id:abc;span:def ,other=thing",
-            "user=val,other=thing",
+            "user=val, durabletask-mssql=id:abc;span:def, other=thing",
+            "user=val, other=thing",
             "abc",
             "def")]
         public void GetHistoryEvent_NewReader_ExtractsVendorKeyRegardlessOfPosition(
@@ -317,6 +317,7 @@ namespace DurableTask.SqlServer.Tests.Unit
             Assert.True(reader.Read());
 
             var ev = Assert.IsType<ExecutionStartedEvent>(reader.GetHistoryEvent());
+            Assert.NotNull(ev.ParentTraceContext);
             Assert.Equal(expectedId, ev.ParentTraceContext.Id);
             Assert.Equal(expectedSpanId, ev.ParentTraceContext.SpanId);
             Assert.Equal(

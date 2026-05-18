@@ -464,12 +464,13 @@ namespace DurableTask.SqlServer
                     return SqlString.Null;
                 }
 
-                // Wire format for sub-orchestration rows:
+                // Wire format for SubOrchestrationInstanceCreated history rows:
                 //   "durabletask-mssql=client:<spanId>"
-                // This is a single line — no traceparent, no newlines. The pre-PR reader never
-                // inspected the TraceContext column for sub-orchestration rows (only the new
-                // SqlUtils.GetSubOrchestrationClientSpanId helper does), so this payload is
-                // only ever parsed by code that knows about the vendor key.
+                // This is a single line — no traceparent, no newlines. SQL history queries return
+                // the TraceContext column together with the row's EventType, and legacy readers
+                // do not call GetTraceContext for SubOrchestrationInstanceCreated. The payload is
+                // not projected into ExecutionStarted/EventRaised/TaskScheduled rows, so legacy
+                // workers never interpret this vendor key as a traceparent.
                 return new SqlString(
                     BuildVendorKeyValue(id: null, spanId: null, clientSpanId: subOrchestrationEvent.ClientSpanId));
             }
@@ -672,22 +673,26 @@ namespace DurableTask.SqlServer
             spanId = null;
             clientSpanId = null;
 
-            // W3C tracestate entries are comma-separated. Use a List<string> so the order of
-            // user-supplied entries is preserved when reconstructing the user tracestate.
+            // W3C tracestate entries are comma-separated. Use a List<string> so the order and
+            // optional whitespace of user-supplied entries are preserved when reconstructing the
+            // user tracestate.
             string[] entries = tracestate.Split(',');
             List<string>? userEntries = null;
+            bool foundVendorKey = false;
 
             for (int i = 0; i < entries.Length; i++)
             {
-                string entry = entries[i].Trim();
-                if (entry.Length == 0)
+                string entry = entries[i];
+                string trimmedEntry = entry.Trim();
+                if (trimmedEntry.Length == 0)
                 {
                     continue;
                 }
 
-                if (entry.StartsWith(TracestateVendorKeyEquals, StringComparison.Ordinal))
+                if (trimmedEntry.StartsWith(TracestateVendorKeyEquals, StringComparison.Ordinal))
                 {
-                    string vendorValue = entry.Substring(TracestateVendorKeyEquals.Length);
+                    foundVendorKey = true;
+                    string vendorValue = trimmedEntry.Substring(TracestateVendorKeyEquals.Length);
                     ParseVendorFields(vendorValue, out id, out spanId, out clientSpanId);
                 }
                 else
@@ -697,7 +702,19 @@ namespace DurableTask.SqlServer
                 }
             }
 
-            return userEntries != null ? string.Join(",", userEntries) : null;
+            if (!foundVendorKey)
+            {
+                return tracestate;
+            }
+
+            if (userEntries == null)
+            {
+                return null;
+            }
+
+            userEntries[0] = userEntries[0].TrimStart();
+            userEntries[userEntries.Count - 1] = userEntries[userEntries.Count - 1].TrimEnd();
+            return string.Join(",", userEntries);
         }
 
         static void ParseVendorFields(string vendorValue, out string? id, out string? spanId, out string? clientSpanId)
@@ -738,7 +755,7 @@ namespace DurableTask.SqlServer
             if (parsed == null || string.IsNullOrEmpty(parsed.Value.TraceParent))
             {
                 // No traceparent means this row carries only sub-orchestration-specific data
-                // (e.g. @clientspanid=...) which is not a DistributedTraceContext.
+                // (e.g. durabletask-mssql=client:...) which is not a DistributedTraceContext.
                 return null;
             }
 
