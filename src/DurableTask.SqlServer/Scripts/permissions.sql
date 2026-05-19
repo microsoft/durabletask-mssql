@@ -38,6 +38,8 @@ GRANT EXECUTE ON OBJECT::__SchemaNamePlaceholder__._LockNextTask TO __SchemaName
 GRANT EXECUTE ON OBJECT::__SchemaNamePlaceholder__._QueryManyOrchestrations TO __SchemaNamePlaceholder___runtime
 GRANT EXECUTE ON OBJECT::__SchemaNamePlaceholder__._RenewOrchestrationLocks TO __SchemaNamePlaceholder___runtime
 GRANT EXECUTE ON OBJECT::__SchemaNamePlaceholder__._RenewTaskLocks TO __SchemaNamePlaceholder___runtime
+GRANT EXECUTE ON OBJECT::__SchemaNamePlaceholder__._FetchOrchestrationMessages TO __SchemaNamePlaceholder___runtime
+GRANT EXECUTE ON OBJECT::__SchemaNamePlaceholder__._ReleaseOrchestrationLock TO __SchemaNamePlaceholder___runtime
 GRANT EXECUTE ON OBJECT::__SchemaNamePlaceholder__._UpdateVersion TO __SchemaNamePlaceholder___runtime
 GRANT EXECUTE ON OBJECT::__SchemaNamePlaceholder__._RewindInstance TO __SchemaNamePlaceholder___runtime
 GRANT EXECUTE ON OBJECT::__SchemaNamePlaceholder__._RewindInstanceRecursive TO __SchemaNamePlaceholder___runtime

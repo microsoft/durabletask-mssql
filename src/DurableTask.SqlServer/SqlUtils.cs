@@ -970,6 +970,19 @@ namespace DurableTask.SqlServer
             return exception.Errors.Cast<SqlError>().Any(e => e.Class == 14 && (e.Number == 2601 || e.Number == 2627));
         }
 
+        public static bool HasErrorNumber(SqlException ex, int errorNumber)
+        {
+            foreach (SqlError error in ex.Errors)
+            {
+                if (error.Number == errorNumber)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
         public static void SetDateTime(this SqlDataRecord record, int ordinal, DateTime? dateTime)
         {
             if (dateTime.HasValue)
