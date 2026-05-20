@@ -70,7 +70,7 @@ extends:
               instructions: Confirm you want to push to NuGet
               onTimeout: 'reject'
 
-      # NuGet release (Microsoft.DurableTask.Client.Grpc)
+      # NuGet release (Microsoft.DurableTask.SqlServer)
       - job: nugetRelease_Microsoft_DurableTask_SqlServer
         displayName: NuGet Release (Microsoft.DurableTask.SqlServer)
         dependsOn: nugetApproval
