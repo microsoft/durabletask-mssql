@@ -300,12 +300,24 @@ namespace DurableTask.SqlServer
                         instance = new OrchestrationInstance();
                     }
 
+                    string orchestrationInstanceId = messages[0].OrchestrationInstance.InstanceId;
+
                     return new ExtendedOrchestrationWorkItem(orchestrationName, instance, eventPayloadMappings)
                     {
-                        InstanceId = messages[0].OrchestrationInstance.InstanceId,
+                        InstanceId = orchestrationInstanceId,
                         LockedUntilUtc = lockExpiration,
                         NewMessages = messages,
                         OrchestrationRuntimeState = runtimeState,
+                        Session = this.settings.ExtendedSessionsEnabled
+                            ? new SqlOrchestrationSession(
+                                this.settings,
+                                this.orchestrationBackoffHelper,
+                                this.traceHelper,
+                                eventPayloadMappings,
+                                orchestrationInstanceId,
+                                this.lockedByValue,
+                                this.ShutdownToken)
+                            : null,
                     };
                 }
             } while (stopwatch.Elapsed < receiveTimeout);
@@ -361,6 +373,15 @@ namespace DurableTask.SqlServer
             command.Parameters.Add("@RuntimeStatus", SqlDbType.VarChar, size: 30).Value = orchestrationState.OrchestrationStatus.ToString();
             command.Parameters.Add("@CustomStatusPayload", SqlDbType.VarChar).Value = orchestrationState.Status ?? SqlString.Null;
 
+            bool keepLocked = workItem.Session != null && !IsTerminalStatus(orchestrationState.OrchestrationStatus);
+            DateTime newLockExpiration = DateTime.UtcNow.Add(this.settings.WorkItemLockTimeout);
+            if (keepLocked)
+            {
+                command.Parameters.Add("@KeepLocked", SqlDbType.Bit).Value = true;
+                command.Parameters.Add("@LockedBy", SqlDbType.VarChar, size: 100).Value = this.lockedByValue;
+                command.Parameters.Add("@NewLockExpiration", SqlDbType.DateTime2).Value = newLockExpiration;
+            }
+
             currentWorkItem.EventPayloadMappings.Add(outboundMessages);
             currentWorkItem.EventPayloadMappings.Add(orchestratorMessages);
 
@@ -400,6 +421,16 @@ namespace DurableTask.SqlServer
                 this.traceHelper.DuplicateExecutionDetected(instance, orchestrationState.Name);
                 return;
             }
+            catch (SqlException e) when (keepLocked && SqlUtils.HasErrorNumber(e, SqlOrchestrationSession.LockLostErrorNumber))
+            {
+                throw new SessionAbortedException(
+                    $"Lost the lock for instance '{instance.InstanceId}' during checkpoint.", e);
+            }
+
+            if (keepLocked)
+            {
+                workItem.LockedUntilUtc = newLockExpiration;
+            }
 
             // notify pollers that new messages may be available
             if (outboundMessages.Count > 0)
@@ -415,9 +446,24 @@ namespace DurableTask.SqlServer
             this.traceHelper.CheckpointCompleted(orchestrationState, sw);
         }
 
+        static bool IsTerminalStatus(OrchestrationStatus status) =>
+            status == OrchestrationStatus.Completed ||
+            status == OrchestrationStatus.Failed ||
+            status == OrchestrationStatus.Terminated;
+
         // We abandon work items by just letting their locks expire. The benefit of this "lazy" approach is that it
         // removes the need for a DB access and also ensures that a work-item can't spam the error logs in a tight loop.
         public override Task AbandonTaskOrchestrationWorkItemAsync(TaskOrchestrationWorkItem workItem) => Task.CompletedTask;
+
+        public override Task ReleaseTaskOrchestrationWorkItemAsync(TaskOrchestrationWorkItem workItem)
+        {
+            if (workItem.Session is SqlOrchestrationSession session)
+            {
+                return session.ReleaseLockAsync();
+            }
+
+            return Task.CompletedTask;
+        }
 
         public override async Task<TaskActivityWorkItem?> LockNextTaskActivityWorkItem(
             TimeSpan receiveTimeout,

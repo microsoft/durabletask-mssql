@@ -51,7 +51,11 @@ namespace DurableTask.SqlServer.Tests.Utils
 
         public TestLogProvider LogProvider { get; }
 
-        public async Task InitializeAsync(bool startWorker = true, bool legacyErrorPropagation = false)
+        public async Task InitializeAsync(
+            bool startWorker = true,
+            bool legacyErrorPropagation = false,
+            bool extendedSessions = false,
+            TimeSpan? extendedSessionIdleTimeout = null)
         {
             // The initialization requires administrative credentials (default)
             await new SqlOrchestrationService(this.OrchestrationServiceOptions).CreateIfNotExistsAsync();
@@ -64,7 +68,13 @@ namespace DurableTask.SqlServer.Tests.Utils
             this.OrchestrationServiceOptions = new SqlOrchestrationServiceSettings(this.testCredential.ConnectionString)
             {
                 LoggerFactory = this.loggerFactory,
+                ExtendedSessionsEnabled = extendedSessions,
             };
+
+            if (extendedSessionIdleTimeout.HasValue)
+            {
+                this.OrchestrationServiceOptions.ExtendedSessionIdleTimeout = extendedSessionIdleTimeout.Value;
+            }
 
             // A mock orchestration service allows us to stub out specific methods for testing.
             this.OrchestrationServiceMock = new Mock<SqlOrchestrationService>(this.OrchestrationServiceOptions) { CallBase = true };
