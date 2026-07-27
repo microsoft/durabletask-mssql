@@ -94,6 +94,25 @@ namespace DurableTask.SqlServer
         public int MaxActiveOrchestrations { get; set; } = Environment.ProcessorCount;
 
         /// <summary>
+        /// Gets or sets the maximum number of entities that can be loaded in memory at a time by a single worker.
+        /// The default value is the value of <see cref="Environment.ProcessorCount"/>.
+        /// </summary>
+        [JsonProperty("maxActiveEntities")]
+        public int MaxActiveEntities { get; set; } = Environment.ProcessorCount;
+
+        /// <summary>
+        /// Gets or sets the maximum number of entity operations that can be processed in a single batch.
+        /// </summary>
+        [JsonProperty("maxEntityOperationBatchSize")]
+        public int? MaxEntityOperationBatchSize { get; set; }
+
+        /// <summary>
+        /// Gets or sets a value indicating whether entities and orchestrations are dispatched separately.
+        /// </summary>
+        [JsonProperty("useSeparateQueueForEntityWorkItems")]
+        public bool UseSeparateQueueForEntityWorkItems { get; set; }
+
+        /// <summary>
         /// Gets or sets the minimum interval to poll for orchestrations.
         /// Polling interval increases when no orchestrations or activities are found.
         /// The default value is 50 milliseconds.

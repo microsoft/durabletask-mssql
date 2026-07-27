@@ -21,6 +21,7 @@ namespace DurableTask.SqlServer.AzureFunctions
         readonly DurableTaskOptions extensionOptions;
         readonly ILoggerFactory loggerFactory;
         readonly IConnectionInfoResolver connectionInfoResolver;
+        bool useSeparateQueueForEntityWorkItems;
 
         SqlDurabilityOptions? defaultOptions;
         SqlDurabilityProvider? defaultProvider;
@@ -49,7 +50,7 @@ namespace DurableTask.SqlServer.AzureFunctions
 
         public void SetUseSeparateQueueForEntityWorkItems(bool newValue)
         {
-            // SQL providers do not require different construction for separate entity queue mode.
+            this.useSeparateQueueForEntityWorkItems = newValue;
         }
 
         // Called by the Durable trigger binding infrastructure
@@ -90,9 +91,11 @@ namespace DurableTask.SqlServer.AzureFunctions
 
         SqlOrchestrationService GetOrchestrationService(SqlDurabilityOptions clientOptions)
         {
-            return new (clientOptions.GetOrchestrationServiceSettings(
+            SqlOrchestrationServiceSettings settings = clientOptions.GetOrchestrationServiceSettings(
                 this.extensionOptions,
-                this.connectionInfoResolver));
+                this.connectionInfoResolver);
+            settings.UseSeparateQueueForEntityWorkItems = this.useSeparateQueueForEntityWorkItems;
+            return new SqlOrchestrationService(settings);
         }
 
         static string GetDurabilityProviderKey(DurableClientAttribute attribute)

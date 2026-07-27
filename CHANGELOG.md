@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.8.0
+
+### Updates
+
+* Add separate entity work-item dispatch support for gRPC-based Durable Functions workers.
+
 ## v1.7.0
 
 ### Updates

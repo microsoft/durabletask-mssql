@@ -635,7 +635,8 @@ GO
 CREATE OR ALTER PROCEDURE __SchemaNamePlaceholder__._LockNextOrchestration
     @BatchSize int,
     @LockedBy varchar(100),
-    @LockExpiration datetime2
+    @LockExpiration datetime2,
+    @IsEntity bit = NULL
 AS
 BEGIN
     DECLARE @now datetime2 = SYSUTCDATETIME()
@@ -672,7 +673,12 @@ BEGIN
     WHERE
         I.TaskHub = @TaskHub AND
 	    (I.[LockExpiration] IS NULL OR I.[LockExpiration] < @now) AND
-        (E.[VisibleTime] IS NULL OR E.[VisibleTime] < @now)
+        (E.[VisibleTime] IS NULL OR E.[VisibleTime] < @now) AND
+        (
+            @IsEntity IS NULL OR
+            (@IsEntity = 1 AND LEFT(I.[InstanceID], 1) = '@' AND CHARINDEX('@', I.[InstanceID], 2) > 2) OR
+            (@IsEntity = 0 AND NOT (LEFT(I.[InstanceID], 1) = '@' AND CHARINDEX('@', I.[InstanceID], 2) > 2))
+        )
 
     -- Result #1: The list of new events to fetch.
     -- IMPORTANT: DO NOT CHANGE THE ORDER OF RETURNED COLUMNS!
@@ -705,6 +711,7 @@ BEGIN
         N.[TaskHub] = @TaskHub AND
         N.[InstanceID] = @instanceID AND
         (N.[VisibleTime] IS NULL OR N.[VisibleTime] < @now)
+    ORDER BY N.[SequenceNumber]
 
     -- Bail if no events are returned - this implies that another thread already took them (???)
     IF @@ROWCOUNT = 0

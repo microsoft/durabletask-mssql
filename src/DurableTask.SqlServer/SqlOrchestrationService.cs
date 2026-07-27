@@ -14,6 +14,7 @@ namespace DurableTask.SqlServer
     using System.Threading.Tasks;
     using DurableTask.Core;
     using DurableTask.Core.Common;
+    using DurableTask.Core.Entities;
     using DurableTask.Core.Exceptions;
     using DurableTask.Core.History;
     using DurableTask.Core.Query;
@@ -22,10 +23,11 @@ namespace DurableTask.SqlServer
     using Microsoft.Data.SqlClient;
 
 
-    public class SqlOrchestrationService : OrchestrationServiceBase
+    public class SqlOrchestrationService : OrchestrationServiceBase, IEntityOrchestrationService
     {
         readonly SqlOrchestrationServiceSettings settings;
         readonly BackoffPollingHelper orchestrationBackoffHelper;
+        readonly BackoffPollingHelper entityBackoffHelper;
         readonly BackoffPollingHelper activityBackoffHelper;
         readonly LogHelper traceHelper;
         readonly SqlDbManager dbManager;
@@ -36,6 +38,10 @@ namespace DurableTask.SqlServer
         {
             this.settings = ValidateSettings(settings) ?? throw new ArgumentNullException(nameof(settings));
             this.orchestrationBackoffHelper = new BackoffPollingHelper(
+                this.settings.MinOrchestrationPollingInterval,
+                this.settings.MaxOrchestrationPollingInterval,
+                this.settings.DeltaBackoffOrchestrationPollingInterval);
+            this.entityBackoffHelper = new BackoffPollingHelper(
                 this.settings.MinOrchestrationPollingInterval,
                 this.settings.MaxOrchestrationPollingInterval,
                 this.settings.DeltaBackoffOrchestrationPollingInterval);
@@ -52,6 +58,24 @@ namespace DurableTask.SqlServer
         public override int MaxConcurrentTaskOrchestrationWorkItems => this.settings.MaxActiveOrchestrations;
 
         public override int MaxConcurrentTaskActivityWorkItems => this.settings.MaxConcurrentActivities;
+
+        EntityBackendProperties IEntityOrchestrationService.EntityBackendProperties => new EntityBackendProperties
+        {
+            EntityMessageReorderWindow = TimeSpan.Zero,
+            MaxEntityOperationBatchSize = this.settings.MaxEntityOperationBatchSize,
+            MaxConcurrentTaskEntityWorkItems = this.settings.MaxActiveEntities,
+            SupportsImplicitEntityDeletion = true,
+            MaximumSignalDelayTime = TimeSpan.MaxValue,
+            UseSeparateQueueForEntityWorkItems = this.settings.UseSeparateQueueForEntityWorkItems,
+        };
+
+        EntityBackendQueries? IEntityOrchestrationService.EntityBackendQueries => null;
+
+        public bool UseSeparateQueuesForEntityWorkItems
+        {
+            get => this.settings.UseSeparateQueueForEntityWorkItems;
+            set => this.settings.UseSeparateQueueForEntityWorkItems = value;
+        }
 
         static SqlOrchestrationServiceSettings? ValidateSettings(SqlOrchestrationServiceSettings? settings)
         {
@@ -112,8 +136,51 @@ namespace DurableTask.SqlServer
             return this.dbManager.DeleteSchemaAsync();
         }
 
-        public override async Task<TaskOrchestrationWorkItem?> LockNextTaskOrchestrationWorkItemAsync(
+        public override Task<TaskOrchestrationWorkItem?> LockNextTaskOrchestrationWorkItemAsync(
             TimeSpan receiveTimeout,
+            CancellationToken cancellationToken)
+            => this.LockNextTaskOrchestrationWorkItemAsync(
+                receiveTimeout,
+                isEntity: null,
+                this.orchestrationBackoffHelper,
+                cancellationToken);
+
+        async Task<TaskOrchestrationWorkItem> IEntityOrchestrationService.LockNextOrchestrationWorkItemAsync(
+            TimeSpan receiveTimeout,
+            CancellationToken cancellationToken)
+        {
+            if (!this.settings.UseSeparateQueueForEntityWorkItems)
+            {
+                throw new InvalidOperationException("Separate entity dispatch is not enabled.");
+            }
+
+            return (await this.LockNextTaskOrchestrationWorkItemAsync(
+                receiveTimeout,
+                isEntity: false,
+                this.orchestrationBackoffHelper,
+                cancellationToken))!;
+        }
+
+        async Task<TaskOrchestrationWorkItem> IEntityOrchestrationService.LockNextEntityWorkItemAsync(
+            TimeSpan receiveTimeout,
+            CancellationToken cancellationToken)
+        {
+            if (!this.settings.UseSeparateQueueForEntityWorkItems)
+            {
+                throw new InvalidOperationException("Separate entity dispatch is not enabled.");
+            }
+
+            return (await this.LockNextTaskOrchestrationWorkItemAsync(
+                receiveTimeout,
+                isEntity: true,
+                this.entityBackoffHelper,
+                cancellationToken))!;
+        }
+
+        async Task<TaskOrchestrationWorkItem?> LockNextTaskOrchestrationWorkItemAsync(
+            TimeSpan receiveTimeout,
+            bool? isEntity,
+            BackoffPollingHelper backoffHelper,
             CancellationToken cancellationToken)
         {
             bool isWaiting = false;
@@ -129,6 +196,7 @@ namespace DurableTask.SqlServer
                 command.Parameters.Add("@BatchSize", SqlDbType.Int).Value = batchSize;
                 command.Parameters.Add("@LockedBy", SqlDbType.VarChar, 100).Value = this.lockedByValue;
                 command.Parameters.Add("@LockExpiration", SqlDbType.DateTime2).Value = lockExpiration;
+                command.Parameters.Add("@IsEntity", SqlDbType.Bit).Value = (object?)isEntity ?? DBNull.Value;
 
                 DbDataReader reader;
 
@@ -183,11 +251,11 @@ namespace DurableTask.SqlServer
                         }
 
                         // TODO: Make this dynamic based on the number of readers
-                        await this.orchestrationBackoffHelper.WaitAsync(cancellationToken);
+                        await backoffHelper.WaitAsync(cancellationToken);
                         continue;
                     }
 
-                    this.orchestrationBackoffHelper.Reset();
+                    backoffHelper.Reset();
                     isWaiting = false;
 
                     // Result #2: The runtime status of the orchestration instance
@@ -410,6 +478,7 @@ namespace DurableTask.SqlServer
             if (orchestratorMessages.Count > 0 || timerMessages.Count > 0)
             {
                 this.orchestrationBackoffHelper.Reset();
+                this.entityBackoffHelper.Reset();
             }
 
             this.traceHelper.CheckpointCompleted(orchestrationState, sw);

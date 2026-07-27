@@ -28,6 +28,7 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
 
             factory.SetUseSeparateQueueForEntityWorkItems(true);
             DurabilityProvider provider = factory.GetDurabilityProvider();
+            Assert.True(provider.SupportsEntities);
             provider.SetUseSeparateQueueForEntityWorkItems(true);
 
             factory.SetUseSeparateQueueForEntityWorkItems(false);
