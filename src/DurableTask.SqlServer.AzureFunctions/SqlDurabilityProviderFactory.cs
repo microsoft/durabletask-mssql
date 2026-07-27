@@ -47,6 +47,11 @@ namespace DurableTask.SqlServer.AzureFunctions
         // Called by the Durable trigger binding infrastructure
         public string Name => SqlDurabilityProvider.Name;
 
+        public void SetUseSeparateQueueForEntityWorkItems(bool newValue)
+        {
+            // SQL providers do not require different construction for separate entity queue mode.
+        }
+
         // Called by the Durable trigger binding infrastructure
         public DurabilityProvider GetDurabilityProvider()
         {

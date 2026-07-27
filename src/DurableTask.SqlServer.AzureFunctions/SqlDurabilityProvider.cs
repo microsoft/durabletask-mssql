@@ -43,6 +43,13 @@ namespace DurableTask.SqlServer.AzureFunctions
 
         public override string EventSourceName =>  "DurableTask-SqlServer";
 
+#if NET8_0_OR_GREATER
+        public override void SetUseSeparateQueueForEntityWorkItems(bool newValue)
+        {
+            // SQL stores entity and orchestration work items together, so both modes use the same dequeue path.
+        }
+#endif
+
         public override async Task<IList<OrchestrationState>> GetOrchestrationStateWithInputsAsync(string instanceId, bool showInput = true)
         {
             OrchestrationState? state = await this.service.GetOrchestrationStateAsync(instanceId, executionId: null);

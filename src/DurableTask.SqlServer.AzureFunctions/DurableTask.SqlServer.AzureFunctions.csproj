@@ -4,10 +4,10 @@
   <Import Project="../common.props" />
   
   <PropertyGroup>
-    <TargetFrameworks>net6.0</TargetFrameworks>
+    <TargetFrameworks>net6.0;net8.0</TargetFrameworks>
   </PropertyGroup>
 
-  <PropertyGroup Condition="'$(TargetFramework)' == 'net6.0'">
+  <PropertyGroup Condition="'$(TargetFramework)' == 'net6.0' Or '$(TargetFramework)' == 'net8.0'">
     <DefineConstants>$(DefineConstants);FUNCTIONS_V4</DefineConstants>
   </PropertyGroup>
   
