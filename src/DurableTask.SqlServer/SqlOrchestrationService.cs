@@ -158,7 +158,9 @@ namespace DurableTask.SqlServer
             return await this.LockNextWorkItemAsync(
                 receiveTimeout,
                 cancellationToken,
-                OrchestrationFilterType.OrchestrationsOnly);
+                this.settings.UseSeparateQueueForEntityWorkItems ?
+                    OrchestrationFilterType.OrchestrationsOnly :
+                    OrchestrationFilterType.All);
         }
 
         async Task<TaskOrchestrationWorkItem?> LockNextWorkItemAsync(
