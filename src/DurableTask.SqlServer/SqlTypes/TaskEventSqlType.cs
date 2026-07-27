@@ -9,6 +9,7 @@ namespace DurableTask.SqlServer.SqlTypes
     using System.Data.SqlTypes;
     using System.Linq;
     using DurableTask.Core;
+    using DurableTask.SqlServer.Logging;
     using Microsoft.Data.SqlClient;
     using Microsoft.Data.SqlClient.Server;
 
@@ -30,6 +31,7 @@ namespace DurableTask.SqlServer.SqlTypes
             new SqlMetaData("PayloadID", SqlDbType.UniqueIdentifier),
             new SqlMetaData("Version", SqlDbType.VarChar, 100),
             new SqlMetaData("TraceContext", SqlDbType.VarChar, 800),
+            new SqlMetaData("Tags", SqlDbType.VarChar, 8000),
         };
 
         static class ColumnOrdinals
@@ -48,6 +50,7 @@ namespace DurableTask.SqlServer.SqlTypes
             public const int PayloadId = 10;
             public const int Version = 11;
             public const int TraceContext = 12;
+            public const int Tags = 13;
         }
 
         public static SqlParameter AddTaskEventsParameter(
@@ -55,11 +58,12 @@ namespace DurableTask.SqlServer.SqlTypes
             string paramName,
             IList<TaskMessage> outboundMessages,
             EventPayloadMap eventPayloadMap,
-            string schemaName)
+            string schemaName,
+            LogHelper logHelper)
         {
             SqlParameter param = commandParameters.Add(paramName, SqlDbType.Structured);
             param.TypeName = $"{schemaName}.TaskEvents";
-            param.Value = ToTaskMessagesParameter(outboundMessages, eventPayloadMap);
+            param.Value = ToTaskMessagesParameter(outboundMessages, eventPayloadMap, logHelper);
             return param;
         }
 
@@ -67,17 +71,19 @@ namespace DurableTask.SqlServer.SqlTypes
             this SqlParameterCollection commandParameters,
             string paramName,
             TaskMessage message,
-            string schemaName)
+            string schemaName,
+            LogHelper logHelper)
         {
             SqlParameter param = commandParameters.Add(paramName, SqlDbType.Structured);
             param.TypeName = $"{schemaName}.TaskEvents";
-            param.Value = ToTaskMessageParameter(message);
+            param.Value = ToTaskMessageParameter(message, logHelper);
             return param;
         }
 
         static IEnumerable<SqlDataRecord>? ToTaskMessagesParameter(
             this IEnumerable<TaskMessage> messages,
-            EventPayloadMap? eventPayloadMap)
+            EventPayloadMap? eventPayloadMap,
+            LogHelper logHelper)
         {
             if (!messages.Any())
             {
@@ -92,21 +98,22 @@ namespace DurableTask.SqlServer.SqlTypes
                 var record = new SqlDataRecord(TaskEventSchema);
                 foreach (TaskMessage msg in messages)
                 {
-                    yield return PopulateTaskMessageRecord(msg, record, eventPayloadMap);
+                    yield return PopulateTaskMessageRecord(msg, record, eventPayloadMap, logHelper);
                 }
             }
         }
 
-        static IEnumerable<SqlDataRecord> ToTaskMessageParameter(TaskMessage msg)
+        static IEnumerable<SqlDataRecord> ToTaskMessageParameter(TaskMessage msg, LogHelper logHelper)
         {
             var record = new SqlDataRecord(TaskEventSchema);
-            yield return PopulateTaskMessageRecord(msg, record, eventPayloadMap: null);
+            yield return PopulateTaskMessageRecord(msg, record, eventPayloadMap: null, logHelper);
         }
 
         static SqlDataRecord PopulateTaskMessageRecord(
             TaskMessage msg,
             SqlDataRecord record,
-            EventPayloadMap? eventPayloadMap)
+            EventPayloadMap? eventPayloadMap,
+            LogHelper logHelper)
         {
             record.SetSqlString(ColumnOrdinals.InstanceID, msg.OrchestrationInstance.InstanceId);
             record.SetSqlString(ColumnOrdinals.ExecutionID, msg.OrchestrationInstance.ExecutionId);
@@ -140,6 +147,7 @@ namespace DurableTask.SqlServer.SqlTypes
 
             record.SetSqlString(ColumnOrdinals.Version, SqlUtils.GetVersion(msg.Event));
             record.SetSqlString(ColumnOrdinals.TraceContext, SqlUtils.GetTraceContext(msg.Event));
+            record.SetSqlString(ColumnOrdinals.Tags, SqlUtils.GetMergedTaskTagsJson(msg, logHelper));
             return record;
         }
     }

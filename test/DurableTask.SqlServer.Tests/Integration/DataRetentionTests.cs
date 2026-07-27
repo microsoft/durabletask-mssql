@@ -126,6 +126,42 @@ namespace DurableTask.SqlServer.Tests.Integration
         }
 
         /// <summary>
+        /// Verifies that PurgeInstanceStateAsync with a PurgeInstanceFilter purges all matching instances,
+        /// even when the count exceeds the previous 1000-instance limit.
+        /// This is a regression test for https://github.com/microsoft/durabletask-mssql/issues/297.
+        /// </summary>
+        [Fact]
+        public async Task PurgesMoreThanOneThousandInstances()
+        {
+            const int InstanceCount = 1100;
+
+            IReadOnlyList<TestInstance<string>> instances = await this.testService.RunOrchestrations(
+                count: InstanceCount,
+                instanceIdGenerator: i => $"BulkPurge_{i:0000}",
+                inputGenerator: i => $"Input_{i}",
+                orchestrationName: "QuickComplete",
+                version: string.Empty,
+                implementation: (ctx, input) => Task.FromResult(input));
+
+            TimeSpan timeout = TimeSpan.FromSeconds(60);
+            await Task.WhenAll(instances.Select(instance => instance.WaitForCompletion(timeout)));
+
+            var filter = new PurgeInstanceFilter(
+                DateTime.MinValue,
+                DateTime.UtcNow.AddMinutes(1),
+                new[] { OrchestrationStatus.Completed });
+
+            PurgeResult result = await this.testService.PurgeAsync(filter);
+            Assert.Equal(InstanceCount, result.DeletedInstanceCount);
+
+            foreach (TestInstance<string> instance in instances)
+            {
+                OrchestrationState purgedState = await instance.GetStateAsync();
+                Assert.Null(purgedState);
+            }
+        }
+
+        /// <summary>
         /// Validates that external events sent to a completed orchestration are eventually removed from the database
         /// and that a log message is emitted for each discarded event.
         /// </summary>

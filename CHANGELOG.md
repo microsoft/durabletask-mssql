@@ -1,5 +1,31 @@
 # Changelog
 
+## v1.7.0
+
+### Updates
+
+* enable SqlOrchestrationService.PurgeInstanceStateAsync to delete more than 1000 instances by @usemam ([#308](https://github.com/microsoft/durabletask-mssql/pull/308))
+* Add es-metadata.yml (schema 1.0.0) by @jviau in [#310](https://github.com/microsoft/durabletask-mssql/pull/310)
+* Preserve durable trace context in SQL history by @chandramouleswaran in [#306](https://github.com/microsoft/durabletask-mssql/pull/306)
+
+## v1.6.0
+
+### Updates
+
+* Add support for orchestration tags ([#299](https://github.com/microsoft/durabletask-mssql/pull/299) and [#304](https://github.com/microsoft/durabletask-mssql/pull/304))
+
+## v1.5.3
+
+### Updates
+
+* Bug fix for correctly generating the `ExecutionCompletedEvent` ([#303](https://github.com/microsoft/durabletask-mssql/pull/303))
+
+## v1.5.3
+
+### Updates
+
+* Add logic to terminate suspended instances ([#301](https://github.com/microsoft/durabletask-mssql/pull/301))
+
 ## v1.5.2
 
 ### Updates
