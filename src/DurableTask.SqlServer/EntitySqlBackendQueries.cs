@@ -16,7 +16,7 @@ namespace DurableTask.SqlServer
     {
         readonly SqlOrchestrationService orchestrationService;
 
-        static TimeSpan timeLimitForCleanEntityStorageLoop = TimeSpan.FromSeconds(5);
+        static readonly TimeSpan TimeLimitForCleanEntityStorageLoop = TimeSpan.FromSeconds(5);
 
         public EntitySqlBackendQueries(
             SqlOrchestrationService orchestrationService)
@@ -52,7 +52,7 @@ namespace DurableTask.SqlServer
                 {
                     PageSize = filter.PageSize.GetValueOrDefault(100),
                     PageNumber = pageNumber,
-                    InstanceIdPrefix = filter.InstanceIdStartsWith,
+                    InstanceIdPrefix = filter.InstanceIdStartsWith ?? "@",
                     CreatedTimeFrom = filter.LastModifiedFrom.GetValueOrDefault(DateTime.MinValue),
                     CreatedTimeTo = filter.LastModifiedTo.GetValueOrDefault(DateTime.MaxValue),
                     FetchInput = filter.IncludeState,
@@ -116,7 +116,7 @@ namespace DurableTask.SqlServer
                 }
 
                 var tasks = new List<Task>();
-                IEnumerable<string> emptyEntityIds = new List<string>();
+                var emptyEntityIds = new List<string>();
 
                 foreach (OrchestrationState state in page)
                 {
@@ -135,8 +135,8 @@ namespace DurableTask.SqlServer
                                 now - state.LastUpdatedTime > this.orchestrationService.EntityBackendProperties.EntityMessageReorderWindow;
                             if (isEmptyEntity && safeToRemoveWithoutBreakingMessageSorterLogic)
                             {
-                                emptyEntityIds.Append(state.OrchestrationInstance.InstanceId);
-                                orphanedLocksReleased++;
+                                emptyEntityIds.Add(state.OrchestrationInstance.InstanceId);
+                                emptyEntitiesRemoved++;
                             }
                         }
                     }
@@ -159,9 +159,10 @@ namespace DurableTask.SqlServer
                     }
                 }
 
-                await this.orchestrationService.PurgeOrchestrationHistoryAsync(emptyEntityIds);
+                await Task.WhenAll(tasks);
+                emptyEntitiesRemoved += await this.orchestrationService.PurgeOrchestrationHistoryAsync(emptyEntityIds);
 
-            } while (retrievedResults > 0 && stopwatch.Elapsed <= timeLimitForCleanEntityStorageLoop);
+            } while (retrievedResults > 0 && stopwatch.Elapsed <= TimeLimitForCleanEntityStorageLoop);
 
             return new CleanEntityStorageResult()
             {
@@ -195,7 +196,7 @@ namespace DurableTask.SqlServer
                 return new EntityMetadata()
                 {
                     EntityId = EntityId.FromString(state.OrchestrationInstance.InstanceId),
-                    LastModifiedTime = state.CreatedTime,
+                    LastModifiedTime = state.LastUpdatedTime,
                     BacklogQueueSize = status?.BacklogQueueSize ?? 0,
                     LockedBy = status?.LockedBy,
                     SerializedState = null, // we were instructed to not include the state
@@ -215,7 +216,7 @@ namespace DurableTask.SqlServer
                     return new EntityMetadata()
                     {
                         EntityId = EntityId.FromString(state.OrchestrationInstance.InstanceId),
-                        LastModifiedTime = state.CreatedTime,
+                        LastModifiedTime = state.LastUpdatedTime,
                         BacklogQueueSize = status?.BacklogQueueSize ?? 0,
                         LockedBy = status?.LockedBy,
                         SerializedState = state.Input,

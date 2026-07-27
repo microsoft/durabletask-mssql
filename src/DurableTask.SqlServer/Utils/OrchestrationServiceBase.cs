@@ -45,10 +45,10 @@ namespace DurableTask.SqlServer.Utils
         public virtual BehaviorOnContinueAsNew EventBehaviourForContinueAsNew
             => BehaviorOnContinueAsNew.Carryover;
 
-        public virtual EntityBackendProperties? EntityBackendProperties 
+        public virtual EntityBackendProperties? EntityBackendProperties
             => null;
 
-        public virtual EntityBackendQueries? EntityBackendQueries 
+        public virtual EntityBackendQueries? EntityBackendQueries
             => null;
 
         public virtual Task CreateAsync()

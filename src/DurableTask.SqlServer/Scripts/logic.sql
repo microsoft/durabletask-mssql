@@ -674,7 +674,7 @@ BEGIN
     WHERE
         I.TaskHub = @TaskHub AND
 	    (I.[LockExpiration] IS NULL OR I.[LockExpiration] < @now) AND
-        (E.[VisibleTime] IS NULL OR E.[VisibleTime] < @now) AND 
+        (E.[VisibleTime] IS NULL OR E.[VisibleTime] < @now) AND
         (@OrchestrationType IS NULL OR
             (@OrchestrationType = 0 AND I.[InstanceID] NOT LIKE '@%@%') OR
             (@OrchestrationType = 1 AND I.[InstanceID] LIKE '@%@%')

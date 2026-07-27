@@ -22,7 +22,7 @@ namespace DurableTask.SqlServer.AzureFunctions
         readonly ILoggerFactory loggerFactory;
         readonly IConnectionInfoResolver connectionInfoResolver;
 
-        readonly bool useSeparateQueueForEntityWorkItems = false;
+        bool useSeparateQueueForEntityWorkItems;
 
         SqlDurabilityOptions? defaultOptions;
         SqlDurabilityProvider? defaultProvider;
@@ -94,6 +94,11 @@ namespace DurableTask.SqlServer.AzureFunctions
                 this.clientProviders.Add(key, clientProvider);
                 return clientProvider;
             }
+        }
+
+        public void SetUseSeparateQueueForEntityWorkItems(bool newValue)
+        {
+            this.useSeparateQueueForEntityWorkItems = newValue;
         }
 
         SqlOrchestrationService GetOrchestrationService(SqlDurabilityOptions clientOptions)

@@ -67,6 +67,11 @@ namespace DurableTask.SqlServer
 
         public override EntityBackendQueries? EntityBackendQueries => new EntitySqlBackendQueries(this);
 
+        internal void SetUseSeparateQueueForEntityWorkItems(bool value)
+        {
+            this.settings.UseSeparateQueueForEntityWorkItems = value;
+        }
+
         static SqlOrchestrationServiceSettings? ValidateSettings(SqlOrchestrationServiceSettings? settings)
         {
             if (settings != null)
@@ -130,7 +135,7 @@ namespace DurableTask.SqlServer
         {
 #pragma warning disable CS8603 // Possible null reference return. Need to update base signature in IEntityOrchestrationService
             return await this.LockNextWorkItemAsync(
-                receiveTimeout, 
+                receiveTimeout,
                 cancellationToken,
                 OrchestrationFilterType.OrchestrationsOnly);
 # pragma warning restore CS8603
@@ -140,7 +145,7 @@ namespace DurableTask.SqlServer
         {
 #pragma warning disable CS8603 // Possible null reference return. Need to update base signature in IEntityOrchestrationService
             return await this.LockNextWorkItemAsync(
-                receiveTimeout, 
+                receiveTimeout,
                 cancellationToken,
                 OrchestrationFilterType.EntitiesOnly);
 # pragma warning restore CS8603
