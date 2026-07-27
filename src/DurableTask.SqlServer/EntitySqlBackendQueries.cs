@@ -11,6 +11,7 @@ namespace DurableTask.SqlServer
     using DurableTask.Core.Entities;
     using System.Collections.Generic;
     using System.Diagnostics;
+    using Newtonsoft.Json.Linq;
 
     class EntitySqlBackendQueries : EntityBackendQueries
     {
@@ -179,50 +180,38 @@ namespace DurableTask.SqlServer
                 return null;
             }
 
-            if (!includeState)
+            if (!includeTransient && !EntityStatus.TestEntityExists(state.Status))
             {
-                if (!includeTransient)
-                {
-                    // it is possible that this entity was logically deleted even though its orchestration was not purged yet.
-                    // we can check this efficiently (i.e. without deserializing anything) by looking at just the custom status
-                    if (!EntityStatus.TestEntityExists(state.Status))
-                    {
-                        return null;
-                    }
-                }
-
-                EntityStatus? status = ClientEntityHelpers.GetEntityStatus(state.Status);
-
-                return new EntityMetadata()
-                {
-                    EntityId = EntityId.FromString(state.OrchestrationInstance.InstanceId),
-                    LastModifiedTime = state.LastUpdatedTime,
-                    BacklogQueueSize = status?.BacklogQueueSize ?? 0,
-                    LockedBy = status?.LockedBy,
-                    SerializedState = null, // we were instructed to not include the state
-                };
+                return null;
             }
-            else
+
+            EntityStatus? status = ClientEntityHelpers.GetEntityStatus(state.Status);
+            return new EntityMetadata()
             {
-                // return the result to the user
-                if (!includeTransient && state.Input == null)
-                {
-                    return null;
-                }
-                else
-                {
-                    EntityStatus? status = ClientEntityHelpers.GetEntityStatus(state.Status);
+                EntityId = EntityId.FromString(state.OrchestrationInstance.InstanceId),
+                LastModifiedTime = state.LastUpdatedTime,
+                BacklogQueueSize = status?.BacklogQueueSize ?? 0,
+                LockedBy = status?.LockedBy,
+                SerializedState = includeState ? ExtractSerializedEntityState(state.Input) : null,
+            };
+        }
 
-                    return new EntityMetadata()
-                    {
-                        EntityId = EntityId.FromString(state.OrchestrationInstance.InstanceId),
-                        LastModifiedTime = state.LastUpdatedTime,
-                        BacklogQueueSize = status?.BacklogQueueSize ?? 0,
-                        LockedBy = status?.LockedBy,
-                        SerializedState = state.Input,
-                    };
-                }
+        static string? ExtractSerializedEntityState(string? entityMetadata)
+        {
+            if (entityMetadata is null || entityMetadata.Length == 0)
+            {
+                return null;
             }
+
+            JObject entityJson = JObject.Parse(entityMetadata);
+            if (entityJson.TryGetValue("exists", out JToken? existsValue) &&
+                existsValue.Type == JTokenType.Boolean &&
+                existsValue.Value<bool>() == false)
+            {
+                return null;
+            }
+
+            return entityJson.TryGetValue("state", out JToken? stateValue) ? stateValue.ToString(Newtonsoft.Json.Formatting.None) : null;
         }
     }
 }
