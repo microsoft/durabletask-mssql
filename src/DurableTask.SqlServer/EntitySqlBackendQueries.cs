@@ -137,7 +137,6 @@ namespace DurableTask.SqlServer
                             if (isEmptyEntity && safeToRemoveWithoutBreakingMessageSorterLogic)
                             {
                                 emptyEntityIds.Add(state.OrchestrationInstance.InstanceId);
-                                emptyEntitiesRemoved++;
                             }
                         }
                     }
