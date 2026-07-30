@@ -37,6 +37,11 @@ namespace DurableTask.SqlServer.AzureFunctions
 
         public override bool SupportsImplicitEntityDeletion => true;
 
+        public override void SetUseSeparateQueueForEntityWorkItems(bool newValue)
+        {
+            this.service.SetUseSeparateQueueForEntityWorkItems(newValue);
+        }
+
         public override JObject ConfigurationJson => JObject.FromObject(this.durabilityOptions);
 
         public override TimeSpan MaximumDelayTime { get; set; } = TimeSpan.MaxValue;

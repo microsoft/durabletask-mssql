@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+### Updates
+
+* Add support for Durable Entities, including a new `net8.0` target framework for `DurableTask.SqlServer.AzureFunctions` ([#295](https://github.com/microsoft/durabletask-mssql/pull/295))
+
+## v1.7.0
+
+### Updates
+
+* enable SqlOrchestrationService.PurgeInstanceStateAsync to delete more than 1000 instances by @usemam ([#308](https://github.com/microsoft/durabletask-mssql/pull/308))
+* Add es-metadata.yml (schema 1.0.0) by @jviau in [#310](https://github.com/microsoft/durabletask-mssql/pull/310)
+* Preserve durable trace context in SQL history by @chandramouleswaran in [#306](https://github.com/microsoft/durabletask-mssql/pull/306)
+
 ## v1.6.0
 
 ### Updates
