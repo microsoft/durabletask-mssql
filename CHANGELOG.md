@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Updates
+
+* Add support for Durable Entities, including a new `net8.0` target framework for `DurableTask.SqlServer.AzureFunctions` ([#295](https://github.com/microsoft/durabletask-mssql/pull/295))
+
 ## v1.7.0
 
 ### Updates
