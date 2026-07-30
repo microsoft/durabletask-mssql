@@ -92,6 +92,7 @@ namespace DurableTask.SqlServer
 
             int retrievedResults = 0;
             IEnumerable<OrchestrationState> allResults = Array.Empty<OrchestrationState>();
+            var lockReleaseRequests = new HashSet<(string EntityId, string LockOwner)>();
             var stopwatch = new Stopwatch();
             stopwatch.Start();
             do
@@ -103,12 +104,10 @@ namespace DurableTask.SqlServer
                     InstanceIdPrefix = "@",
                     CreatedTimeFrom = DateTime.MinValue,
                     CreatedTimeTo = DateTime.MaxValue,
-                    FetchInput = true,
+                    FetchInput = false,
                 };
-
                 IReadOnlyCollection<OrchestrationState> page = await this.orchestrationService.GetManyOrchestrationsAsync(entityInstancesQuery, cancellation);
 
-                pageNumber++;
                 retrievedResults = page.Count;
                 if (retrievedResults == 0)
                 {
@@ -124,9 +123,12 @@ namespace DurableTask.SqlServer
                     EntityStatus? status = ClientEntityHelpers.GetEntityStatus(state.Status);
                     if (status != null)
                     {
-                        if (request.ReleaseOrphanedLocks && status.LockedBy != null)
+                        string? lockOwner = status.LockedBy;
+                        if (request.ReleaseOrphanedLocks &&
+                            lockOwner != null &&
+                            lockReleaseRequests.Add((state.OrchestrationInstance.InstanceId, lockOwner)))
                         {
-                            tasks.Add(CheckForOrphanedLockAndFixIt(state, status.LockedBy));
+                            tasks.Add(CheckForOrphanedLockAndFixIt(state, lockOwner));
                         }
 
                         if (request.RemoveEmptyEntities)
@@ -161,6 +163,10 @@ namespace DurableTask.SqlServer
 
                 await Task.WhenAll(tasks);
                 emptyEntitiesRemoved += await this.orchestrationService.PurgeOrchestrationHistoryAsync(emptyEntityIds);
+                if (emptyEntityIds.Count == 0)
+                {
+                    pageNumber++;
+                }
 
             } while (retrievedResults > 0 && stopwatch.Elapsed <= TimeLimitForCleanEntityStorageLoop);
 
