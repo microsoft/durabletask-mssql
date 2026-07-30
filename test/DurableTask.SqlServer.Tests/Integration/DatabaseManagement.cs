@@ -135,6 +135,64 @@ namespace DurableTask.SqlServer.Tests.Integration
             Assert.DoesNotContain("dt", testDb.GetSchemas());
         }
         
+        /// <summary>
+        /// Verifies that the schema can be created and dropped correctly when using
+        /// a case-sensitive database collation (SQL_Latin1_General_CP1_CS_AS).
+        /// This helps prevent case-sensitivity regressions (see issue #111).
+        /// </summary>
+        [Fact]
+        public async Task CanCreateAndDropSchemaWithCaseSensitiveCollation()
+        {
+            using TestDatabase testDb = this.CreateTestDb(
+                initializeDatabase: true,
+                collation: "SQL_Latin1_General_CP1_CS_AS");
+            IOrchestrationService service = this.CreateServiceWithTestDb(testDb);
+
+            // Create the DB schema for the first time
+            await service.CreateAsync(recreateInstanceStore: true);
+
+            LogAssert.NoWarningsOrErrors(this.logProvider);
+            LogAssert
+                .For(this.logProvider)
+                .Expect(
+                    LogAssert.CheckedDatabase())
+                .Expect(
+                    LogAssert.AcquiredAppLock(),
+                    LogAssert.ExecutedSqlScript("drop-schema.sql"),
+                    LogAssert.ExecutedSqlScript("schema-1.0.0.sql"),
+                    LogAssert.ExecutedSqlScript("schema-1.2.0.sql"),
+                    LogAssert.ExecutedSqlScript("schema-1.6.0.sql"),
+                    LogAssert.ExecutedSqlScript("logic.sql"),
+                    LogAssert.ExecutedSqlScript("permissions.sql"),
+                    LogAssert.SprocCompleted("dt._UpdateVersion"))
+                .EndOfLog();
+
+            await this.ValidateDatabaseSchemaAsync(testDb);
+
+            // Create the DB schema again - should be a no-op since it already exists
+            this.logProvider.Clear();
+            await service.CreateIfNotExistsAsync();
+            await this.ValidateDatabaseSchemaAsync(testDb);
+
+            LogAssert.NoWarningsOrErrors(this.logProvider);
+            LogAssert.Sequence(
+                this.logProvider,
+                LogAssert.CheckedDatabase(),
+                LogAssert.AcquiredAppLock(),
+                LogAssert.SprocCompleted("dt._GetVersions"));
+
+            // Delete the database and validate
+            this.logProvider.Clear();
+            await service.DeleteAsync();
+            LogAssert.NoWarningsOrErrors(this.logProvider);
+            LogAssert.Sequence(
+                this.logProvider,
+                LogAssert.AcquiredAppLock(),
+                LogAssert.ExecutedSqlScript("drop-schema.sql"));
+
+            Assert.DoesNotContain("dt", testDb.GetSchemas());
+        }
+
         [Theory]
         [InlineData(true)]
         [InlineData(false)]
@@ -411,9 +469,9 @@ namespace DurableTask.SqlServer.Tests.Integration
             Assert.Contains("Tags", taskColumns);
         }
 
-        TestDatabase CreateTestDb(bool initializeDatabase = true)
+        TestDatabase CreateTestDb(bool initializeDatabase = true, string collation = "Latin1_General_100_BIN2_UTF8")
         {
-            var testDb = new TestDatabase(this.output);
+            var testDb = new TestDatabase(this.output, collation);
             if (initializeDatabase)
             {
                 testDb.Create();
@@ -545,13 +603,13 @@ namespace DurableTask.SqlServer.Tests.Integration
             readonly ITestOutputHelper output;
             bool created = false;
 
-            public TestDatabase(ITestOutputHelper output)
+            public TestDatabase(ITestOutputHelper output, string collation = "Latin1_General_100_BIN2_UTF8")
             {
                 string defaultConnectionString = SharedTestHelpers.GetDefaultConnectionString("master");
                 this.server = new Server(new ServerConnection(new SqlConnection(defaultConnectionString)));
                 this.testDb = new Database(this.server, $"TestDB_{DateTime.UtcNow:yyyyMMddhhmmssfffffff}")
                 {
-                    Collation = "Latin1_General_100_BIN2_UTF8"
+                    Collation = collation
                 };
 
                 this.ConnectionString =
