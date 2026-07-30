@@ -6,7 +6,6 @@ on:
       - v* #version is cut
 
 env:
-  DOTNET_VERSION: "6.0.x"
   GITHUB_SOURCE: "https://nuget.pkg.github.com/microsoft/index.json"
   CONFIGURATION: Release
 
@@ -17,10 +16,12 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
-    - name: Setup .NET Core ${{ env.DOTNET_VERSION }}
-      uses: actions/setup-dotnet@v1
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
       with:
-        dotnet-version: ${{ env.DOTNET_VERSION }}
+        dotnet-version: |
+          6.0.x
+          8.0.x
     - name: Install dependencies
       run: dotnet restore
     - name: Build
