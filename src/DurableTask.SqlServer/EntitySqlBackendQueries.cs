@@ -104,7 +104,7 @@ namespace DurableTask.SqlServer
                     InstanceIdPrefix = "@",
                     CreatedTimeFrom = DateTime.MinValue,
                     CreatedTimeTo = DateTime.MaxValue,
-                    FetchInput = true,
+                    FetchInput = false,
                 };
                 IReadOnlyCollection<OrchestrationState> page = await this.orchestrationService.GetManyOrchestrationsAsync(entityInstancesQuery, cancellation);
 
