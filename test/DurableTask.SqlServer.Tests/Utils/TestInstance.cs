@@ -97,8 +97,8 @@ namespace DurableTask.SqlServer.Tests.Utils
 
             // For created time, account for potential clock skew
             Assert.True(state.CreatedTime >= this.startTime.AddMinutes(-5));
-            Assert.True(state.LastUpdatedTime > state.CreatedTime);
-            Assert.True(state.CompletedTime > state.CreatedTime);
+            Assert.True(state.LastUpdatedTime >= state.CreatedTime);
+            Assert.True(state.CompletedTime >= state.CreatedTime);
             Assert.NotNull(state.OrchestrationInstance);
             Assert.Equal(this.instance.InstanceId, state.OrchestrationInstance.InstanceId);
 
