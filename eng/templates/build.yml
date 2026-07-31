@@ -33,16 +33,14 @@ jobs:
             verbosityRestore: Minimal
             projects: '**/*.csproj'
 
-        # Build the entire solution. This will also build all the tests, which
-        # isn't strictly necessary...
-        - task: VSBuild@1
+        # Build the entire solution with the installed .NET SDK. This will also
+        # build all the tests, which isn't strictly necessary...
+        - task: DotNetCoreCLI@2
           displayName: 'Build'
           inputs:
-            solution: '**/*.sln'
-            vsVersion: 'latest'
-            logFileVerbosity: minimal
-            configuration: Release
-            msbuildArgs: /p:FileVersionRevision=$(Build.BuildId) /p:ContinuousIntegrationBuild=true
+            command: build
+            projects: '**/*.sln'
+            arguments: '--configuration Release --no-restore --verbosity minimal /p:FileVersionRevision=$(Build.BuildId) /p:ContinuousIntegrationBuild=true'
 
         - template: ci/sign-files.yml@eng
           parameters:
