@@ -910,7 +910,8 @@ namespace DurableTask.SqlServer
                 command,
                 traceHelper,
                 instanceId,
-                cmd => cmd.ExecuteReaderAsync(cancellationToken));
+                cmd => cmd.ExecuteReaderAsync(cancellationToken),
+                cancellationToken);
         }
 
         public static Task<int> ExecuteNonQueryAsync(
@@ -923,7 +924,8 @@ namespace DurableTask.SqlServer
                 command,
                 traceHelper,
                 instanceId,
-                cmd => cmd.ExecuteNonQueryAsync(cancellationToken));
+                cmd => cmd.ExecuteNonQueryAsync(cancellationToken),
+                cancellationToken);
         }
 
         public static Task<object> ExecuteScalarAsync(
@@ -936,19 +938,25 @@ namespace DurableTask.SqlServer
                 command,
                 traceHelper,
                 instanceId,
-                cmd => cmd.ExecuteScalarAsync(cancellationToken));
+                cmd => cmd.ExecuteScalarAsync(cancellationToken),
+                cancellationToken);
         }
 
         static async Task<T> ExecuteSprocAndTraceAsync<T>(
             DbCommand command,
             LogHelper traceHelper,
             string? instanceId,
-            Func<DbCommand, Task<T>> executor)
+            Func<DbCommand, Task<T>> executor,
+            CancellationToken cancellationToken)
         {
             var context = new SprocExecutionContext();
             try
             {
                 return await WithRetry(command, executor, context, traceHelper, instanceId);
+            }
+            catch (SqlException e) when (cancellationToken.IsCancellationRequested)
+            {
+                throw new OperationCanceledException("The SQL operation was canceled.", e, cancellationToken);
             }
             finally
             {
