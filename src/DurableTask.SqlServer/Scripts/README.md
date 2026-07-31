@@ -53,7 +53,7 @@ The published `InstanceIDs`, `MessageIDs`, `HistoryEvents`, `OrchestrationEvents
 
 When new tabular input is required, create a versioned TVP and a versioned stored procedure entry point, and retain the previous versions for rolling upgrades. Prefer a scalar stored procedure parameter when it can carry the new value without changing a TVP. Do not add runtime metadata checks or conversion paths to hot procedures; versioning preserves compatibility without adding per-operation overhead.
 
-The `PublishedTableValuedParameterContractsRemainCompatible` integration test submits frozen, previously published TVP record shapes to the latest database schema. Its expected shapes are a compatibility baseline and must not be updated to accommodate a minor or patch schema change.
+The `PublishedV1_6_0TableValuedParameterContractsRemainCompatible` integration test submits the frozen v1.6.0 TVP record shapes to the latest database schema. Its expected shapes are a compatibility baseline and must never be updated to accommodate a later schema change. When a new versioned TVP is published, add a separate version-specific baseline test for that contract and retain all earlier baselines for as long as those client versions are supported.
 
 ## Changing Stored Procedures or Permissions
 

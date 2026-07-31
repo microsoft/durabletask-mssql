@@ -476,7 +476,7 @@ namespace DurableTask.SqlServer.Tests.Integration
         /// must not invalidate the TVP records sent by an app that has not yet upgraded.
         /// </summary>
         [Fact]
-        public async Task PublishedTableValuedParameterContractsRemainCompatible()
+        public async Task PublishedV1_6_0TableValuedParameterContractsRemainCompatible()
         {
             using TestDatabase testDb = this.CreateTestDb();
             IOrchestrationService service = this.CreateServiceWithTestDb(testDb);
@@ -485,7 +485,7 @@ namespace DurableTask.SqlServer.Tests.Integration
             await using var connection = new SqlConnection(testDb.ConnectionString);
             await connection.OpenAsync();
 
-            foreach ((string typeName, SqlMetaData[] columns) in GetPublishedTableValuedParameterContracts())
+            foreach ((string typeName, SqlMetaData[] columns) in GetPublishedV1_6_0TableValuedParameterContracts())
             {
                 var record = new SqlDataRecord(columns);
                 for (int ordinal = 0; ordinal < columns.Length; ordinal++)
@@ -510,7 +510,7 @@ namespace DurableTask.SqlServer.Tests.Integration
             }
         }
 
-        static (string TypeName, SqlMetaData[] Columns)[] GetPublishedTableValuedParameterContracts()
+        static (string TypeName, SqlMetaData[] Columns)[] GetPublishedV1_6_0TableValuedParameterContracts()
         {
             // These shapes are a compatibility baseline, not a copy that should track logic.sql.
             // Changing them would stop this test from representing already-deployed clients.

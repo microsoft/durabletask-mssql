@@ -40,15 +40,9 @@ The provider persists orchestration and entity state, coordinates distributed wo
 
 ### Published TVPs are immutable compatibility contracts
 
-User-defined table types used as table-valued parameters (TVPs), including `InstanceIDs`, `MessageIDs`, `HistoryEvents`, `OrchestrationEvents`, and `TaskEvents`, are wire contracts between deployed client binaries and the database. SQL Server validates the TVP shape before entering a stored procedure. Adding, removing, reordering, renaming, or changing a column can therefore break older apps even when the column is nullable.
+Published table-valued parameters are wire contracts for independently deployed apps sharing a database schema. Never change or recreate a published TVP in a minor or patch release, even to add a nullable column. Prefer scalar parameters or a versioned TVP and procedure, retain old contracts during rolling upgrades, and keep version-specific compatibility test baselines frozen.
 
-Customers commonly deploy multiple Function Apps independently against the same database resource and schema. The first app to start with a newer provider upgrades that shared schema; apps still running an older provider must continue to operate.
-
-- Do not change or recreate a published TVP in a minor or patch release.
-- To carry new data, prefer scalar procedure parameters when practical. Otherwise introduce a versioned TVP and versioned procedure entry point while retaining the old contract.
-- A TVP contract may be removed or changed only in an explicitly planned major/breaking release with migration guidance.
-- Do not add runtime schema guards to compensate for TVP drift; they run too late to prevent SQL Server's parameter-binding failure and can regress performance.
-- Keep `PublishedTableValuedParameterContractsRemainCompatible` frozen to the published baseline. Do not update its expected shapes to make a schema change pass.
+Follow the canonical [database schema development rules](../src/DurableTask.SqlServer/Scripts/README.md#table-valued-parameter-compatibility) for the rationale and maintenance procedure.
 
 ## Documentation
 
