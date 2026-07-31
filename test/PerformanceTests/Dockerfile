@@ -6,7 +6,8 @@ FROM mcr.microsoft.com/dotnet/sdk:6.0 AS installer-env
 COPY . /durabletask-mssql
 RUN cd /durabletask-mssql/test/PerformanceTests && \
     mkdir -p /home/site/wwwroot && \
-    dotnet publish -c Release *.csproj --output /home/site/wwwroot
+    dotnet restore "PerformanceTests.csproj" --configfile "/durabletask-mssql/nuget.config" && \
+    dotnet publish -c Release "PerformanceTests.csproj" --no-restore --output /home/site/wwwroot
 
 # To enable ssh & remote debugging on app service change the base image to the one below
 # FROM mcr.microsoft.com/azure-functions/dotnet:3.0-appservice

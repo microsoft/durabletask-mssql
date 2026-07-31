@@ -31,10 +31,10 @@ jobs:
           8.0.x
 
     - name: NuGet Restore
-      run: dotnet restore -v n
+      run: dotnet restore --configfile "$GITHUB_WORKSPACE/nuget.config" -v n
 
     - name: Build
-      run: dotnet build
+      run: dotnet build --no-restore
 
     - name: Setup SQL Server container
       run: test/setup.ps1

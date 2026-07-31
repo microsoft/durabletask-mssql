@@ -32,6 +32,8 @@ steps:
   displayName: 'Restore nuget dependencies'
   inputs:
     command: restore
+    feedsToUse: config
+    nugetConfigPath: 'nuget.config'
     verbosityRestore: Minimal
     projects: '**/*.csproj'
 
