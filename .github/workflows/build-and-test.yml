@@ -24,8 +24,8 @@ jobs:
       uses: actions/setup-dotnet@v4
       with:
         dotnet-version: |
-          6.0.x
           8.0.x
+          10.0.x
       env:
         NUGET_AUTH_TOKEN: RequiredButNotUsed
 
@@ -40,6 +40,6 @@ jobs:
       shell: pwsh
 
     - name: Durable framework tests
-      run: dotnet test --no-build --verbosity normal --filter Category!=Stress ./test/DurableTask.SqlServer.Tests/DurableTask.SqlServer.Tests.csproj
+      run: dotnet test --no-build --verbosity normal --filter Category!=Stress -p:TestTfmsInParallel=false ./test/DurableTask.SqlServer.Tests/DurableTask.SqlServer.Tests.csproj
     - name: Functions runtime tests
-      run: dotnet test --no-build --verbosity normal ./test/DurableTask.SqlServer.AzureFunctions.Tests/DurableTask.SqlServer.AzureFunctions.Tests.csproj
+      run: dotnet test --no-build --verbosity normal -p:TestTfmsInParallel=false ./test/DurableTask.SqlServer.AzureFunctions.Tests/DurableTask.SqlServer.AzureFunctions.Tests.csproj
