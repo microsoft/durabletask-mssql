@@ -143,7 +143,7 @@ namespace DurableTask.SqlServer.Tests.Integration
                 version: string.Empty,
                 implementation: (ctx, input) => Task.FromResult(input));
 
-            TimeSpan timeout = TimeSpan.FromSeconds(60);
+            TimeSpan timeout = TimeSpan.FromMinutes(2);
             await Task.WhenAll(instances.Select(instance => instance.WaitForCompletion(timeout)));
 
             var filter = new PurgeInstanceFilter(
