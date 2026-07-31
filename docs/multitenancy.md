@@ -16,6 +16,12 @@ Shared schema multitenancy works by isolating each app into a separate [task hub
 
 Shared schema mode is available starting in the v1.0.0 version of the MSSQL storage provider. The benefit of this mode is that fewer database objects need to be created in the database. It also enables high-privileged user accounts to write SQL queries that span multiple tenants. The downside of this mode is that schema updates must be applied to all tenants at once, which increases the risk associated with schema upgrades.
 
+### Rolling upgrades
+
+Apps that use the same SQL schema also share its stored procedures and user-defined table types. Provider minor and patch releases preserve these database contracts so independently deployed apps can run different provider versions during a rolling upgrade. Start with a non-production environment and upgrade all apps using the shared schema promptly.
+
+A major provider release may intentionally include breaking database-contract changes. Coordinate those upgrades across every app using the schema, or configure isolated schema mode so each app can upgrade independently. Merely using separate task hubs or login credentials does not isolate schema versions.
+
 ### Enabling shared schema multitenancy
 
 Shared schema multitenancy is enabled by default. When using shared schema multitenacy, you do not (and should not) configure a task hub name in code or configuration. Instead, the SQL login username (from the [`USER_NAME()`](https://docs.microsoft.com/sql/t-sql/functions/user-name-transact-sql) SQL function) is automatically used as the task hub name (for example, `dbo`).
