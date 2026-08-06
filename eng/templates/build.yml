@@ -33,6 +33,21 @@ jobs:
             verbosityRestore: Minimal
             projects: '**/*.csproj'
 
+        - task: PowerShell@2
+          displayName: 'Check vulnerable NuGet dependencies'
+          inputs:
+            targetType: inline
+            script: |
+              $output = dotnet list DurableTask.SqlServer.sln package --vulnerable --include-transitive --no-restore
+              $output | Write-Host
+              if ($LASTEXITCODE -ne 0) {
+                exit $LASTEXITCODE
+              }
+
+              if ($output -match 'has the following vulnerable packages') {
+                throw 'Vulnerable NuGet dependencies were found.'
+              }
+
         # Build the entire solution with the installed .NET SDK. This will also
         # build all the tests, which isn't strictly necessary...
         - task: DotNetCoreCLI@2

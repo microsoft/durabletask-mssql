@@ -33,6 +33,14 @@ jobs:
     - name: NuGet Restore
       run: dotnet restore --configfile "$GITHUB_WORKSPACE/nuget.config" -v n
 
+    - name: Check vulnerable NuGet dependencies
+      run: |
+        output=$(dotnet list DurableTask.SqlServer.sln package --vulnerable --include-transitive --no-restore)
+        echo "$output"
+        if echo "$output" | grep --quiet "has the following vulnerable packages"; then
+          exit 1
+        fi
+
     - name: Build
       run: dotnet build --no-restore
 
