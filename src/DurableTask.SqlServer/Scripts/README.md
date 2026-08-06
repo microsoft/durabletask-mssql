@@ -43,7 +43,17 @@ The existing `schema-x.y.z.sql` files generally should NOT be modified after the
 1. Create a new `schema-x.y.z.sql` script file with the new schema. The `x.y.z` numbers should match the new nuget package version that will be shipped with this new script.
 1. Copy/paste the generic warning comments from any existing `schema-x.y.z.sql` files into the new script file as appropriate.
 1. For adding new columns or indexes, use the appropriate `ALTER TABLE` statements as well as the `IF NOT EXISTS` syntax to avoid errors if the column or index already exists. These scripts must be safe to run multiple times.
-1. For making changes to custom types, add `DROP TYPE` statements in the `schema-x.y.z.sql` file and then update the existing `CREATE TYPE` statements in the `logic.sql` file to ensure that those types get recreated with the newest schema.
+1. Do not change an existing user-defined table type used as a table-valued parameter (TVP) in a minor or patch release. Published TVPs are immutable client/database contracts. Adding even a nullable column causes SQL Server to reject records sent by older clients before the stored procedure begins executing.
+
+### Table-valued parameter compatibility
+
+Multiple Function Apps can share one database schema while being deployed independently. The first app running a newer provider version automatically upgrades the shared schema. Apps that have not upgraded must still be able to submit their existing TVP shapes.
+
+The published `InstanceIDs`, `MessageIDs`, `HistoryEvents`, `OrchestrationEvents`, and `TaskEvents` types must therefore not have columns added, removed, reordered, renamed, or changed outside an explicitly planned major/breaking release. A SQL guard inside a stored procedure cannot make a changed TVP compatible because SQL Server validates the parameter shape before executing the procedure.
+
+When new tabular input is required, create a versioned TVP and a versioned stored procedure entry point, and retain the previous versions for rolling upgrades. Prefer a scalar stored procedure parameter when it can carry the new value without changing a TVP. Do not add runtime metadata checks or conversion paths to hot procedures; versioning preserves compatibility without adding per-operation overhead.
+
+The `PublishedV1_6_0TableValuedParameterContractsRemainCompatible` integration test submits the frozen v1.6.0 TVP record shapes to the latest database schema. Its expected shapes are a compatibility baseline and must never be updated to accommodate a later schema change. When a new versioned TVP is published, add a separate version-specific baseline test for that contract and retain all earlier baselines for as long as those client versions are supported.
 
 ## Changing Stored Procedures or Permissions
 

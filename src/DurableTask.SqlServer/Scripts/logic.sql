@@ -2,8 +2,9 @@
 -- Licensed under the MIT License.
 
 -- Create custom types. This must be done before creating stored procedures.
--- IMPORTANT: If you make any changes to these types, you must also add a line in the schema upgrade script
---            (for example, schema-1.X.0) to drop them so that those changes are properly reflected.
+-- IMPORTANT: Published table-valued parameter types are immutable outside a major/breaking release.
+--            Even adding a nullable column prevents older clients from binding the parameter.
+--            Add a versioned type and procedure instead of changing an existing type.
 IF TYPE_ID(N'__SchemaNamePlaceholder__.InstanceIDs') IS NULL
     CREATE TYPE __SchemaNamePlaceholder__.InstanceIDs AS TABLE (
         [InstanceID] varchar(100) NOT NULL

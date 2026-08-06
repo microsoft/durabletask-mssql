@@ -14,6 +14,7 @@ namespace DurableTask.SqlServer.Tests.Integration
     using DurableTask.SqlServer.Tests.Logging;
     using DurableTask.SqlServer.Tests.Utils;
     using Microsoft.Data.SqlClient;
+    using Microsoft.Data.SqlClient.Server;
     using Microsoft.Extensions.Logging;
     using Microsoft.SqlServer.Management.Common;
     using Microsoft.SqlServer.Management.Smo;
@@ -467,6 +468,118 @@ namespace DurableTask.SqlServer.Tests.Integration
             // Verify the Tags column exists on the NewTasks table
             IEnumerable<string> taskColumns = testDb.GetColumns("NewTasks");
             Assert.Contains("Tags", taskColumns);
+        }
+
+        /// <summary>
+        /// Verifies that the latest schema still accepts the TVP shapes published in v1.6.0.
+        /// Multiple independently deployed apps can share a schema, so an upgrade by one app
+        /// must not invalidate the TVP records sent by an app that has not yet upgraded.
+        /// </summary>
+        [Fact]
+        public async Task PublishedV1_6_0TableValuedParameterContractsRemainCompatible()
+        {
+            using TestDatabase testDb = this.CreateTestDb();
+            IOrchestrationService service = this.CreateServiceWithTestDb(testDb);
+            await service.CreateAsync(recreateInstanceStore: true);
+
+            await using var connection = new SqlConnection(testDb.ConnectionString);
+            await connection.OpenAsync();
+
+            foreach ((string typeName, SqlMetaData[] columns) in GetPublishedV1_6_0TableValuedParameterContracts())
+            {
+                var record = new SqlDataRecord(columns);
+                for (int ordinal = 0; ordinal < columns.Length; ordinal++)
+                {
+                    record.SetDBNull(ordinal);
+                }
+
+                if (typeName == "InstanceIDs")
+                {
+                    record.SetString(0, "compatibility-test");
+                }
+
+                await using SqlCommand command = connection.CreateCommand();
+                command.CommandText = "SELECT COUNT_BIG(*) FROM @Rows";
+
+                SqlParameter parameter = command.Parameters.Add("@Rows", SqlDbType.Structured);
+                parameter.TypeName = $"dt.{typeName}";
+                parameter.Value = new[] { record };
+
+                long rowCount = (long)(await command.ExecuteScalarAsync())!;
+                Assert.Equal(1, rowCount);
+            }
+        }
+
+        static (string TypeName, SqlMetaData[] Columns)[] GetPublishedV1_6_0TableValuedParameterContracts()
+        {
+            // These shapes are a compatibility baseline, not a copy that should track logic.sql.
+            // Changing them would stop this test from representing already-deployed clients.
+            return new[]
+            {
+                ("InstanceIDs", new[]
+                {
+                    new SqlMetaData("InstanceID", SqlDbType.VarChar, 100),
+                }),
+                ("MessageIDs", new[]
+                {
+                    new SqlMetaData("InstanceID", SqlDbType.VarChar, 100),
+                    new SqlMetaData("SequenceNumber", SqlDbType.BigInt),
+                }),
+                ("HistoryEvents", new[]
+                {
+                    new SqlMetaData("InstanceID", SqlDbType.VarChar, 100),
+                    new SqlMetaData("ExecutionID", SqlDbType.VarChar, 50),
+                    new SqlMetaData("SequenceNumber", SqlDbType.BigInt),
+                    new SqlMetaData("EventType", SqlDbType.VarChar, 40),
+                    new SqlMetaData("Name", SqlDbType.VarChar, 300),
+                    new SqlMetaData("RuntimeStatus", SqlDbType.VarChar, 30),
+                    new SqlMetaData("TaskID", SqlDbType.Int),
+                    new SqlMetaData("Timestamp", SqlDbType.DateTime2),
+                    new SqlMetaData("IsPlayed", SqlDbType.Bit),
+                    new SqlMetaData("VisibleTime", SqlDbType.DateTime2),
+                    new SqlMetaData("Reason", SqlDbType.VarChar, -1),
+                    new SqlMetaData("PayloadText", SqlDbType.VarChar, -1),
+                    new SqlMetaData("PayloadID", SqlDbType.UniqueIdentifier),
+                    new SqlMetaData("ParentInstanceID", SqlDbType.VarChar, 100),
+                    new SqlMetaData("Version", SqlDbType.VarChar, 100),
+                    new SqlMetaData("TraceContext", SqlDbType.VarChar, 800),
+                }),
+                ("OrchestrationEvents", new[]
+                {
+                    new SqlMetaData("InstanceID", SqlDbType.VarChar, 100),
+                    new SqlMetaData("ExecutionID", SqlDbType.VarChar, 50),
+                    new SqlMetaData("SequenceNumber", SqlDbType.BigInt),
+                    new SqlMetaData("EventType", SqlDbType.VarChar, 40),
+                    new SqlMetaData("Name", SqlDbType.VarChar, 300),
+                    new SqlMetaData("RuntimeStatus", SqlDbType.VarChar, 30),
+                    new SqlMetaData("TaskID", SqlDbType.Int),
+                    new SqlMetaData("VisibleTime", SqlDbType.DateTime2),
+                    new SqlMetaData("Reason", SqlDbType.VarChar, -1),
+                    new SqlMetaData("PayloadText", SqlDbType.VarChar, -1),
+                    new SqlMetaData("PayloadID", SqlDbType.UniqueIdentifier),
+                    new SqlMetaData("ParentInstanceID", SqlDbType.VarChar, 100),
+                    new SqlMetaData("Version", SqlDbType.VarChar, 100),
+                    new SqlMetaData("TraceContext", SqlDbType.VarChar, 800),
+                    new SqlMetaData("Tags", SqlDbType.VarChar, 8000),
+                }),
+                ("TaskEvents", new[]
+                {
+                    new SqlMetaData("InstanceID", SqlDbType.VarChar, 100),
+                    new SqlMetaData("ExecutionID", SqlDbType.VarChar, 50),
+                    new SqlMetaData("Name", SqlDbType.VarChar, 300),
+                    new SqlMetaData("EventType", SqlDbType.VarChar, 40),
+                    new SqlMetaData("TaskID", SqlDbType.Int),
+                    new SqlMetaData("VisibleTime", SqlDbType.DateTime2),
+                    new SqlMetaData("LockedBy", SqlDbType.VarChar, 100),
+                    new SqlMetaData("LockExpiration", SqlDbType.DateTime2),
+                    new SqlMetaData("Reason", SqlDbType.VarChar, -1),
+                    new SqlMetaData("PayloadText", SqlDbType.VarChar, -1),
+                    new SqlMetaData("PayloadID", SqlDbType.UniqueIdentifier),
+                    new SqlMetaData("Version", SqlDbType.VarChar, 100),
+                    new SqlMetaData("TraceContext", SqlDbType.VarChar, 800),
+                    new SqlMetaData("Tags", SqlDbType.VarChar, 8000),
+                }),
+            };
         }
 
         TestDatabase CreateTestDb(bool initializeDatabase = true, string collation = "Latin1_General_100_BIN2_UTF8")
