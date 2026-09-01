@@ -28,19 +28,34 @@ jobs:
           displayName: 'Restore nuget dependencies'
           inputs:
             command: restore
+            feedsToUse: config
+            nugetConfigPath: 'nuget.config'
             verbosityRestore: Minimal
             projects: '**/*.csproj'
 
-        # Build the entire solution. This will also build all the tests, which
-        # isn't strictly necessary...
-        - task: VSBuild@1
+        - task: PowerShell@2
+          displayName: 'Check vulnerable NuGet dependencies'
+          inputs:
+            targetType: inline
+            script: |
+              $output = dotnet list DurableTask.SqlServer.sln package --vulnerable --include-transitive --no-restore
+              $output | Write-Host
+              if ($LASTEXITCODE -ne 0) {
+                exit $LASTEXITCODE
+              }
+
+              if ($output -match 'has the following vulnerable packages') {
+                throw 'Vulnerable NuGet dependencies were found.'
+              }
+
+        # Build the entire solution with the installed .NET SDK. This will also
+        # build all the tests, which isn't strictly necessary...
+        - task: DotNetCoreCLI@2
           displayName: 'Build'
           inputs:
-            solution: '**/*.sln'
-            vsVersion: 'latest'
-            logFileVerbosity: minimal
-            configuration: Release
-            msbuildArgs: /p:FileVersionRevision=$(Build.BuildId) /p:ContinuousIntegrationBuild=true
+            command: build
+            projects: '**/*.sln'
+            arguments: '--configuration Release --no-restore --verbosity minimal /p:FileVersionRevision=$(Build.BuildId) /p:ContinuousIntegrationBuild=true'
 
         - template: ci/sign-files.yml@eng
           parameters:
