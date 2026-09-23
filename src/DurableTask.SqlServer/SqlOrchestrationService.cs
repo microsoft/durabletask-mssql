@@ -178,6 +178,10 @@ namespace DurableTask.SqlServer
                 int batchSize = this.settings.WorkItemBatchSize;
                 DateTime lockExpiration = DateTime.UtcNow.Add(this.settings.WorkItemLockTimeout);
 
+                // The same process can stop and start several extended sessions for one instance, so
+                // lockedByValue alone can't tell them apart. The per-acquisition GUID makes the token
+                // identify a single session, which is what lets a stale session's checkpoint or lock
+                // release be rejected instead of silently acting on its successor's lease.
                 string lockOwnershipToken = this.settings.ExtendedSessionsEnabled
                     ? $"{this.lockedByValue}|{Guid.NewGuid():N}"
                     : this.lockedByValue;

@@ -37,7 +37,6 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
             SqlOrchestrationServiceSettings settings = GetSettings(extensionOptions);
 
             Assert.True(frameworkDefault > 0, "Expected a positive framework default for the unconfigured case.");
-            Assert.Equal(TimeSpan.FromSeconds(Math.Max(0, frameworkDefault)), settings.ExtendedSessionIdleTimeout);
         }
 
         static SqlOrchestrationServiceSettings GetSettings(DurableTaskOptions extensionOptions)

@@ -7,9 +7,11 @@ namespace DurableTask.SqlServer.Tests.Integration
     using System.Collections.Generic;
     using System.Diagnostics;
     using System.Linq;
+    using System.Threading;
     using System.Threading.Tasks;
     using DurableTask.Core;
     using DurableTask.SqlServer.Tests.Utils;
+    using Microsoft.Extensions.Logging;
     using Newtonsoft.Json;
     using Xunit;
     using Xunit.Abstractions;
@@ -121,30 +123,68 @@ namespace DurableTask.SqlServer.Tests.Integration
         [Fact]
         public async Task LockNotPoachedWhileSessionActive()
         {
-            TaskCompletionSource<string> tcs = null;
+            // A locked-but-uncheckpointed work item still has its NewEvents rows, which is the only
+            // state where _LockNextOrchestration would hand out the instance if the lease were ignored.
+            await this.testService.StopWorkerAsync(isForced: true);
+
+            // Stopping the worker cancelled the service's shutdown token; re-arm it.
+            SqlOrchestrationService firstWorker = this.testService.OrchestrationServiceMock.Object;
+            await firstWorker.StartAsync();
 
             TestInstance<string> instance = await this.testService.RunOrchestration<string, string>(
                 input: null,
                 orchestrationName: nameof(LockNotPoachedWhileSessionActive),
-                implementation: (ctx, _) =>
+                implementation: (ctx, _) => Task.FromResult("done"));
+
+            TaskOrchestrationWorkItem firstWorkItem = await firstWorker.LockNextTaskOrchestrationWorkItemAsync(
+                TimeSpan.FromSeconds(10).AdjustForDebugging(),
+                CancellationToken.None);
+
+            Assert.NotNull(firstWorkItem);
+            Assert.Equal(instance.InstanceId, firstWorkItem.InstanceId);
+
+            // Same low-privilege credentials: dt.CurrentTaskHub() is derived from the login.
+            var secondWorkerSettings = new SqlOrchestrationServiceSettings(
+                this.testService.TestCredentialConnectionString)
+            {
+                AppName = "second-worker",
+                ExtendedSessionsEnabled = true,
+                LoggerFactory = LoggerFactory.Create(
+                    builder => builder.AddProvider(this.testService.LogProvider)),
+            };
+
+            var secondWorker = new SqlOrchestrationService(secondWorkerSettings);
+            await secondWorker.StartAsync();
+
+            TaskOrchestrationWorkItem poachedWorkItem = null;
+            try
+            {
+                Assert.Null(await secondWorker.LockNextTaskOrchestrationWorkItemAsync(
+                    TimeSpan.FromSeconds(2).AdjustForDebugging(),
+                    CancellationToken.None));
+
+                // Positive control: the same call succeeds once the lease is handed back.
+                await firstWorker.ReleaseTaskOrchestrationWorkItemAsync(firstWorkItem);
+
+                poachedWorkItem = await secondWorker.LockNextTaskOrchestrationWorkItemAsync(
+                    TimeSpan.FromSeconds(10).AdjustForDebugging(),
+                    CancellationToken.None);
+
+                Assert.NotNull(poachedWorkItem);
+                Assert.Equal(instance.InstanceId, poachedWorkItem.InstanceId);
+
+                string lockedBy = await this.GetLockedByAsync(instance.InstanceId);
+                Assert.StartsWith("second-worker,", lockedBy);
+            }
+            finally
+            {
+                if (poachedWorkItem != null)
                 {
-                    tcs = new TaskCompletionSource<string>();
-                    return tcs.Task;
-                },
-                onEvent: (ctx, name, value) => tcs.TrySetResult(JsonConvert.DeserializeObject<string>(value)));
+                    await secondWorker.ReleaseTaskOrchestrationWorkItemAsync(poachedWorkItem);
+                }
 
-            await instance.WaitForStart();
-            string heldBy = await this.WaitForLockToBeHeldAsync(instance.InstanceId, TimeSpan.FromSeconds(10));
-
-            // Sanity check: a second worker calling _LockNextOrchestration sees no available work
-            // because the only ready instance is locked by the in-flight session.
-            object available = await SharedTestHelpers.ExecuteSqlAsync(
-                this.output,
-                $"SELECT COUNT(*) FROM dt.[Instances] WHERE [InstanceID] = '{instance.InstanceId}' AND [LockedBy] = '{heldBy}' AND [LockExpiration] > SYSUTCDATETIME()");
-            Assert.Equal(1, Convert.ToInt32(available));
-
-            await instance.RaiseEventAsync("Continue", "done");
-            await instance.WaitForCompletion(expectedOutput: "done");
+                await secondWorker.StopAsync();
+            }
         }
 
         [Fact]
@@ -330,6 +370,14 @@ namespace DurableTask.SqlServer.Tests.Integration
             await instance.WaitForCompletion(
                 timeout: TimeSpan.FromSeconds(20),
                 expectedOutput: "done");
+
+            // Completion alone doesn't prove the session noticed: the lost lock must surface as a
+            // SessionAbortedException, which the dispatcher logs under DurableTask.Core.
+            this.testService.LogProvider.TryGetLogs("DurableTask.Core", out var coreLogs);
+            Assert.Contains(
+                coreLogs,
+                entry => entry.Message != null &&
+                    entry.Message.Contains($"Lost the lock for instance '{instance.InstanceId}'"));
         }
 
         [Fact]
@@ -394,6 +442,12 @@ EXEC dt._CheckpointOrchestration
             // aborts and a fresh lock acquisition takes over.
             await instance.RaiseEventAsync("Continue", "done");
             await instance.WaitForCompletion(timeout: TimeSpan.FromSeconds(30), expectedOutput: "done");
+
+            this.testService.LogProvider.TryGetLogs("DurableTask.Core", out var coreLogs);
+            Assert.Contains(
+                coreLogs,
+                entry => entry.Message != null &&
+                    entry.Message.Contains($"Lost the lock for instance '{id}'"));
         }
 
         async Task<int> RunGuardedProcAsync(string procBatch)
