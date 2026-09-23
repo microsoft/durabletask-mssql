@@ -187,6 +187,18 @@ namespace DurableTask.SqlServer
         public bool CreateDatabaseIfNotExists { get; set; }
 
         /// <summary>
+        /// Gets or sets a flag indicating whether to enable extended sessions.
+        /// </summary>
+        [JsonProperty("extendedSessionsEnabled")]
+        public bool ExtendedSessionsEnabled { get; set; } = false;
+
+        /// <summary>
+        /// Gets or sets the number of seconds before an idle session times out.
+        /// </summary>
+        [JsonProperty("extendedSessionIdleTimeout")]
+        public TimeSpan ExtendedSessionIdleTimeout { get; set; } = TimeSpan.FromSeconds(30);
+
+        /// <summary>
         /// Gets a SQL connection string associated with the configured task hub.
         /// </summary>
         [JsonIgnore]
