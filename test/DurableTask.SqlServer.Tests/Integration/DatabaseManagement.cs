@@ -635,10 +635,12 @@ namespace DurableTask.SqlServer.Tests.Integration
                 $"{schemaName}._CheckpointOrchestration",
                 $"{schemaName}._CompleteTasks",
                 $"{schemaName}._DiscardEventsAndUnlockInstance",
+                $"{schemaName}._FetchOrchestrationMessages",
                 $"{schemaName}._GetVersions",
                 $"{schemaName}._LockNextOrchestration",
                 $"{schemaName}._LockNextTask",
                 $"{schemaName}._QueryManyOrchestrations",
+                $"{schemaName}._ReleaseOrchestrationLock",
                 $"{schemaName}._RenewOrchestrationLocks",
                 $"{schemaName}._RenewTaskLocks",
                 $"{schemaName}._UpdateVersion",
@@ -698,15 +700,20 @@ namespace DurableTask.SqlServer.Tests.Integration
 
             Assert.Empty(expectedFunctionNames);
 
-            // Verify that the schema version in the database matches the expected version
-            // Note that we'll need to change the expected version here whenever we introduce new schema.
+            // Verify that the version recorded in the database matches the version of the extension
+            // that created the schema. This tracks VersionPrefix in src/common.props automatically,
+            // so no update is required here when the product version changes.
             SemanticVersion currentSchemaVersion = await SharedTestHelpers.GetCurrentSchemaVersionAsync(
                 this.output,
                 database.ConnectionString,
                 schemaName);
-            Assert.Equal(1, currentSchemaVersion.Major);
-            Assert.Equal(8, currentSchemaVersion.Minor);
-            Assert.Equal(0, currentSchemaVersion.Patch);
+            SemanticVersion expectedVersion = DTUtils.ExtensionVersion;
+
+            // Compare the individual components rather than the whole version. The extension version
+            // carries SourceLink build metadata (for example 1.8.1+<commit sha>) that isn't stored in the database.
+            Assert.Equal(expectedVersion.Major, currentSchemaVersion.Major);
+            Assert.Equal(expectedVersion.Minor, currentSchemaVersion.Minor);
+            Assert.Equal(expectedVersion.Patch, currentSchemaVersion.Patch);
         }
 
         sealed class TestDatabase : IDisposable

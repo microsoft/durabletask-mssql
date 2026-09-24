@@ -47,11 +47,20 @@ namespace DurableTask.SqlServer.Tests.Utils
 
         public SqlOrchestrationServiceSettings OrchestrationServiceOptions { get; private set; }
 
+        // The low-privilege connection string used by the worker. Tests that call stored procedures
+        // directly must use this so that dt.CurrentTaskHub() resolves to the same task hub the
+        // orchestration runs under (task hub is inferred from the login when multitenancy is on).
+        public string TestCredentialConnectionString => this.testCredential.ConnectionString;
+
         public Mock<SqlOrchestrationService> OrchestrationServiceMock { get; private set; }
 
         public TestLogProvider LogProvider { get; }
 
-        public async Task InitializeAsync(bool startWorker = true, bool legacyErrorPropagation = false)
+        public async Task InitializeAsync(
+            bool startWorker = true,
+            bool legacyErrorPropagation = false,
+            bool extendedSessions = false,
+            TimeSpan? extendedSessionIdleTimeout = null)
         {
             // The initialization requires administrative credentials (default)
             await new SqlOrchestrationService(this.OrchestrationServiceOptions).CreateIfNotExistsAsync();
@@ -64,7 +73,13 @@ namespace DurableTask.SqlServer.Tests.Utils
             this.OrchestrationServiceOptions = new SqlOrchestrationServiceSettings(this.testCredential.ConnectionString)
             {
                 LoggerFactory = this.loggerFactory,
+                ExtendedSessionsEnabled = extendedSessions,
             };
+
+            if (extendedSessionIdleTimeout.HasValue)
+            {
+                this.OrchestrationServiceOptions.ExtendedSessionIdleTimeout = extendedSessionIdleTimeout.Value;
+            }
 
             // A mock orchestration service allows us to stub out specific methods for testing.
             this.OrchestrationServiceMock = new Mock<SqlOrchestrationService>(this.OrchestrationServiceOptions) { CallBase = true };
@@ -94,6 +109,8 @@ namespace DurableTask.SqlServer.Tests.Utils
         }
 
         public Task StartWorkerAsync() => this.worker?.StartAsync() ?? Task.CompletedTask;
+
+        public Task StopWorkerAsync(bool isForced = false) => this.worker?.StopAsync(isForced) ?? Task.CompletedTask;
 
         public void AddActivityDispatcherMiddleware(Func<DispatchMiddlewareContext, Func<Task>, Task> middleware)
         {
