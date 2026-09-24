@@ -47,6 +47,13 @@ namespace DurableTask.SqlServer
             }
         }
 
+        public void Clear()
+        {
+            this.payloadIdsByEventId.Clear();
+            this.payloadIdsByEventReference.Clear();
+            this.sequenceNumber = 0;
+        }
+
         public bool TryGetPayloadId(HistoryEvent e, out Guid payloadId)
         {
             if (CanTrackByReference(e))
