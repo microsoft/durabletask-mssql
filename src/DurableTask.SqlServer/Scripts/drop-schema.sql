@@ -31,6 +31,8 @@ DROP PROCEDURE IF EXISTS __SchemaNamePlaceholder__._LockNextTask
 DROP PROCEDURE IF EXISTS __SchemaNamePlaceholder__._QueryManyOrchestrations
 DROP PROCEDURE IF EXISTS __SchemaNamePlaceholder__._RenewOrchestrationLocks
 DROP PROCEDURE IF EXISTS __SchemaNamePlaceholder__._RenewTaskLocks
+DROP PROCEDURE IF EXISTS __SchemaNamePlaceholder__._FetchOrchestrationMessages
+DROP PROCEDURE IF EXISTS __SchemaNamePlaceholder__._ReleaseOrchestrationLock
 DROP PROCEDURE IF EXISTS __SchemaNamePlaceholder__._UpdateVersion
 DROP PROCEDURE IF EXISTS __SchemaNamePlaceholder__._RewindInstance
 DROP PROCEDURE IF EXISTS __SchemaNamePlaceholder__._RewindInstanceRecursive
