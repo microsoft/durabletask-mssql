@@ -654,7 +654,7 @@ namespace DurableTask.SqlServer.Tests.Integration
         }
 
         [Theory]
-        //[InlineData(true)] // BUG: https://github.com/microsoft/durabletask-mssql/issues/148
+        [InlineData(true)]
         [InlineData(false)]
         public async Task RetryFailedSubOrchestration(bool userSpecifiedInstanceId)
         {
@@ -688,6 +688,76 @@ namespace DurableTask.SqlServer.Tests.Integration
                         input: null);
                 });
             await parentInstance.WaitForCompletion(expectedOutput: true);
+        }
+
+        [Fact]
+        public async Task ReuseCompletedSubOrchestrationInstanceID()
+        {
+            string subOrchestrationName = "RecreatableSubOrchestration";
+            string subInstanceId = $"sub-{Guid.NewGuid():N}";
+
+            this.testService.RegisterInlineOrchestration<string, string>(
+                subOrchestrationName,
+                implementation: (ctx, input) => Task.FromResult($"Hello, {input}!"));
+
+            // The second run is only possible if the terminal state of the first run gets overwritten.
+            TestInstance<string> parentInstance = await this.testService.RunOrchestration<string[], string>(
+                null,
+                "RecreateSubOrchestrationParent",
+                implementation: async (ctx, input) =>
+                {
+                    string first = await ctx.CreateSubOrchestrationInstance<string>(
+                        subOrchestrationName, string.Empty, subInstanceId, "first");
+                    string second = await ctx.CreateSubOrchestrationInstance<string>(
+                        subOrchestrationName, string.Empty, subInstanceId, "second");
+                    return new[] { first, second };
+                });
+
+            await parentInstance.WaitForCompletion(
+                timeout: TimeSpan.FromSeconds(30),
+                expectedOutput: new[] { "Hello, first!", "Hello, second!" });
+
+            // Only the second run should remain.
+            OrchestrationState subState = await this.testService.GetOrchestrationStateAsync(subInstanceId);
+            Assert.NotNull(subState);
+            Assert.Equal(OrchestrationStatus.Completed, subState.OrchestrationStatus);
+            Assert.Equal("\"Hello, second!\"", subState.Output);
+        }
+
+        [Fact]
+        public async Task CannotReuseRunningSubOrchestrationInstanceID()
+        {
+            string subOrchestrationName = "BlockedSubOrchestration";
+            string subInstanceId = $"sub-{Guid.NewGuid():N}";
+            TimeSpan delay = TimeSpan.FromSeconds(30);
+
+            // Block on a long timer so that the instance stays active.
+            TestInstance<string> blockedInstance = await this.testService.RunOrchestration(
+                "blocked",
+                subOrchestrationName,
+                version: null,
+                subInstanceId,
+                implementation: (ctx, input) => ctx.CreateTimer(ctx.CurrentUtcDateTime.Add(delay), input));
+            OrchestrationState startedState = await blockedInstance.WaitForStart();
+
+            // Starting a sub-orchestration with the ID of an active instance must not overwrite it.
+            TestInstance<string> parentInstance = await this.testService.RunOrchestration<string, string>(
+                null,
+                "RunningSubOrchestrationParent",
+                implementation: (ctx, input) => ctx.CreateSubOrchestrationInstance<string>(
+                    subOrchestrationName, string.Empty, subInstanceId, "overwrite"));
+
+            await parentInstance.WaitForStart();
+
+            // Give the sub-orchestration start event time to be processed.
+            await Task.Delay(TimeSpan.FromSeconds(5));
+
+            // CreatedTime is only assigned when a row is created, so an unchanged value proves the
+            // instance wasn't recreated. What happens to the duplicate start event is out of scope.
+            OrchestrationState subState = await this.testService.GetOrchestrationStateAsync(subInstanceId);
+            Assert.NotNull(subState);
+            Assert.Equal(startedState.CreatedTime, subState.CreatedTime);
+            Assert.Equal(startedState.OrchestrationInstance.ExecutionId, subState.OrchestrationInstance.ExecutionId);
         }
 
         // This regression locks down the expected DurableTask span shape for a simple

@@ -820,6 +820,24 @@ BEGIN
         SET @IsContinueAsNew = 1
     END
 
+    -- Sub-orchestration instance ID reuse case: https://github.com/microsoft/durabletask-mssql/issues/148
+    -- Purge the existing instance data so that the "Create sub-orchestration instances" statement further below can overwrite it.
+    -- NOTE: This must happen before any new payloads or events are written below, otherwise the
+    --       incoming sub-orchestration state would be purged along with the existing state.
+    DECLARE @SubOrchestrationsToRecreate InstanceIDs
+    INSERT INTO @SubOrchestrationsToRecreate ([InstanceID])
+        SELECT DISTINCT E.[InstanceID]
+        FROM @NewOrchestrationEvents E
+            INNER JOIN Instances I ON I.[TaskHub] = @TaskHub AND I.[InstanceID] = E.[InstanceID]
+        WHERE E.[EventType] = 'ExecutionStarted'
+            AND E.[InstanceID] <> @InstanceID -- never touch the instance being checkpointed
+            AND I.[RuntimeStatus] IN ('Completed', 'Failed', 'Terminated')
+
+    IF EXISTS (SELECT 1 FROM @SubOrchestrationsToRecreate)
+    BEGIN
+        EXEC __SchemaNamePlaceholder__.PurgeInstanceStateByID @SubOrchestrationsToRecreate
+    END
+
     -- Custom status case #1: Setting the custom status for the first time
     IF @ExistingCustomStatusPayload IS NULL AND @CustomStatusPayload IS NOT NULL
     BEGIN
