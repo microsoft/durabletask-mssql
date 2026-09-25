@@ -19,6 +19,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       SA_PASSWORD: NotASecret!12 # ([SuppressMessage\("Microsoft.Security", "CS001:SecretInline", Justification="This isn't a real prod secret, it is a local DB instance instantiated on demand."\)]
+      # Lets UpgradeTests stage its database backup into the SQL Server container created by test/setup.ps1
+      DTFX_TEST_SQL_CONTAINER: mssql-server
 
     steps:
     - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4

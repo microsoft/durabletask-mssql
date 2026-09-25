@@ -66,6 +66,7 @@ When making schema changes, some of those tests will fail and will need to be up
 
 * Multiple test methods (`CanCreateAndDropSchema`, `CanCreateAndDropMultipleSchemas`, `CanCreateIfNotExists`, etc.) will need to be updated to list the new `schema-x.y.z.sql` script file name.
 * The `ValidateDatabaseSchemaAsync` method will need to be updated to check for the newest schema version number.
+* The log assertions in `ValidateUpgradedOrchestrations` ([UpgradeTests.cs](../../../test/DurableTask.SqlServer.Tests/Integration/UpgradeTests.cs)) will need to list the new `schema-x.y.z.sql` script file name, since an upgrade from an older database executes every newer schema script in order.
 
 ## Testing Database Upgrades
 
@@ -77,11 +78,22 @@ It works by:
 * Runs a mix of new and old orchestrations to ensure that the schema upgrade was successful and that no data was lost.
 
 This test is critical to ensure that end-users won't be negatively impacted by schema changes.
-Unfortunately, it is not possible to run this test in CI yet until additional changes are made to support restoring database backups using Docker containers.
-However, it can be run locally on a Windows OS by following these steps:
+It runs automatically in CI alongside the rest of the integration tests, and runs locally with no extra setup.
 
-1. Install [SQL Server Express or Developer](https://www.microsoft.com/sql-server/sql-server-downloads) on your local Windows machine, if it's not already installed.
-1. Open the `UpgradeTests.cs` file and delete the `Skip` property in the `[Theory]` attribute on the `ValidateUpgradedOrchestrations` test method.
-1. Run the `ValidateUpgradedOrchestrations` test manually in Visual Studio or using `dotnet test`. The test should pass.
+`RESTORE DATABASE` is executed by SQL Server rather than by the test process, so the backup file has to exist on the
+server's own file system. The test handles both of the supported setups:
 
-In a future update, we will add support for running this test in CI using Docker containers.
+* **SQL Server in a Docker container** (what CI and `test/setup.ps1` use): the extracted `.bak` file is copied into the
+  container with `docker cp` before the restore. The test looks for the `mssql-server` container created by
+  `test/setup.ps1`. Set the `DTFX_TEST_SQL_CONTAINER` environment variable to use a different container name, or to
+  `none` to force the local-file behavior below.
+* **SQL Server installed locally**: the extracted `.bak` file is already on the server's file system, so it's used
+  as-is. This is the path taken when no reachable container is found.
+
+The backup's data and log files are relocated to the target server's default data directory during the restore, since
+the paths recorded in the backup are those of the Windows machine that generated it.
+
+One known gap: the `1.0.0` backup was generated without an explicit collation, so the restored database uses the
+server default (`SQL_Latin1_General_CP1_CI_AS`) rather than the `Latin1_General_100_BIN2_UTF8` collation this provider
+requires. The upgrade path is therefore not exercised against a binary-collation database. Closing that gap requires
+regenerating the backup with [TestDBGenerator](../../../tools/TestDBGenerator).

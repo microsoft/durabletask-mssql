@@ -6,6 +6,7 @@ namespace DurableTask.SqlServer.Tests.Integration
 {
     using System;
     using System.Collections.Generic;
+    using System.Data;
     using System.IO;
     using System.IO.Compression;
     using System.Threading;
@@ -17,11 +18,20 @@ namespace DurableTask.SqlServer.Tests.Integration
     using Microsoft.Extensions.Logging;
     using Microsoft.SqlServer.Management.Common;
     using Microsoft.SqlServer.Management.Smo;
+    using SemVersion;
     using Xunit;
     using Xunit.Abstractions;
 
+    [Collection("Integration")]
     public class UpgradeTests
     {
+        static readonly TimeSpan RestoreTimeout = TimeSpan.FromMinutes(5);
+
+        /// <summary>
+        /// Orchestrations resume against a freshly restored database with a cold plan cache, hence the larger timeout value.
+        /// </summary>
+        static readonly TimeSpan OrchestrationTimeout = TimeSpan.FromSeconds(60);
+
         readonly TestLogProvider logProvider;
         readonly ITestOutputHelper output;
 
@@ -31,9 +41,8 @@ namespace DurableTask.SqlServer.Tests.Integration
             this.output = output;
         }
 
-        // TODO: Re-enable as part of https://github.com/microsoft/durabletask-mssql/issues/152
         // TODO: Support validation from multiple base versions
-        [Theory(Skip = "Not yet automated for CI")]
+        [Theory]
         [InlineData("1.0.0")]
         public async Task ValidateUpgradedOrchestrations(string version)
         {
@@ -53,6 +62,13 @@ namespace DurableTask.SqlServer.Tests.Integration
 
             SqlOrchestrationService service = new(settings);
 
+            // Sanity check: the restored database must be at the version we're upgrading from.
+            SemanticVersion expectedVersion = SemanticVersion.Parse(version);
+            SemanticVersion restoredVersion = await SharedTestHelpers.GetCurrentSchemaVersionAsync(this.output, dbConnectionString);
+            Assert.Equal(expectedVersion.Major, restoredVersion.Major);
+            Assert.Equal(expectedVersion.Minor, restoredVersion.Minor);
+            Assert.Equal(expectedVersion.Patch, restoredVersion.Patch);
+
             // This call should update the existing database schema to the latest version
             await service.CreateIfNotExistsAsync();
 
@@ -63,15 +79,13 @@ namespace DurableTask.SqlServer.Tests.Integration
                     LogAssert.AcquiredAppLock(statusCode: 0),
                     LogAssert.SprocCompleted("dt._GetVersions"),
                     LogAssert.ExecutedSqlScript("schema-1.2.0.sql"),
+                    LogAssert.ExecutedSqlScript("schema-1.6.0.sql"),
                     LogAssert.ExecutedSqlScript("logic.sql"),
                     LogAssert.ExecutedSqlScript("permissions.sql"),
                     LogAssert.SprocCompleted("dt._UpdateVersion"))
                 .EndOfLog();
 
-            // Make sure all the data we expect is there, and that we can query it
             await this.VerifyExpectedRuntimeData(service);
-
-            // Complete all the pending instances, ensuring that they were able to resume successfully
             await this.CompletePendingInstances(service, loggerFactory);
         }
 
@@ -80,23 +94,21 @@ namespace DurableTask.SqlServer.Tests.Integration
             SqlConnectionStringBuilder builder = new(SharedTestHelpers.GetDefaultConnectionString(database: "master"));
             Server dbServer = new(new ServerConnection(new SqlConnection(builder.ToString())));
 
-            string dbName = $"DurableDB-v{version}";
-            Database db = dbServer.Databases[dbName];
-            if (db != null)
-            {
-                this.output.WriteLine($"Dropping existing '{dbName}' database...");
+            // Restoring a multi-megabyte backup can take a while on a cold container.
+            dbServer.ConnectionContext.StatementTimeout = (int)RestoreTimeout.TotalSeconds;
 
-                // Drop any previous databases with this name
-                db.UserAccess = DatabaseUserAccess.Restricted;
-                db.Alter(TerminationClause.RollbackTransactionsImmediately);
-                db.Refresh();
-                db.Drop();
+            string dbName = $"DurableDB-v{version}";
+            if (dbServer.Databases[dbName] != null)
+            {
+                // Drop any previous database with this name, disconnecting any existing sessions
+                this.output.WriteLine($"Dropping existing '{dbName}' database...");
+                dbServer.KillDatabase(dbName);
             }
 
-            string backupFileName = $"./DatabaseBackups/DurableDB-v{version}.bak.zip";
-            Assert.True(File.Exists(backupFileName));
+            string backupFileName = Path.Combine("DatabaseBackups", $"DurableDB-v{version}.bak.zip");
+            Assert.True(File.Exists(backupFileName), $"Could not find the database backup at '{Path.GetFullPath(backupFileName)}'.");
 
-            string extractedBackupFile = Path.Join(Environment.CurrentDirectory, $"DurableDB-v{version}.bak");
+            string extractedBackupFile = Path.Combine(Path.GetTempPath(), $"DurableDB-v{version}.bak");
             this.output.WriteLine($"Extracting {backupFileName} to {extractedBackupFile}...");
             using (ZipArchive archive = ZipFile.OpenRead(backupFileName))
             {
@@ -105,14 +117,43 @@ namespace DurableTask.SqlServer.Tests.Integration
 
             try
             {
-                Restore restore = new()
-                {
-                    Database = dbName,
-                    Devices = { new BackupDeviceItem(extractedBackupFile, DeviceType.File) },
-                };
+                string serverBackupFile = SqlBackupStaging.Stage(extractedBackupFile, this.output);
 
-                this.output.WriteLine($"Restoring {extractedBackupFile} to '{dbName}'...");
-                restore.SqlRestore(dbServer);
+                try
+                {
+                    Restore restore = new()
+                    {
+                        Database = dbName,
+                        ReplaceDatabase = true,
+                        Devices = { new BackupDeviceItem(serverBackupFile, DeviceType.File) },
+                    };
+
+                    try
+                    {
+                        // The backup has Windows file paths baked into it, so the data and log files have
+                        // to be relocated to wherever this particular server keeps its databases.
+                        foreach (RelocateFile relocatedFile in GetRelocatedFiles(dbServer, restore))
+                        {
+                            restore.RelocateFiles.Add(relocatedFile);
+                        }
+
+                        this.output.WriteLine($"Restoring {serverBackupFile} to '{dbName}'...");
+                        restore.SqlRestore(dbServer);
+                    }
+                    catch (Exception e) when (!SqlBackupStaging.IsServerContainerized)
+                    {
+                        throw new InvalidOperationException(
+                            $"Failed to restore '{serverBackupFile}'. The test assumed that SQL Server can read " +
+                            $"files from this machine's file system. If SQL Server is running in a container that " +
+                            $"the docker CLI can't reach, set the 'DTFX_TEST_SQL_CONTAINER' environment variable " +
+                            $"to its name.",
+                            e);
+                    }
+                }
+                finally
+                {
+                    SqlBackupStaging.Unstage(serverBackupFile, this.output);
+                }
             }
             finally
             {
@@ -121,6 +162,28 @@ namespace DurableTask.SqlServer.Tests.Integration
 
             builder.InitialCatalog = dbName;
             return builder.ToString();
+        }
+
+        static IEnumerable<RelocateFile> GetRelocatedFiles(Server dbServer, Restore restore)
+        {
+            string dataDirectory = !string.IsNullOrEmpty(dbServer.Settings.DefaultFile) ?
+                dbServer.Settings.DefaultFile :
+                dbServer.Information.MasterDBPath;
+
+            // The path is interpreted by the server, which may not use the same directory separator as
+            // this machine - a Windows test client can be driving a Linux container. Path.Combine would
+            // use the client's separator, so the server's own separator is inferred instead.
+            char separator = dataDirectory.Contains("/") ? '/' : '\\';
+            dataDirectory = dataDirectory.TrimEnd('/', '\\');
+
+            foreach (DataRow row in restore.ReadFileList(dbServer).Rows)
+            {
+                string logicalName = (string)row["LogicalName"];
+
+                // "L" identifies the log file; everything else is a data file.
+                string extension = string.Equals((string)row["Type"], "L", StringComparison.OrdinalIgnoreCase) ? ".ldf" : ".mdf";
+                yield return new RelocateFile(logicalName, $"{dataDirectory}{separator}{logicalName}{extension}");
+            }
         }
 
         async Task VerifyExpectedRuntimeData(SqlOrchestrationService service)
@@ -192,40 +255,48 @@ namespace DurableTask.SqlServer.Tests.Integration
 
             OrchestrationState state;
             OrchestrationInstance instance;
-            TimeSpan timeout = TimeSpan.FromSeconds(10);
+            TimeSpan timeout = OrchestrationTimeout.AdjustForDebugging();
 
-            // Test2, which was in Pending, should start and run to completion on its own.
-            instance = new OrchestrationInstance { InstanceId = "Test2" };
-            state = await client.WaitForOrchestrationAsync(instance, timeout);
-            Assert.Equal(OrchestrationStatus.Completed, state.OrchestrationStatus);
-            Assert.Equal(@"[""Hello, Tokyo!"",""Hello, London!"",""Hello, Seattle!""]", state.Output);
+            try
+            {
+                // Test2, which was in Pending, should start and run to completion on its own.
+                instance = new OrchestrationInstance { InstanceId = "Test2" };
+                state = await client.WaitForOrchestrationAsync(instance, timeout);
+                Assert.Equal(OrchestrationStatus.Completed, state.OrchestrationStatus);
+                Assert.Equal(@"[""Hello, Tokyo!"",""Hello, London!"",""Hello, Seattle!""]", state.Output);
 
-            // Test4, which was Running, is resumed by the WaitForSignal orchestrations
-            string data = Guid.NewGuid().ToString();
-            instance = new OrchestrationInstance { InstanceId = "Test4" };
-            await client.RaiseEventAsync(instance, "signal", data);
-            state = await client.WaitForOrchestrationAsync(instance, TimeSpan.FromSeconds(10));
-            Assert.Equal(OrchestrationStatus.Completed, state.OrchestrationStatus);
-            Assert.Equal($"\"{data}\"", state.Output);
+                // Test4, which was Running, is resumed by the WaitForSignal orchestrations
+                string data = Guid.NewGuid().ToString();
+                instance = new OrchestrationInstance { InstanceId = "Test4" };
+                await client.RaiseEventAsync(instance, "signal", data);
+                state = await client.WaitForOrchestrationAsync(instance, timeout);
+                Assert.Equal(OrchestrationStatus.Completed, state.OrchestrationStatus);
+                Assert.Equal($"\"{data}\"", state.Output);
 
-            // Test5 is waiting on Test5-child, which is waiting for an external event.
-            data = Guid.NewGuid().ToString();
-            instance = new OrchestrationInstance { InstanceId = "Test5-child" };
-            await client.RaiseEventAsync(instance, "signal", data);
-            state = await client.WaitForOrchestrationAsync(instance, TimeSpan.FromSeconds(10));
-            Assert.Equal(OrchestrationStatus.Completed, state.OrchestrationStatus);
-            Assert.Equal($"\"{data}\"", state.Output);
-            instance = new OrchestrationInstance { InstanceId = "Test5" };
-            state = await client.WaitForOrchestrationAsync(instance, TimeSpan.FromSeconds(10));
-            Assert.Equal(OrchestrationStatus.Completed, state.OrchestrationStatus);
-            Assert.Equal($"\"{data}\"", state.Output);
+                // Test5 is waiting on Test5-child, which is waiting for an external event.
+                data = Guid.NewGuid().ToString();
+                instance = new OrchestrationInstance { InstanceId = "Test5-child" };
+                await client.RaiseEventAsync(instance, "signal", data);
+                state = await client.WaitForOrchestrationAsync(instance, timeout);
+                Assert.Equal(OrchestrationStatus.Completed, state.OrchestrationStatus);
+                Assert.Equal($"\"{data}\"", state.Output);
+                instance = new OrchestrationInstance { InstanceId = "Test5" };
+                state = await client.WaitForOrchestrationAsync(instance, timeout);
+                Assert.Equal(OrchestrationStatus.Completed, state.OrchestrationStatus);
+                Assert.Equal($"\"{data}\"", state.Output);
 
-            // Test6, which was cut off during an activity execution, should run to completion on its own.
-            OrchestrationState test6 = await client.WaitForOrchestrationAsync(
-                new OrchestrationInstance { InstanceId = "Test6" },
-                TimeSpan.FromSeconds(10));
-            Assert.Equal(OrchestrationStatus.Completed, test6.OrchestrationStatus);
-            Assert.Equal(@"[""Hello, Tokyo!"",""Hello, London!"",""Hello, Seattle!""]", test6.Output);
+                // Test6, which was cut off during an activity execution, should run to completion on its own.
+                OrchestrationState test6 = await client.WaitForOrchestrationAsync(
+                    new OrchestrationInstance { InstanceId = "Test6" },
+                    timeout);
+                Assert.Equal(OrchestrationStatus.Completed, test6.OrchestrationStatus);
+                Assert.Equal(@"[""Hello, Tokyo!"",""Hello, London!"",""Hello, Seattle!""]", test6.Output);
+            }
+            finally
+            {
+                // Stop polling the restored database
+                await worker.StopAsync(isForced: true);
+            }
         }
 
         class SimpleObjectCreator<T> : ObjectCreator<T>
