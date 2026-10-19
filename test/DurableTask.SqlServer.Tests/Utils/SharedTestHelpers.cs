@@ -96,6 +96,19 @@ namespace DurableTask.SqlServer.Tests.Utils
             throw lastException;
         }
 
+        /// <summary>
+        /// Occupies the instance's next history sequence number so its next checkpoint hits a PK violation.
+        /// </summary>
+        public static Task OccupyNextHistorySlotAsync(ITestOutputHelper output, string instanceId)
+        {
+            return ExecuteSqlAsync(
+                output,
+                $@"INSERT INTO dt.[History] ([TaskHub], [InstanceID], [ExecutionID], [SequenceNumber], [EventType])
+                   SELECT TOP 1 [TaskHub], [InstanceID], [ExecutionID], [SequenceNumber] + 1, 'GenericEvent'
+                   FROM dt.[History] WHERE [InstanceID] = '{instanceId}'
+                   ORDER BY [SequenceNumber] DESC");
+        }
+
         public static async Task InitializeDatabaseAsync(string schema = DefaultSchema)
         {
             var options = new SqlOrchestrationServiceSettings(GetDefaultConnectionString(), schemaName: schema);

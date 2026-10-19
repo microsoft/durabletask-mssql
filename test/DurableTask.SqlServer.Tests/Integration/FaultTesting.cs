@@ -5,9 +5,13 @@ namespace DurableTask.SqlServer.Tests.Integration
 {
     using System;
     using System.Collections.Generic;
+    using System.Diagnostics;
+    using System.Linq;
     using System.Threading;
     using System.Threading.Tasks;
     using DurableTask.Core;
+    using DurableTask.Core.History;
+    using DurableTask.SqlServer.Logging;
     using DurableTask.SqlServer.Tests.Logging;
     using DurableTask.SqlServer.Tests.Utils;
     using Moq;
@@ -18,10 +22,12 @@ namespace DurableTask.SqlServer.Tests.Integration
     public class FaultTesting : IAsyncLifetime
     {
         readonly TestService testService;
+        readonly ITestOutputHelper output;
 
         public FaultTesting(ITestOutputHelper output)
         {
             this.testService = new TestService(output);
+            this.output = output;
         }
 
         Task IAsyncLifetime.InitializeAsync() => this.testService.InitializeAsync();
@@ -287,6 +293,82 @@ namespace DurableTask.SqlServer.Tests.Integration
                 LogAssert.CheckpointStarting(orchestrationName),
                 LogAssert.CheckpointCompleted(orchestrationName),
                 LogAssert.DuplicateExecutionDetected("SayHello"));
+        }
+
+        [Fact]
+        public async Task DuplicateCheckpointDoesNotPurgeCompletedSubOrchestration()
+        {
+            // The rolled-back checkpoint keeps the lock, so the retry waits for it to expire.
+            this.testService.OrchestrationServiceOptions.WorkItemLockTimeout = TimeSpan.FromSeconds(5);
+
+            string subOrchestrationName = "CountedSubOrchestration";
+            string subInstanceId = $"sub-{Guid.NewGuid():N}";
+            int subInvocations = 0;
+            bool injected = false;
+
+            this.testService.RegisterInlineOrchestration<string, string>(
+                subOrchestrationName,
+                implementation: (ctx, input) =>
+                {
+                    Interlocked.Increment(ref subInvocations);
+                    return Task.FromResult($"Hello, {input}!");
+                });
+
+            this.testService.OrchestrationServiceMock.Setup(
+                svc => svc.CompleteTaskOrchestrationWorkItemAsync(
+                    It.IsAny<TaskOrchestrationWorkItem>(),
+                    It.IsAny<OrchestrationRuntimeState>(),
+                    It.IsAny<IList<TaskMessage>>(),
+                    It.IsAny<IList<TaskMessage>>(),
+                    It.IsAny<IList<TaskMessage>>(),
+                    It.IsAny<TaskMessage>(),
+                    It.IsAny<OrchestrationState>()))
+                .Callback<TaskOrchestrationWorkItem, OrchestrationRuntimeState, IList<TaskMessage>, IList<TaskMessage>, IList<TaskMessage>, TaskMessage, OrchestrationState>(
+                    (workItem, _, _, _, _, _, _) =>
+                    {
+                        if (!injected && workItem.NewMessages.Any(m => m.Event.EventType == EventType.SubOrchestrationInstanceCompleted))
+                        {
+                            // Inject the conflict into the parent turn that reuses the completed sub-orchestration's ID.
+                            injected = true;
+                            SharedTestHelpers.OccupyNextHistorySlotAsync(this.output, workItem.InstanceId).GetAwaiter().GetResult();
+                        }
+                    });
+
+            TestInstance<string> parentInstance = await this.testService.RunOrchestration<string[], string>(
+                null,
+                "ReuseSubOrchestrationParent",
+                implementation: async (ctx, input) =>
+                {
+                    string first = await ctx.CreateSubOrchestrationInstance<string>(
+                        subOrchestrationName, string.Empty, subInstanceId, "first");
+                    string second = await ctx.CreateSubOrchestrationInstance<string>(
+                        subOrchestrationName, string.Empty, subInstanceId, "second");
+                    return new[] { first, second };
+                });
+
+            Stopwatch sw = Stopwatch.StartNew();
+            while (!HasDuplicateExecutionLog() && sw.Elapsed < TimeSpan.FromSeconds(30))
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(200));
+            }
+
+            Assert.True(HasDuplicateExecutionLog(), "The injected history conflict was never hit.");
+
+            // The rejected checkpoint must not have purged and restarted the completed sub-orchestration.
+            OrchestrationState subState = await this.testService.GetOrchestrationStateAsync(subInstanceId);
+            Assert.NotNull(subState);
+            Assert.Equal(OrchestrationStatus.Completed, subState.OrchestrationStatus);
+            Assert.Equal("\"Hello, first!\"", subState.Output);
+
+            // The retried checkpoint reuses the ID as usual.
+            await parentInstance.WaitForCompletion(
+                timeout: TimeSpan.FromSeconds(30),
+                expectedOutput: new[] { "Hello, first!", "Hello, second!" });
+            Assert.Equal(2, subInvocations);
+
+            bool HasDuplicateExecutionLog() =>
+                this.testService.LogProvider.TryGetLogs("DurableTask.SqlServer", out var logs) &&
+                logs.Any(entry => entry.EventId.Id == EventIds.DuplicateExecutionDetected);
         }
     }
 }
