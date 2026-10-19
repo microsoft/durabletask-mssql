@@ -506,6 +506,13 @@ namespace DurableTask.SqlServer
             catch (SqlException e) when (SqlUtils.IsUniqueKeyViolation(e))
             {
                 this.traceHelper.DuplicateExecutionDetected(instance, orchestrationState.Name);
+                if (hasSession)
+                {
+                    // In-memory state is ahead of the DB; abort so the lock is released and the next run replays.
+                    throw new SessionAbortedException(
+                        $"Checkpoint for instance '{instance.InstanceId}' was rejected as a duplicate execution.", e);
+                }
+
                 return;
             }
             catch (SqlException e) when (hasSession && SqlUtils.HasErrorNumber(e, SqlOrchestrationSession.LockLostErrorNumber))

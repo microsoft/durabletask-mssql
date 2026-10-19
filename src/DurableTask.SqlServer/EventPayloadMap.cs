@@ -13,13 +13,15 @@ namespace DurableTask.SqlServer
         readonly Dictionary<(EventType, int), Guid> payloadIdsByEventId;
         readonly Dictionary<HistoryEvent, Guid> payloadIdsByEventReference;
 
-        readonly byte[] timestamp = BitConverter.GetBytes(DateTime.UtcNow.Ticks);
+        long timestampTicks = DateTime.UtcNow.Ticks;
+        byte[] timestamp;
         short sequenceNumber;
 
         public EventPayloadMap(int capacity)
         {
             this.payloadIdsByEventId = new Dictionary<(EventType, int), Guid>(capacity);
             this.payloadIdsByEventReference = new Dictionary<HistoryEvent, Guid>(capacity);
+            this.timestamp = BitConverter.GetBytes(this.timestampTicks);
         }
 
         public void Add(HistoryEvent e, Guid payloadId)
@@ -51,7 +53,8 @@ namespace DurableTask.SqlServer
         {
             this.payloadIdsByEventId.Clear();
             this.payloadIdsByEventReference.Clear();
-            this.sequenceNumber = 0;
+
+            // Don't reset sequenceNumber: sessions reuse this map, and resetting would repeat stored payload IDs.
         }
 
         public bool TryGetPayloadId(HistoryEvent e, out Guid payloadId)
@@ -78,7 +81,17 @@ namespace DurableTask.SqlServer
         {
             // Sequential GUIDs are simply to make reading slightly easier. They don't have any other purpose.
             // Example: 00000001-0004-0000-ca2b-694a052ada08
-            return new Guid(DTUtils.GetTaskEventId(e), (short)e.EventType, this.sequenceNumber++, this.timestamp);
+            Guid payloadId = new Guid(DTUtils.GetTaskEventId(e), (short)e.EventType, this.sequenceNumber, this.timestamp);
+
+            this.sequenceNumber++;
+            if (this.sequenceNumber == 0)
+            {
+                // Sequence wrapped (long sessions only): advance the timestamp so IDs never repeat.
+                this.timestampTicks = Math.Max(DateTime.UtcNow.Ticks, this.timestampTicks + 1);
+                this.timestamp = BitConverter.GetBytes(this.timestampTicks);
+            }
+
+            return payloadId;
         }
     }
 }

@@ -86,6 +86,74 @@ namespace DurableTask.SqlServer.Tests.Integration
         }
 
         /// <summary>
+        /// Verifies that a duplicate-execution checkpoint rolls back atomically, keeping its triggering event.
+        /// </summary>
+        [Fact]
+        public async Task DuplicateCheckpointRollsBackAtomically()
+        {
+            // The rolled-back checkpoint keeps the lock, so the retry waits for it to expire.
+            this.testService.OrchestrationServiceOptions.WorkItemLockTimeout = TimeSpan.FromSeconds(5);
+
+            TaskCompletionSource<int> tcs = null;
+            string instanceId = null;
+            bool injected = false;
+
+            // Inject the conflict after the event's work item has loaded its history.
+            this.testService.OrchestrationServiceMock.Setup(
+                svc => svc.CompleteTaskOrchestrationWorkItemAsync(
+                    It.IsAny<TaskOrchestrationWorkItem>(),
+                    It.IsAny<OrchestrationRuntimeState>(),
+                    It.IsAny<IList<TaskMessage>>(),
+                    It.IsAny<IList<TaskMessage>>(),
+                    It.IsAny<IList<TaskMessage>>(),
+                    It.IsAny<TaskMessage>(),
+                    It.IsAny<OrchestrationState>()))
+                .Callback<TaskOrchestrationWorkItem, OrchestrationRuntimeState, IList<TaskMessage>, IList<TaskMessage>, IList<TaskMessage>, TaskMessage, OrchestrationState>(
+                    (workItem, _, _, _, _, _, _) =>
+                    {
+                        if (!injected && workItem.NewMessages.Any(m => m.Event.EventType == EventType.EventRaised))
+                        {
+                            injected = true;
+                            SharedTestHelpers.OccupyNextHistorySlotAsync(this.output, instanceId).GetAwaiter().GetResult();
+                        }
+                    });
+
+            TestInstance<string> instance = await this.testService.RunOrchestration<int, string>(
+                input: null,
+                orchestrationName: nameof(DuplicateCheckpointRollsBackAtomically),
+                implementation: async (ctx, _) =>
+                {
+                    // Two events, so the rejected turn can't complete the instance.
+                    tcs = new TaskCompletionSource<int>();
+                    int first = await tcs.Task;
+                    tcs = new TaskCompletionSource<int>();
+                    return first + await tcs.Task;
+                },
+                onEvent: (ctx, name, value) => tcs.TrySetResult(int.Parse(value)));
+
+            instanceId = instance.InstanceId;
+            await instance.WaitForStart();
+
+            await instance.RaiseEventAsync("First", 1);
+
+            Stopwatch sw = Stopwatch.StartNew();
+            while (!HasDuplicateExecutionLog() && sw.Elapsed < TimeSpan.FromSeconds(10))
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(200));
+            }
+
+            Assert.True(HasDuplicateExecutionLog(), "The injected history conflict was never hit.");
+
+            // Completing requires the first event to survive the rejected checkpoint.
+            await instance.RaiseEventAsync("Second", 2);
+            await instance.WaitForCompletion(timeout: TimeSpan.FromSeconds(30), expectedOutput: 3);
+
+            bool HasDuplicateExecutionLog() =>
+                this.testService.LogProvider.TryGetLogs("DurableTask.SqlServer", out var logs) &&
+                logs.Any(entry => entry.EventId.Id == EventIds.DuplicateExecutionDetected);
+        }
+
+        /// <summary>
         /// Verifies that when an orchestration hangs, the triggering event gets retried successfully,
         /// and that the "unstuck" execution fails to checkpoint due to a detected duplicate execution.
         /// </summary>
