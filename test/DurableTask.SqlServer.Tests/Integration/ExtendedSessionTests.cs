@@ -273,6 +273,58 @@ namespace DurableTask.SqlServer.Tests.Integration
         }
 
         [Fact]
+        public async Task SendEventOnMultipleTurnsAcrossSession()
+        {
+            // Messages sent to other instances all have EventId -1, so this is the shape of traffic
+            // that Durable Entities produce: every turn of the session sends a new message whose
+            // payload must not collide with the one sent by the previous turn.
+            TaskCompletionSource<int> receiverTcs = null;
+            TestInstance<string> receiver = await this.testService.RunOrchestration<string, string>(
+                input: null,
+                orchestrationName: "SendEventReceiver",
+                implementation: async (ctx, _) =>
+                {
+                    var received = new List<int>();
+                    for (int i = 0; i < 2; i++)
+                    {
+                        receiverTcs = new TaskCompletionSource<int>();
+                        received.Add(await receiverTcs.Task);
+                    }
+
+                    return string.Join(",", received);
+                },
+                onEvent: (ctx, name, value) => receiverTcs.TrySetResult(int.Parse(value)));
+
+            await receiver.WaitForStart();
+
+            TaskCompletionSource<bool> senderTcs = null;
+            TestInstance<string> sender = await this.testService.RunOrchestration<string, string>(
+                input: null,
+                orchestrationName: "SendEventSender",
+                implementation: async (ctx, _) =>
+                {
+                    var target = new OrchestrationInstance { InstanceId = receiver.InstanceId };
+
+                    senderTcs = new TaskCompletionSource<bool>();
+                    ctx.SendEvent(target, "Ping", 1);
+                    await senderTcs.Task;
+
+                    ctx.SendEvent(target, "Ping", 2);
+                    return "done";
+                },
+                onEvent: (ctx, name, value) => senderTcs.TrySetResult(true));
+
+            await sender.WaitForStart();
+            await this.WaitForLockToBeHeldAsync(sender.InstanceId, TimeSpan.FromSeconds(10));
+
+            // Resume the sender inside its extended session so the second send happens on turn 2.
+            await sender.RaiseEventAsync("Go", true);
+
+            await sender.WaitForCompletion(timeout: TimeSpan.FromSeconds(15), expectedOutput: "done");
+            await receiver.WaitForCompletion(timeout: TimeSpan.FromSeconds(15), expectedOutput: "1,2");
+        }
+
+        [Fact]
         public async Task ContinueAsNewWithSession()
         {
             TestInstance<int> instance = await this.testService.RunOrchestration(
@@ -378,6 +430,51 @@ namespace DurableTask.SqlServer.Tests.Integration
                 coreLogs,
                 entry => entry.Message != null &&
                     entry.Message.Contains($"Lost the lock for instance '{instance.InstanceId}'"));
+        }
+
+        [Fact]
+        public async Task DuplicateCheckpointAbortsSession()
+        {
+            TaskCompletionSource<string> tcs = null;
+
+            TestInstance<string> instance = await this.testService.RunOrchestration<string, string>(
+                input: null,
+                orchestrationName: nameof(DuplicateCheckpointAbortsSession),
+                implementation: async (ctx, _) =>
+                {
+                    // Two events keep the instance running (and its lock kept) after the first one.
+                    tcs = new TaskCompletionSource<string>();
+                    string first = await tcs.Task;
+                    tcs = new TaskCompletionSource<string>();
+                    string second = await tcs.Task;
+                    return $"{first},{second}";
+                },
+                onEvent: (ctx, name, value) => tcs.TrySetResult(JsonConvert.DeserializeObject<string>(value)));
+
+            await instance.WaitForStart();
+            await this.WaitForLockToBeHeldAsync(instance.InstanceId, TimeSpan.FromSeconds(10));
+
+            // Occupy the history slot the session's next checkpoint will write, as a concurrent
+            // execution would, so that checkpoint fails with a primary key violation.
+            await SharedTestHelpers.OccupyNextHistorySlotAsync(this.output, instance.InstanceId);
+
+            await instance.RaiseEventAsync("First", "1");
+
+            // The session must end and release its lock right away rather than keep running on
+            // state that was never persisted until the 15s idle timeout lets it go.
+            await this.WaitForLockToBeReleasedAsync(instance.InstanceId, TimeSpan.FromSeconds(5));
+
+            this.testService.LogProvider.TryGetLogs("DurableTask.Core", out var coreLogs);
+            Assert.Contains(
+                coreLogs,
+                entry => entry.Message != null &&
+                    entry.Message.Contains($"Checkpoint for instance '{instance.InstanceId}' was rejected as a duplicate execution."));
+
+            // "1,2" requires "First" to survive the rolled-back checkpoint and be replayed exactly once.
+            await instance.RaiseEventAsync("Second", "2");
+            await instance.WaitForCompletion(
+                timeout: TimeSpan.FromSeconds(20),
+                expectedOutput: "1,2");
         }
 
         [Fact]

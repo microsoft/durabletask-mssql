@@ -771,6 +771,9 @@ CREATE OR ALTER PROCEDURE __SchemaNamePlaceholder__._CheckpointOrchestration
     @NewLockExpiration datetime2 = NULL
 AS
 BEGIN
+    -- Roll back the whole checkpoint on any error (e.g. duplicate-execution PK violation).
+    SET XACT_ABORT ON
+
     BEGIN TRANSACTION
 
     DECLARE @TaskHub varchar(50) = __SchemaNamePlaceholder__.CurrentTaskHub()

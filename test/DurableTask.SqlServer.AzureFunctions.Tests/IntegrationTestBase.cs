@@ -36,7 +36,11 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
 
         TestCredential? testCredential;
 
-        public IntegrationTestBase(ITestOutputHelper output, string? taskHubName = null, bool multiTenancy = true)
+        public IntegrationTestBase(
+            ITestOutputHelper output,
+            string? taskHubName = null,
+            bool multiTenancy = true,
+            bool extendedSessions = false)
         {
             this.multiTenancy = multiTenancy;
             this.schema = multiTenancy ? "dt" : "dt2";
@@ -77,6 +81,11 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
                             options.HubName = this.taskHubName;
                             options.StorageProvider["type"] = "mssql";
                             options.StorageProvider["schemaName"] = this.schema;
+                            if (extendedSessions)
+                            {
+                                options.ExtendedSessionsEnabled = true;
+                                options.ExtendedSessionIdleTimeoutInSeconds = 5;
+                            }
                         });
                     })
                 .ConfigureServices(
