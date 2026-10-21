@@ -253,9 +253,11 @@ BEGIN
     BEGIN
         BEGIN TRANSACTION
 
+        -- UPDLOCK waits for a checkpoint that is recreating this ID as a sub-orchestration.
+        -- No HOLDLOCK: its key-range locks would block unrelated instances with adjacent IDs.
         DECLARE @existingStatus varchar(30) = (
             SELECT TOP 1 existing.[RuntimeStatus]
-            FROM Instances existing WITH (HOLDLOCK)
+            FROM Instances existing WITH (UPDLOCK)
             WHERE [TaskHub] = @TaskHub AND [InstanceID] = @InstanceID
         )
 
@@ -827,14 +829,24 @@ BEGIN
     -- Purge the existing instance data so that the "Create sub-orchestration instances" statement further below can overwrite it.
     -- NOTE: This must happen before any new payloads or events are written below, otherwise the
     --       incoming sub-orchestration state would be purged along with the existing state.
+    -- UPDLOCK keeps the rows locked until commit, so a concurrent checkpoint or CreateInstance can't recreate
+    -- an instance between this status check and the purge. Status is filtered separately to lock non-terminal rows too.
+    DECLARE @StartedSubOrchestrations TABLE ([InstanceID] varchar(100) NOT NULL, [RuntimeStatus] varchar(30) NULL)
+    INSERT INTO @StartedSubOrchestrations ([InstanceID], [RuntimeStatus])
+        SELECT I.[InstanceID], I.[RuntimeStatus]
+        FROM Instances I WITH (UPDLOCK)
+        WHERE I.[TaskHub] = @TaskHub
+            AND I.[InstanceID] IN (
+                SELECT E.[InstanceID]
+                FROM @NewOrchestrationEvents E
+                WHERE E.[EventType] = 'ExecutionStarted'
+                    AND E.[InstanceID] <> @InstanceID) -- never touch the instance being checkpointed
+
     DECLARE @SubOrchestrationsToRecreate InstanceIDs
     INSERT INTO @SubOrchestrationsToRecreate ([InstanceID])
-        SELECT DISTINCT E.[InstanceID]
-        FROM @NewOrchestrationEvents E
-            INNER JOIN Instances I ON I.[TaskHub] = @TaskHub AND I.[InstanceID] = E.[InstanceID]
-        WHERE E.[EventType] = 'ExecutionStarted'
-            AND E.[InstanceID] <> @InstanceID -- never touch the instance being checkpointed
-            AND I.[RuntimeStatus] IN ('Completed', 'Failed', 'Terminated')
+        SELECT [InstanceID]
+        FROM @StartedSubOrchestrations
+        WHERE [RuntimeStatus] IN ('Completed', 'Failed', 'Terminated')
 
     IF EXISTS (SELECT 1 FROM @SubOrchestrationsToRecreate)
     BEGIN
