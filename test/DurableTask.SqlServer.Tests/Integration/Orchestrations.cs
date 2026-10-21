@@ -15,6 +15,7 @@ namespace DurableTask.SqlServer.Tests.Integration
     using DurableTask.Core.Middleware;
     using DurableTask.SqlServer.Tests.Logging;
     using DurableTask.SqlServer.Tests.Utils;
+    using Microsoft.Data.SqlClient;
     using Moq;
     using Newtonsoft.Json;
     using Newtonsoft.Json.Linq;
@@ -654,7 +655,7 @@ namespace DurableTask.SqlServer.Tests.Integration
         }
 
         [Theory]
-        //[InlineData(true)] // BUG: https://github.com/microsoft/durabletask-mssql/issues/148
+        [InlineData(true)]
         [InlineData(false)]
         public async Task RetryFailedSubOrchestration(bool userSpecifiedInstanceId)
         {
@@ -688,6 +689,178 @@ namespace DurableTask.SqlServer.Tests.Integration
                         input: null);
                 });
             await parentInstance.WaitForCompletion(expectedOutput: true);
+        }
+
+        [Fact]
+        public async Task ReuseCompletedSubOrchestrationInstanceID()
+        {
+            string subOrchestrationName = "RecreatableSubOrchestration";
+            string subInstanceId = $"sub-{Guid.NewGuid():N}";
+
+            this.testService.RegisterInlineOrchestration<string, string>(
+                subOrchestrationName,
+                implementation: (ctx, input) => Task.FromResult($"Hello, {input}!"));
+
+            // The second run is only possible if the terminal state of the first run gets overwritten.
+            TestInstance<string> parentInstance = await this.testService.RunOrchestration<string[], string>(
+                null,
+                "RecreateSubOrchestrationParent",
+                implementation: async (ctx, input) =>
+                {
+                    string first = await ctx.CreateSubOrchestrationInstance<string>(
+                        subOrchestrationName, string.Empty, subInstanceId, "first");
+                    string second = await ctx.CreateSubOrchestrationInstance<string>(
+                        subOrchestrationName, string.Empty, subInstanceId, "second");
+                    return new[] { first, second };
+                });
+
+            await parentInstance.WaitForCompletion(
+                timeout: TimeSpan.FromSeconds(30),
+                expectedOutput: new[] { "Hello, first!", "Hello, second!" });
+
+            // Only the second run should remain.
+            OrchestrationState subState = await this.testService.GetOrchestrationStateAsync(subInstanceId);
+            Assert.NotNull(subState);
+            Assert.Equal(OrchestrationStatus.Completed, subState.OrchestrationStatus);
+            Assert.Equal("\"Hello, second!\"", subState.Output);
+        }
+
+        [Fact]
+        public async Task CannotReuseRunningSubOrchestrationInstanceID()
+        {
+            string subOrchestrationName = "BlockedSubOrchestration";
+            string subInstanceId = $"sub-{Guid.NewGuid():N}";
+            TimeSpan delay = TimeSpan.FromSeconds(30);
+
+            // Block on a long timer so that the instance stays active.
+            TestInstance<string> blockedInstance = await this.testService.RunOrchestration(
+                "blocked",
+                subOrchestrationName,
+                version: null,
+                subInstanceId,
+                implementation: (ctx, input) => ctx.CreateTimer(ctx.CurrentUtcDateTime.Add(delay), input));
+            OrchestrationState startedState = await blockedInstance.WaitForStart();
+
+            // Starting a sub-orchestration with the ID of an active instance must not overwrite it.
+            TestInstance<string> parentInstance = await this.testService.RunOrchestration<string, string>(
+                null,
+                "RunningSubOrchestrationParent",
+                implementation: (ctx, input) => ctx.CreateSubOrchestrationInstance<string>(
+                    subOrchestrationName, string.Empty, subInstanceId, "overwrite"));
+
+            await parentInstance.WaitForStart();
+
+            // Give the sub-orchestration start event time to be processed.
+            await Task.Delay(TimeSpan.FromSeconds(5));
+
+            // CreatedTime is only assigned when a row is created, so an unchanged value proves the
+            // instance wasn't recreated. What happens to the duplicate start event is out of scope.
+            OrchestrationState subState = await this.testService.GetOrchestrationStateAsync(subInstanceId);
+            Assert.NotNull(subState);
+            Assert.Equal(startedState.CreatedTime, subState.CreatedTime);
+            Assert.Equal(startedState.OrchestrationInstance.ExecutionId, subState.OrchestrationInstance.ExecutionId);
+        }
+
+        [Fact]
+        public async Task ConcurrentReuseOfCompletedSubOrchestrationInstanceID()
+        {
+            string subOrchestrationName = "ConcurrentlyReusedSubOrchestration";
+            string subInstanceId = $"sub-{Guid.NewGuid():N}";
+            string parentInstanceId = Guid.NewGuid().ToString("N");
+            Task checkpointStarted = this.WatchCheckpoint(parentInstanceId);
+
+            TestInstance<string> completedInstance = await this.testService.RunOrchestration(
+                "first",
+                subOrchestrationName,
+                version: null,
+                subInstanceId,
+                implementation: (ctx, input) => Task.FromResult($"Hello, {input}!"));
+            await completedInstance.WaitForCompletion(expectedOutput: "Hello, first!");
+
+            (SqlConnection blocker, SqlTransaction blockerTransaction) = await HoldUncommittedEventAsync(subInstanceId);
+            await using (blocker)
+            {
+                // The parent's checkpoint pauses while replacing the completed sub-orchestration.
+                TestInstance<string> parentInstance = await this.testService.RunOrchestration<string, string>(
+                    "parent",
+                    "ConcurrentReuseParent",
+                    version: null,
+                    parentInstanceId,
+                    implementation: (ctx, input) => ctx.CreateSubOrchestrationInstance<string>(
+                        subOrchestrationName, string.Empty, subInstanceId, input));
+                await WaitUntilPausedAsync(checkpointStarted);
+
+                // Meanwhile a client must not overwrite the checkpoint's new instance.
+                Task<OrchestrationInstance> createTask = this.testService.CreateOrchestrationInstanceAsync(
+                    subOrchestrationName, string.Empty, subInstanceId, "client");
+                await Task.Delay(CheckpointPauseDelay);
+
+                await blockerTransaction.RollbackAsync();
+
+                // The checkpoint wins.
+                await Assert.ThrowsAsync<OrchestrationAlreadyExistsException>(() => createTask);
+
+                await parentInstance.WaitForCompletion(
+                    timeout: TimeSpan.FromSeconds(30),
+                    expectedOutput: "Hello, parent!");
+            }
+
+            OrchestrationState subState = await this.testService.GetOrchestrationStateAsync(subInstanceId);
+            Assert.NotNull(subState);
+            Assert.Equal(OrchestrationStatus.Completed, subState.OrchestrationStatus);
+            Assert.Equal("\"Hello, parent!\"", subState.Output);
+        }
+
+        // Time for a started checkpoint to reach the held event.
+        static readonly TimeSpan CheckpointPauseDelay = TimeSpan.FromSeconds(1);
+
+        /// <summary>Completes when the instance starts checkpointing.</summary>
+        Task WatchCheckpoint(string instanceId)
+        {
+            TaskCompletionSource<bool> started = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            this.testService.OrchestrationServiceMock.Setup(
+                svc => svc.CompleteTaskOrchestrationWorkItemAsync(
+                    It.IsAny<TaskOrchestrationWorkItem>(),
+                    It.IsAny<OrchestrationRuntimeState>(),
+                    It.IsAny<IList<TaskMessage>>(),
+                    It.IsAny<IList<TaskMessage>>(),
+                    It.IsAny<IList<TaskMessage>>(),
+                    It.IsAny<TaskMessage>(),
+                    It.IsAny<OrchestrationState>()))
+                .Callback<TaskOrchestrationWorkItem, OrchestrationRuntimeState, IList<TaskMessage>, IList<TaskMessage>, IList<TaskMessage>, TaskMessage, OrchestrationState>(
+                    (workItem, _, _, _, _, _, _) =>
+                    {
+                        if (workItem.InstanceId == instanceId)
+                        {
+                            started.TrySetResult(true);
+                        }
+                    });
+
+            return started.Task;
+        }
+
+        static async Task WaitUntilPausedAsync(Task checkpointStarted)
+        {
+            await checkpointStarted.WaitAsync(TimeSpan.FromSeconds(30));
+            await Task.Delay(CheckpointPauseDelay);
+        }
+
+        /// <summary>Holds an uncommitted event for the instance, so purging it waits for the transaction.</summary>
+        static async Task<(SqlConnection, SqlTransaction)> HoldUncommittedEventAsync(string instanceId)
+        {
+            SqlConnection connection = new SqlConnection(SharedTestHelpers.GetDefaultConnectionString());
+            await connection.OpenAsync();
+            SqlTransaction transaction = (SqlTransaction)await connection.BeginTransactionAsync();
+
+            await using SqlCommand command = connection.CreateCommand();
+            command.Transaction = transaction;
+            command.CommandText =
+                @"INSERT INTO dt.[NewEvents] ([TaskHub], [InstanceID], [EventType])
+                  SELECT [TaskHub], [InstanceID], 'GenericEvent' FROM dt.[Instances] WHERE [InstanceID] = @InstanceID";
+            command.Parameters.AddWithValue("@InstanceID", instanceId);
+            await command.ExecuteNonQueryAsync();
+            return (connection, transaction);
         }
 
         // This regression locks down the expected DurableTask span shape for a simple
