@@ -446,6 +446,93 @@ namespace DurableTask.SqlServer.Tests.Integration
                 LogAssert.CheckpointCompleted(orchestrationName));
         }
 
+        // Each 'あ' is 3 bytes in UTF-8, so this string is under 8,000 characters but over 8,000 bytes.
+        // Regression coverage for https://github.com/microsoft/durabletask-mssql/issues/333.
+        static readonly string LargeUtf8Payload = new string('あ', 3000);
+
+        [Fact]
+        public async Task LargeUtf8Input()
+        {
+            TestInstance<string> instance = await this.testService.RunOrchestration(
+                LargeUtf8Payload,
+                orchestrationName: "EchoOrchestration",
+                implementation: (ctx, input) => Task.FromResult(input));
+
+            await instance.WaitForCompletion(expectedOutput: LargeUtf8Payload);
+        }
+
+        [Fact]
+        public async Task LargeUtf8CustomStatus()
+        {
+            // Keep the input small so this test exercises only the custom status parameter.
+            TestInstance<string> instance = await this.testService.RunOrchestration(
+                "input",
+                orchestrationName: "CustomStatusOrchestration",
+                new LargeCustomStatusOrchestration());
+
+            OrchestrationState state = await instance.WaitForCompletion(expectedOutput: "done");
+            Assert.Equal(LargeUtf8Payload, JToken.Parse(state.Status).ToString());
+        }
+
+        class LargeCustomStatusOrchestration : TaskOrchestration<string, string>
+        {
+            string status;
+
+            public override Task<string> RunTask(OrchestrationContext context, string input)
+            {
+                this.status = LargeUtf8Payload;
+                return Task.FromResult("done");
+            }
+
+            public override string OnGetStatus() => this.status;
+        }
+
+        [Fact]
+        public async Task LargeUtf8TerminateReason()
+        {
+            TestInstance<string> instance = await this.testService.RunOrchestration(
+                "input",
+                orchestrationName: "OrchestrationWithTimer",
+                implementation: (ctx, input) => ctx.CreateTimer(ctx.CurrentUtcDateTime.AddSeconds(30), input));
+
+            await instance.WaitForStart();
+            await instance.TerminateAsync(LargeUtf8Payload);
+
+            await instance.WaitForCompletion(
+                TimeSpan.FromSeconds(10),
+                expectedStatus: OrchestrationStatus.Terminated,
+                expectedOutput: LargeUtf8Payload);
+        }
+
+        [Fact]
+        public async Task LargeUtf8RewindReason()
+        {
+            bool shouldFail = true;
+
+            TestInstance<string> instance = await this.testService.RunOrchestration(
+                "input",
+                orchestrationName: "RewindableOrchestration",
+                implementation: (ctx, input) => ctx.ScheduleTask<string>("MaybeFail", "", input),
+                activities: ("MaybeFail", TestService.MakeActivity((TaskContext ctx, string input) =>
+                {
+                    if (shouldFail)
+                    {
+                        throw new InvalidOperationException("Kah-BOOOOM!!!");
+                    }
+
+                    return input;
+                })));
+
+            await instance.WaitForCompletion(expectedStatus: OrchestrationStatus.Failed);
+
+            shouldFail = false;
+            await this.testService.OrchestrationServiceMock.Object.RewindTaskOrchestrationAsync(
+                instance.InstanceId,
+                LargeUtf8Payload);
+
+            await instance.WaitForCompletion(expectedOutput: "input");
+        }
+
         [Theory]
         [InlineData(10)]
         [InlineData(300)]
