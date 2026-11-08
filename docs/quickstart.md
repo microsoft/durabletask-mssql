@@ -70,6 +70,8 @@ The `connectionStringName` setting is required and must be set to the name of th
 
 The `schemaName` settings is an optional string value that defaults to `null`. This property is required when database objects are provisioned under a custom schema name. If not specified, a schema name of `dt` is assumed. See the [Multitenancy](multitenancy.md) documentation for more details.
 
+The `transientErrorNumbers` setting is an optional array of SQL error numbers, such as `[47073]`, that should be treated as transient. The provider already retries a built-in set of transient errors (deadlocks, connection drops, Azure SQL throttling, and so on). Errors listed here are retried with the same policy on top of that set. Use it for errors that are transient only in your environment, like Azure SQL error 47073 when DNS resolution briefly falls back to the public endpoint of a database that only allows private endpoint access. The default value is `null`.
+
 To enable diagnostic logging, you can also add the following `logging` configuration to your **host.json** file:
 
 ```json

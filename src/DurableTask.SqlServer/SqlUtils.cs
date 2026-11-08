@@ -903,12 +903,14 @@ namespace DurableTask.SqlServer
         public static Task<DbDataReader> ExecuteReaderAsync(
             DbCommand command,
             LogHelper traceHelper,
+            IReadOnlyCollection<int>? transientErrorNumbers,
             string? instanceId = null,
             CancellationToken cancellationToken = default)
         {
             return ExecuteSprocAndTraceAsync(
                 command,
                 traceHelper,
+                transientErrorNumbers,
                 instanceId,
                 cmd => cmd.ExecuteReaderAsync(cancellationToken),
                 cancellationToken);
@@ -917,12 +919,14 @@ namespace DurableTask.SqlServer
         public static Task<int> ExecuteNonQueryAsync(
             DbCommand command,
             LogHelper traceHelper,
+            IReadOnlyCollection<int>? transientErrorNumbers,
             string? instanceId = null,
             CancellationToken cancellationToken = default)
         {
             return ExecuteSprocAndTraceAsync(
                 command,
                 traceHelper,
+                transientErrorNumbers,
                 instanceId,
                 cmd => cmd.ExecuteNonQueryAsync(cancellationToken),
                 cancellationToken);
@@ -931,12 +935,14 @@ namespace DurableTask.SqlServer
         public static Task<object> ExecuteScalarAsync(
             DbCommand command,
             LogHelper traceHelper,
+            IReadOnlyCollection<int>? transientErrorNumbers,
             string? instanceId = null,
             CancellationToken cancellationToken = default)
         {
             return ExecuteSprocAndTraceAsync(
                 command,
                 traceHelper,
+                transientErrorNumbers,
                 instanceId,
                 cmd => cmd.ExecuteScalarAsync(cancellationToken),
                 cancellationToken);
@@ -945,6 +951,7 @@ namespace DurableTask.SqlServer
         static async Task<T> ExecuteSprocAndTraceAsync<T>(
             DbCommand command,
             LogHelper traceHelper,
+            IReadOnlyCollection<int>? transientErrorNumbers,
             string? instanceId,
             Func<DbCommand, Task<T>> executor,
             CancellationToken cancellationToken)
@@ -952,7 +959,7 @@ namespace DurableTask.SqlServer
             var context = new SprocExecutionContext();
             try
             {
-                return await WithRetry(command, executor, context, traceHelper, instanceId);
+                return await WithRetry(command, executor, context, traceHelper, transientErrorNumbers, instanceId);
             }
             catch (SqlException e) when (cancellationToken.IsCancellationRequested)
             {
@@ -1019,7 +1026,14 @@ namespace DurableTask.SqlServer
             }
         }
 
-        static async Task<T> WithRetry<T>(DbCommand command, Func<DbCommand, Task<T>> executor, SprocExecutionContext context, LogHelper traceHelper, string? instanceId, int maxRetries = 5)
+        static async Task<T> WithRetry<T>(
+            DbCommand command,
+            Func<DbCommand, Task<T>> executor,
+            SprocExecutionContext context,
+            LogHelper traceHelper,
+            IReadOnlyCollection<int>? transientErrorNumbers,
+            string? instanceId,
+            int maxRetries = 5)
         {
             context.RetryCount = 0;
 
@@ -1036,7 +1050,7 @@ namespace DurableTask.SqlServer
                 }
                 catch (Exception e)
                 {
-                    if (!IsTransient(e))
+                    if (!IsTransient(e, transientErrorNumbers))
                     {
                         // Not a retriable exception
                         throw;
@@ -1067,7 +1081,7 @@ namespace DurableTask.SqlServer
             }
         }
 
-        static bool IsTransient(Exception exception)
+        internal static bool IsTransient(Exception exception, IReadOnlyCollection<int>? additionalTransientErrorNumbers = null)
         {
             if (exception is SqlException sqlException)
             {
@@ -1170,6 +1184,12 @@ namespace DurableTask.SqlServer
                             // DBNETLIB Error Code: -2
                             // Timeout expired. The timeout period elapsed prior to completion of the operation or the server is not responding. The statement has been terminated.
                             //case -2:
+                    }
+
+                    // User-configured error numbers that should also be treated as transient
+                    if (additionalTransientErrorNumbers != null && additionalTransientErrorNumbers.Contains(error.Number))
+                    {
+                        return true;
                     }
                 }
 
