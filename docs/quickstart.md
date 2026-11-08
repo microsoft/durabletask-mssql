@@ -72,6 +72,18 @@ The `schemaName` settings is an optional string value that defaults to `null`. T
 
 The `transientErrorNumbers` setting is an optional array of SQL error numbers, such as `[47073]`, that should be treated as transient. The provider already retries a built-in set of transient errors (deadlocks, connection drops, Azure SQL throttling, and so on). Errors listed here are retried with the same policy on top of that set. Use it for errors that are transient only in your environment, like Azure SQL error 47073 when DNS resolution briefly falls back to the public endpoint of a database that only allows private endpoint access. The default value is `null`.
 
+The following errors are treated as transient by default and don't need to be configured:
+
+| Category | SQL error numbers |
+|---|---|
+| Azure SQL throttling and resource limits | 10928, 10929, 10936, 40501, 49918, 49919, 49920 |
+| Azure SQL service unavailable | 40197, 40613 |
+| In-memory OLTP commit and validation conflicts | 41301, 41302, 41305, 41325, 41839 |
+| Network and connection errors | 20, 64, 121, 233, 10053, 10054, 10060 |
+| Deadlocks | 1205 |
+
+A `TimeoutException` is also retried. SQL error `-2` (command timeout) is deliberately not retried, because the command may have completed on the server even though the client timed out.
+
 To enable diagnostic logging, you can also add the following `logging` configuration to your **host.json** file:
 
 ```json
