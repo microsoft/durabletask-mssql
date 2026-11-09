@@ -531,6 +531,17 @@ namespace DurableTask.SqlServer.Tests.Integration
                 LargeUtf8Payload);
 
             await instance.WaitForCompletion(expectedOutput: "input");
+
+            // The rewind reason is persisted as the payload of a GenericEvent in the orchestration history.
+            // Rewind also converts the failure-related events into GenericEvents (with their original
+            // payloads), so look for the one carrying the reason rather than for a single GenericEvent.
+            string historyJson = await this.testService.OrchestrationServiceMock.Object.GetOrchestrationHistoryAsync(
+                instance.InstanceId,
+                executionIdFilter: null);
+            Assert.Single(
+                JArray.Parse(historyJson),
+                e => e.Value<int>("EventType") == (int)EventType.GenericEvent
+                    && e.Value<string>("Data") == LargeUtf8Payload);
         }
 
         [Theory]
