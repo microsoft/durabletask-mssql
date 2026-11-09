@@ -282,6 +282,19 @@ namespace DurableTask.SqlServer.Tests.Integration
             Assert.Equal(exceptionToThrow.Message, state.FailureDetails.ErrorMessage);
             Assert.Equal(exceptionToThrow.GetType().FullName, state.FailureDetails.ErrorType);
             Assert.NotNull(state.FailureDetails.StackTrace);
+
+            // Like the Azure Storage provider, the output of a failed orchestration is "{ErrorType}: {ErrorMessage}"
+            string expectedOutput = $"{exceptionToThrow.GetType().FullName}: {exceptionToThrow.Message}";
+            Assert.Equal(expectedOutput, state.Output);
+
+            // The paged query path must report the same output and failure details
+            var query = new SqlOrchestrationQuery { InstanceIdPrefix = instance.InstanceId, FetchOutput = true };
+            IReadOnlyCollection<OrchestrationState> results =
+                await this.testService.OrchestrationServiceMock.Object.GetManyOrchestrationsAsync(query, CancellationToken.None);
+            OrchestrationState queriedState = Assert.Single(results);
+            Assert.Equal(OrchestrationStatus.Failed, queriedState.OrchestrationStatus);
+            Assert.Equal(expectedOutput, queriedState.Output);
+            Assert.Equal(state.FailureDetails, queriedState.FailureDetails);
         }
 
         [Fact]
@@ -303,6 +316,7 @@ namespace DurableTask.SqlServer.Tests.Integration
             Assert.Contains("Task 'Throw' (#0) failed with an unhandled exception", state.FailureDetails.ErrorMessage);
             Assert.Equal(typeof(TaskFailedException).FullName, state.FailureDetails.ErrorType);
             Assert.NotNull(state.FailureDetails.StackTrace);
+            Assert.Equal($"{state.FailureDetails.ErrorType}: {state.FailureDetails.ErrorMessage}", state.Output);
 
             // Ideally, the original exception message would be included in the orchestrator output.
             // This would require a change in DurableTask.Core.
