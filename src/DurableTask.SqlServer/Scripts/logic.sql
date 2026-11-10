@@ -1304,7 +1304,6 @@ BEGIN
     -- Table order for this sproc: NewTasks --> Payloads
 
     -- Update (lock) and return a single row.
-    -- The PK_NewTasks hint is specified to help ensure in-order selection.
     -- TODO: Filter out tasks for instances that are in a non-running state (suspended, etc.)
     UPDATE TOP (1) NewTasks WITH (READPAST)
     SET
@@ -1313,7 +1312,7 @@ BEGIN
 	    [LockExpiration] = @LockExpiration,
         [DequeueCount] = [DequeueCount] + 1
     FROM
-        NewTasks WITH (INDEX (PK_NewTasks))
+        NewTasks
     WHERE
         [TaskHub] = @TaskHub AND
 	    ([LockExpiration] IS NULL OR [LockExpiration] < @now) AND
