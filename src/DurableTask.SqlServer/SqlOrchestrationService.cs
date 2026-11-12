@@ -1034,10 +1034,13 @@ namespace DurableTask.SqlServer
         /// <param name="currentReplicaCount">
         /// If specified, results in a trace message if the recommended replica count differs from this value.
         /// </param>
+        /// <param name="cancellationToken">Cancels the scale query independently of worker shutdown.</param>
         /// <returns>Returns a non-negative recommended replica count integer value.</returns>
         public async Task<int> GetRecommendedReplicaCountAsync(int? currentReplicaCount = null, CancellationToken cancellationToken = default)
         {
-            using SqlConnection connection = await this.GetAndOpenConnectionAsync(cancellationToken);
+            // Scale queries must remain available after the worker stops during drain.
+            using SqlConnection connection = this.settings.CreateConnection();
+            await connection.OpenAsync(cancellationToken);
             using SqlCommand command = connection.CreateCommand();
             command.CommandText = $"SELECT {this.settings.SchemaName}.GetScaleRecommendation(@MaxConcurrentOrchestrations, @MaxConcurrentActivities)";
             command.Parameters.Add("@MaxConcurrentOrchestrations", SqlDbType.Int).Value = this.MaxConcurrentTaskOrchestrationWorkItems;
