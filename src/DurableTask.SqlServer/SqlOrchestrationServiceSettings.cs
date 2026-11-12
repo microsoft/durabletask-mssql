@@ -4,6 +4,7 @@
 namespace DurableTask.SqlServer
 {
     using System;
+    using System.Collections.Generic;
     using Microsoft.Data.SqlClient;
     using Microsoft.Extensions.Logging;
     using Microsoft.Extensions.Logging.Abstractions;
@@ -197,6 +198,19 @@ namespace DurableTask.SqlServer
         /// </summary>
         [JsonProperty("extendedSessionIdleTimeout")]
         public TimeSpan ExtendedSessionIdleTimeout { get; set; } = TimeSpan.FromSeconds(30);
+
+        /// <summary>
+        /// Gets or sets additional SQL error numbers that should be treated as transient and retried,
+        /// on top of the built-in list of transient errors.
+        /// </summary>
+        /// <remarks>
+        /// Use this for errors that are not normally transient but occur transiently in a particular environment,
+        /// for example Azure SQL error 47073 when DNS resolution briefly falls back to the public endpoint of a
+        /// database that only allows private endpoint access. Commands that fail with one of these errors are
+        /// retried using the same retry policy as the built-in transient errors.
+        /// </remarks>
+        [JsonProperty("transientErrorNumbers")]
+        public IReadOnlyCollection<int>? TransientErrorNumbers { get; set; }
 
         /// <summary>
         /// Gets a SQL connection string associated with the configured task hub.

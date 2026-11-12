@@ -205,6 +205,7 @@ namespace DurableTask.SqlServer
                     reader = await SqlUtils.ExecuteReaderAsync(
                         command,
                         this.traceHelper,
+                        this.settings.TransientErrorNumbers,
                         instanceId: null,
                         cancellationToken);
                 }
@@ -311,6 +312,7 @@ namespace DurableTask.SqlServer
                                 await SqlUtils.ExecuteNonQueryAsync(
                                     discardCommand,
                                     this.traceHelper,
+                                    this.settings.TransientErrorNumbers,
                                     instanceId,
                                     cancellationToken);
                             }
@@ -411,7 +413,7 @@ namespace DurableTask.SqlServer
 
             try
             {
-                await SqlUtils.ExecuteNonQueryAsync(command, this.traceHelper, workItem.InstanceId);
+                await SqlUtils.ExecuteNonQueryAsync(command, this.traceHelper, this.settings.TransientErrorNumbers, workItem.InstanceId);
             }
             catch (SqlException e) when (SqlUtils.HasErrorNumber(e, SqlOrchestrationSession.LockLostErrorNumber))
             {
@@ -501,7 +503,7 @@ namespace DurableTask.SqlServer
 
             try
             {
-                await SqlUtils.ExecuteNonQueryAsync(command, this.traceHelper, instance.InstanceId);
+                await SqlUtils.ExecuteNonQueryAsync(command, this.traceHelper, this.settings.TransientErrorNumbers, instance.InstanceId);
             }
             catch (SqlException e) when (SqlUtils.IsUniqueKeyViolation(e))
             {
@@ -581,6 +583,7 @@ namespace DurableTask.SqlServer
                 using DbDataReader reader = await SqlUtils.ExecuteReaderAsync(
                     command,
                     this.traceHelper,
+                    this.settings.TransientErrorNumbers,
                     instanceId: null,
                     shutdownCancellationToken);
                 if (!await reader.ReadAsync(shutdownCancellationToken))
@@ -619,7 +622,7 @@ namespace DurableTask.SqlServer
             command.Parameters.Add("@LockExpiration", SqlDbType.DateTime2).Value = lockExpiration;
 
             string instanceId = workItem.TaskMessage.OrchestrationInstance.InstanceId;
-            await SqlUtils.ExecuteNonQueryAsync(command, this.traceHelper, instanceId);
+            await SqlUtils.ExecuteNonQueryAsync(command, this.traceHelper, this.settings.TransientErrorNumbers, instanceId);
 
             workItem.LockedUntilUtc = lockExpiration;
             return workItem;
@@ -636,7 +639,7 @@ namespace DurableTask.SqlServer
             OrchestrationInstance instance = workItem.TaskMessage.OrchestrationInstance;
             try
             {
-                await SqlUtils.ExecuteNonQueryAsync(command, this.traceHelper, instance.InstanceId);
+                await SqlUtils.ExecuteNonQueryAsync(command, this.traceHelper, this.settings.TransientErrorNumbers, instance.InstanceId);
             }
             catch (SqlException e) when (e.Number == 50002)
             {
@@ -679,7 +682,7 @@ namespace DurableTask.SqlServer
 
             try
             {
-                await SqlUtils.ExecuteNonQueryAsync(command, this.traceHelper, instance.InstanceId);
+                await SqlUtils.ExecuteNonQueryAsync(command, this.traceHelper, this.settings.TransientErrorNumbers, instance.InstanceId);
             }
             catch (SqlException e) when (e.Number == 50001 /* Instance ID for pending/running instance already exists */)
             {
@@ -696,7 +699,7 @@ namespace DurableTask.SqlServer
             command.Parameters.AddOrchestrationEventsParameter("@NewOrchestrationEvents", message, this.settings.SchemaName, this.traceHelper);
 
             string instanceId = message.OrchestrationInstance.InstanceId;
-            await SqlUtils.ExecuteNonQueryAsync(command, this.traceHelper, instanceId);
+            await SqlUtils.ExecuteNonQueryAsync(command, this.traceHelper, this.settings.TransientErrorNumbers, instanceId);
         }
 
         public override async Task<OrchestrationState> WaitForOrchestrationAsync(
@@ -748,6 +751,7 @@ namespace DurableTask.SqlServer
             using DbDataReader reader = await SqlUtils.ExecuteReaderAsync(
                 command,
                 this.traceHelper,
+                this.settings.TransientErrorNumbers,
                 instanceId,
                 cancellationToken);
 
@@ -769,7 +773,7 @@ namespace DurableTask.SqlServer
             command.Parameters.Add("@InstanceID", SqlDbType.VarChar, size: 100).Value = instanceId;
             command.Parameters.Add("@GetInputsAndOutputs", SqlDbType.Bit).Value = true; // There's no clean way for the caller to specify this currently
 
-            using DbDataReader reader = await SqlUtils.ExecuteReaderAsync(command, this.traceHelper, instanceId);
+            using DbDataReader reader = await SqlUtils.ExecuteReaderAsync(command, this.traceHelper, this.settings.TransientErrorNumbers, instanceId);
 
             List<HistoryEvent> history = ReadHistoryEvents(reader, executionIdFilter);
             return DTUtils.SerializeToJson(history);
@@ -814,7 +818,7 @@ namespace DurableTask.SqlServer
             command.Parameters.Add("@InstanceID", SqlDbType.VarChar, size: 100).Value = instanceId;
             command.Parameters.Add("@Reason", SqlDbType.VarChar, size: -1 /* max */).Value = reason;
 
-            await SqlUtils.ExecuteNonQueryAsync(command, this.traceHelper, instanceId);
+            await SqlUtils.ExecuteNonQueryAsync(command, this.traceHelper, this.settings.TransientErrorNumbers, instanceId);
         }
 
         public async Task<int> PurgeOrchestrationHistoryAsync(IEnumerable<string> instanceIds)
@@ -833,7 +837,7 @@ namespace DurableTask.SqlServer
             command.Parameters.AddInstanceIDsParameter("@InstanceIDs", instanceIds, this.settings.SchemaName);
 
             Stopwatch latencyStopwatch = Stopwatch.StartNew();
-            await SqlUtils.ExecuteNonQueryAsync(command, this.traceHelper);
+            await SqlUtils.ExecuteNonQueryAsync(command, this.traceHelper, this.settings.TransientErrorNumbers);
             int purgedInstanceCount = (int)instancesDeletedReturnValue.Value;
             if (purgedInstanceCount > 0)
             {
@@ -856,7 +860,7 @@ namespace DurableTask.SqlServer
             command.Parameters.Add("@ThresholdTime", SqlDbType.DateTime2).Value = maxThresholdDateTimeUtc;
             command.Parameters.Add("@FilterType", SqlDbType.TinyInt).Value = (int)timeRangeFilterType;
 
-            await SqlUtils.ExecuteNonQueryAsync(command, this.traceHelper);
+            await SqlUtils.ExecuteNonQueryAsync(command, this.traceHelper, this.settings.TransientErrorNumbers);
         }
 
         public override async Task<PurgeResult> PurgeInstanceStateAsync(string instanceId)
@@ -987,6 +991,7 @@ namespace DurableTask.SqlServer
             using DbDataReader reader = await SqlUtils.ExecuteReaderAsync(
                 command,
                 this.traceHelper,
+                this.settings.TransientErrorNumbers,
                 instanceId: null,
                 cancellationToken);
 
@@ -1013,7 +1018,7 @@ namespace DurableTask.SqlServer
             command.Parameters.Add("@InstanceID", SqlDbType.VarChar, size: 100).Value = instanceId;
             command.Parameters.Add("@Reason", SqlDbType.VarChar, size: -1 /* max */).Value = reason;
 
-            await SqlUtils.ExecuteNonQueryAsync(command, this.traceHelper);
+            await SqlUtils.ExecuteNonQueryAsync(command, this.traceHelper, this.settings.TransientErrorNumbers);
         }
 
         /// <summary>

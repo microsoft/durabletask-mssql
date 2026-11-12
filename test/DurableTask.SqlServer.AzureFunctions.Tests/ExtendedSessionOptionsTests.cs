@@ -39,7 +39,25 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
             Assert.True(frameworkDefault > 0, "Expected a positive framework default for the unconfigured case.");
         }
 
-        static SqlOrchestrationServiceSettings GetSettings(DurableTaskOptions extensionOptions)
+        [Fact]
+        public void MapsTransientErrorNumbers()
+        {
+            var sqlOptions = new SqlDurabilityOptions { TransientErrorNumbers = new[] { 47073, 4060 } };
+
+            SqlOrchestrationServiceSettings settings = GetSettings(new DurableTaskOptions(), sqlOptions);
+
+            Assert.Equal(new[] { 47073, 4060 }, settings.TransientErrorNumbers);
+        }
+
+        [Fact]
+        public void UnconfiguredTransientErrorNumbersMapToNull()
+        {
+            SqlOrchestrationServiceSettings settings = GetSettings(new DurableTaskOptions());
+
+            Assert.Null(settings.TransientErrorNumbers);
+        }
+
+        static SqlOrchestrationServiceSettings GetSettings(DurableTaskOptions extensionOptions, SqlDurabilityOptions? sqlOptions = null)
         {
             IConfiguration configuration = new ConfigurationBuilder()
                 .AddInMemoryCollection(new[]
@@ -53,7 +71,7 @@ namespace DurableTask.SqlServer.AzureFunctions.Tests
                 .Setup(resolver => resolver.Resolve("SQLDB_Connection"))
                 .Returns(configuration.GetSection("SQLDB_Connection"));
 
-            return new SqlDurabilityOptions().GetOrchestrationServiceSettings(
+            return (sqlOptions ?? new SqlDurabilityOptions()).GetOrchestrationServiceSettings(
                 extensionOptions,
                 connectionInfoResolver.Object);
         }
