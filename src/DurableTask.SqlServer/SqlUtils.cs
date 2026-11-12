@@ -290,6 +290,11 @@ namespace DurableTask.SqlServer
                     DTUtils.TryDeserializeFailureDetails(rawOutput, out FailureDetails? failureDetails))
                 {
                     state.FailureDetails = failureDetails;
+
+                    // Match the Azure Storage provider, which stores FailureDetails.ToString()
+                    // ("{ErrorType}: {ErrorMessage}") as the output of failed orchestrations.
+                    // Status APIs that only read Output would otherwise report no output.
+                    state.Output = failureDetails!.ToString();
                 }
                 else
                 {
