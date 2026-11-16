@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.9.0
+
+### Updates
+
+* Add extended session support for orchestrations and Durable Entities ([#309](https://github.com/microsoft/durabletask-mssql/pull/309) and [#332](https://github.com/microsoft/durabletask-mssql/pull/332))
+* Fix UTF-8 payloads exceeding 8,000 bytes for orchestration input, custom status, and termination and rewind reasons ([#334](https://github.com/microsoft/durabletask-mssql/pull/334))
+* Populate failed orchestration output with error details when using `ErrorPropagationMode.UseFailureDetails` ([#336](https://github.com/microsoft/durabletask-mssql/pull/336))
+* Keep SQL scale recommendation queries available after worker shutdown ([#337](https://github.com/microsoft/durabletask-mssql/pull/337))
+
 ## v1.8.0
 
 ### Updates
