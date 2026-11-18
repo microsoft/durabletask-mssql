@@ -76,6 +76,7 @@ extends:
         templateContext:
           type: releaseJob
           isProduction: true
+          environment: durabletask-pypi-prod
           inputs:
           - input: pipelineArtifact
             pipeline: officialPipeline  # Pipeline reference as defined in the resources section
@@ -122,6 +123,7 @@ extends:
         templateContext:
           type: releaseJob
           isProduction: true
+          environment: durabletask-pypi-prod
           inputs:
           - input: pipelineArtifact
             pipeline: officialPipeline  # Pipeline reference as defined in the resources section
@@ -168,6 +170,7 @@ extends:
         templateContext:
           type: releaseJob
           isProduction: true
+          environment: durabletask-pypi-prod
           inputs:
           - input: pipelineArtifact
             pipeline: officialPipeline  # Pipeline reference as defined in the resources section
