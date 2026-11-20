@@ -30,6 +30,33 @@ namespace DurableTask.SqlServer.Tests.Integration
 
         Task IAsyncLifetime.DisposeAsync() => this.testService.DisposeAsync();
 
+        [Fact]
+        public async Task ScaleRecommendation_AfterServiceStopped()
+        {
+            this.testService.OrchestrationServiceOptions.MaxActiveOrchestrations = 1;
+            SqlOrchestrationService orchestrationService = this.testService.OrchestrationServiceMock.Object;
+            await orchestrationService.StartAsync();
+
+            await this.testService.RunOrchestration(
+                null as string,
+                "PendingOrchestration",
+                (ctx, input) => Task.FromResult(input));
+
+            Assert.Equal(1, await orchestrationService.GetRecommendedReplicaCountAsync());
+            await orchestrationService.StopAsync();
+
+            Assert.Equal(1, await orchestrationService.GetRecommendedReplicaCountAsync(
+                cancellationToken: CancellationToken.None));
+
+            using var cancellationSource = new CancellationTokenSource();
+            Assert.Equal(1, await orchestrationService.GetRecommendedReplicaCountAsync(
+                cancellationToken: cancellationSource.Token));
+
+            cancellationSource.Cancel();
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+                orchestrationService.GetRecommendedReplicaCountAsync(cancellationToken: cancellationSource.Token));
+        }
+
         /// <summary>
         /// Validates the scale recommendation behavior when scheduling new orchestration instances.
         /// </summary>
