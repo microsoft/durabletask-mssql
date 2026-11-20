@@ -108,6 +108,11 @@ namespace DurableTask.SqlServer.Tests.Utils
             return this.client.GetOrchestrationStateAsync(new OrchestrationInstance { InstanceId = instanceId });
         }
 
+        public Task<OrchestrationInstance> CreateOrchestrationInstanceAsync(string name, string version, string instanceId, object input)
+        {
+            return this.client.CreateOrchestrationInstanceAsync(name, version, instanceId, input);
+        }
+
         public Task StartWorkerAsync() => this.worker?.StartAsync() ?? Task.CompletedTask;
 
         public Task StopWorkerAsync(bool isForced = false) => this.worker?.StopAsync(isForced) ?? Task.CompletedTask;
