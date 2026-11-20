@@ -31,6 +31,9 @@ namespace DurableTask.SqlServer.AzureFunctions
         [JsonProperty("schemaName")]
         public string? SchemaName { get; set; }
 
+        [JsonProperty("transientErrorNumbers")]
+        public int[]? TransientErrorNumbers { get; set; }
+
         internal ILoggerFactory LoggerFactory { get; set; } = NullLoggerFactory.Instance;
         
         internal SqlOrchestrationServiceSettings GetOrchestrationServiceSettings(
@@ -65,6 +68,7 @@ namespace DurableTask.SqlServer.AzureFunctions
                 LoggerFactory = this.LoggerFactory,
                 WorkItemBatchSize = this.TaskEventBatchSize,
                 WorkItemLockTimeout = this.TaskEventLockTimeout,
+                TransientErrorNumbers = this.TransientErrorNumbers,
             };
 
             if (extensionOptions.MaxConcurrentActivityFunctions.HasValue)

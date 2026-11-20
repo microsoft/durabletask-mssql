@@ -46,7 +46,7 @@ namespace DurableTask.SqlServer
 
                 try
                 {
-                    using DbDataReader reader = await SqlUtils.ExecuteReaderAsync(command, this.traceHelper);
+                    using DbDataReader reader = await SqlUtils.ExecuteReaderAsync(command, this.traceHelper, this.settings.TransientErrorNumbers);
                     if (await reader.ReadAsync())
                     {
                         // The first result contains the latest version
@@ -114,7 +114,7 @@ namespace DurableTask.SqlServer
                 command.CommandType = CommandType.StoredProcedure;
                 command.Parameters.Add("@SemanticVersion", SqlDbType.NVarChar, 100).Value = DTUtils.ExtensionVersion.ToString();
 
-                await SqlUtils.ExecuteNonQueryAsync(command, this.traceHelper);
+                await SqlUtils.ExecuteNonQueryAsync(command, this.traceHelper, this.settings.TransientErrorNumbers);
             }
 
             await dbLock.CommitAsync();
@@ -194,7 +194,7 @@ namespace DurableTask.SqlServer
             command.CommandText = "SELECT 1 FROM sys.databases WHERE name = @databaseName";
             command.Parameters.AddWithValue("@databaseName", databaseName);
 
-            bool exists = (int?)await SqlUtils.ExecuteScalarAsync(command, this.traceHelper) == 1;
+            bool exists = (int?)await SqlUtils.ExecuteScalarAsync(command, this.traceHelper, this.settings.TransientErrorNumbers) == 1;
             return exists;
         }
 
@@ -205,7 +205,7 @@ namespace DurableTask.SqlServer
 
             try
             {
-                await SqlUtils.ExecuteNonQueryAsync(command, this.traceHelper);
+                await SqlUtils.ExecuteNonQueryAsync(command, this.traceHelper, this.settings.TransientErrorNumbers);
                 this.traceHelper.CreatedDatabase(databaseName);
                 return true;
             }

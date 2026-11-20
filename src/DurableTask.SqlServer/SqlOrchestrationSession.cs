@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft Corporation.
+﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
 namespace DurableTask.SqlServer
@@ -108,7 +108,7 @@ namespace DurableTask.SqlServer
                 command.Parameters.Add("@InstanceID", SqlDbType.VarChar, 100).Value = this.instanceId;
                 command.Parameters.Add("@LockedBy", SqlDbType.VarChar, 100).Value = this.lockedByValue;
 
-                await SqlUtils.ExecuteNonQueryAsync(command, this.traceHelper, this.instanceId);
+                await SqlUtils.ExecuteNonQueryAsync(command, this.traceHelper, this.settings.TransientErrorNumbers, this.instanceId);
             }
             catch (Exception e)
             {
@@ -135,6 +135,7 @@ namespace DurableTask.SqlServer
             using DbDataReader reader = await SqlUtils.ExecuteReaderAsync(
                 command,
                 this.traceHelper,
+                this.settings.TransientErrorNumbers,
                 this.instanceId,
                 this.shutdownToken);
 
