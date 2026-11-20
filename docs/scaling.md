@@ -77,7 +77,9 @@ Here are the English definitions of the variables mentioned in this algorithm:
 | *recommended_orchestrator_workers* | The number of worker replicas needed to handle all active and pending orchestrator events (i.e. `live_orchestrators`). Each orchestrator must run on a single worker at a time so the actual number of events per orchestrator does not matter. |
 | *recommended_worker_count* | The total number of workers needed to handle all activity tasks and orchestrator events. |
 
-This value can be calculated automatically using either the `dt.GetScaleRecommendation` SQL function, which takes concurrency settings as parameters, or the `SqlOrchestrationService.GetScaleRecommendation` .NET API, which discovers the concurrency settings from configuration. The final number can then be given to an auto-scale compute component to change the number of allocated worker replicas.
+This value can be calculated automatically using either the `dt.GetScaleRecommendation` SQL function, which takes concurrency settings as parameters, or the `SqlOrchestrationService.GetRecommendedReplicaCountAsync` .NET API, which discovers the concurrency settings from configuration. The final number can then be given to an auto-scale compute component to change the number of allocated worker replicas.
+
+Scale recommendation queries remain available after a task hub worker stops, including while an Azure Functions instance drains. The .NET API honors the caller's cancellation token independently of the worker's shutdown token.
 
 If you're using the Durable SQL provider with [Azure Durable Functions](https://docs.microsoft.com/azure/azure-functions/durable) running on the [Elastic Premium Plan](https://docs.microsoft.com/azure/azure-functions/functions-premium-plan), then auto-scaling the number of app instances is managed automatically if you enable runtime scale monitoring as described [here](https://docs.microsoft.com/azure/azure-functions/functions-networking-options#premium-plan-with-virtual-network-triggers). Note that this doesn't require you to configure any virtual networking features.
 

@@ -455,7 +455,7 @@ namespace DurableTask.SqlServer
             command.Parameters.Add("@InstanceID", SqlDbType.VarChar, size: 100).Value = instance.InstanceId;
             command.Parameters.Add("@ExecutionID", SqlDbType.VarChar, size: 50).Value = instance.ExecutionId;
             command.Parameters.Add("@RuntimeStatus", SqlDbType.VarChar, size: 30).Value = orchestrationState.OrchestrationStatus.ToString();
-            command.Parameters.Add("@CustomStatusPayload", SqlDbType.VarChar).Value = orchestrationState.Status ?? SqlString.Null;
+            command.Parameters.Add("@CustomStatusPayload", SqlDbType.VarChar, size: -1 /* max */).Value = orchestrationState.Status ?? SqlString.Null;
 
             bool hasSession = workItem.Session != null;
             bool keepLocked = hasSession && !IsTerminalStatus(orchestrationState.OrchestrationStatus);
@@ -669,7 +669,7 @@ namespace DurableTask.SqlServer
             command.Parameters.Add("@Version", SqlDbType.VarChar, size: 100).Value = startEvent.Version;
             command.Parameters.Add("@InstanceID", SqlDbType.VarChar, size: 100).Value = instance.InstanceId;
             command.Parameters.Add("@ExecutionID", SqlDbType.VarChar, size: 50).Value = instance.ExecutionId;
-            command.Parameters.Add("@InputText", SqlDbType.VarChar).Value = startEvent.Input;
+            command.Parameters.Add("@InputText", SqlDbType.VarChar, size: -1 /* max */).Value = startEvent.Input;
             command.Parameters.Add("@StartTime", SqlDbType.DateTime2).Value = startEvent.ScheduledStartTime;
             command.Parameters.Add("@TraceContext", SqlDbType.VarChar, size: 800).Value = SqlUtils.GetTraceContext(startEvent);
 
@@ -677,7 +677,7 @@ namespace DurableTask.SqlServer
 
             if (dedupeStatuses?.Length > 0)
             {
-                command.Parameters.Add("@DedupeStatuses", SqlDbType.VarChar).Value = string.Join(",", dedupeStatuses);
+                command.Parameters.Add("@DedupeStatuses", SqlDbType.VarChar, size: -1 /* max */).Value = string.Join(",", dedupeStatuses);
             }
 
             try
@@ -816,7 +816,7 @@ namespace DurableTask.SqlServer
             using SqlCommand command = this.GetSprocCommand(connection, $"{this.settings.SchemaName}.TerminateInstance");
 
             command.Parameters.Add("@InstanceID", SqlDbType.VarChar, size: 100).Value = instanceId;
-            command.Parameters.Add("@Reason", SqlDbType.VarChar).Value = reason;
+            command.Parameters.Add("@Reason", SqlDbType.VarChar, size: -1 /* max */).Value = reason;
 
             await SqlUtils.ExecuteNonQueryAsync(command, this.traceHelper, this.settings.TransientErrorNumbers, instanceId);
         }
@@ -1016,7 +1016,7 @@ namespace DurableTask.SqlServer
             using SqlCommand command = this.GetSprocCommand(connection, $"{this.settings.SchemaName}._RewindInstance");
 
             command.Parameters.Add("@InstanceID", SqlDbType.VarChar, size: 100).Value = instanceId;
-            command.Parameters.Add("@Reason", SqlDbType.VarChar).Value = reason;
+            command.Parameters.Add("@Reason", SqlDbType.VarChar, size: -1 /* max */).Value = reason;
 
             await SqlUtils.ExecuteNonQueryAsync(command, this.traceHelper, this.settings.TransientErrorNumbers);
         }
@@ -1039,10 +1039,13 @@ namespace DurableTask.SqlServer
         /// <param name="currentReplicaCount">
         /// If specified, results in a trace message if the recommended replica count differs from this value.
         /// </param>
+        /// <param name="cancellationToken">Cancels the scale query independently of worker shutdown.</param>
         /// <returns>Returns a non-negative recommended replica count integer value.</returns>
         public async Task<int> GetRecommendedReplicaCountAsync(int? currentReplicaCount = null, CancellationToken cancellationToken = default)
         {
-            using SqlConnection connection = await this.GetAndOpenConnectionAsync(cancellationToken);
+            // Scale queries must remain available after the worker stops during drain.
+            using SqlConnection connection = this.settings.CreateConnection();
+            await connection.OpenAsync(cancellationToken);
             using SqlCommand command = connection.CreateCommand();
             command.CommandText = $"SELECT {this.settings.SchemaName}.GetScaleRecommendation(@MaxConcurrentOrchestrations, @MaxConcurrentActivities)";
             command.Parameters.Add("@MaxConcurrentOrchestrations", SqlDbType.Int).Value = this.MaxConcurrentTaskOrchestrationWorkItems;

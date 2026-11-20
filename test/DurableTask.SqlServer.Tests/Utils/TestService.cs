@@ -330,6 +330,28 @@ namespace DurableTask.SqlServer.Tests.Utils
                 input);
         }
 
+        // Runs a caller-supplied orchestration object, for tests that need to override TaskOrchestration
+        // members (e.g. OnGetStatus) that the inline implementation delegates can't reach.
+        public async Task<TestInstance<TInput>> RunOrchestration<TInput>(
+            TInput input,
+            string orchestrationName,
+            TaskOrchestration orchestration)
+        {
+            this.worker.AddTaskOrchestrations(new TestObjectCreator<TaskOrchestration>(
+                orchestrationName,
+                string.Empty,
+                orchestration));
+
+            DateTime utcNow = DateTime.UtcNow;
+            OrchestrationInstance instance = await this.client.CreateOrchestrationInstanceAsync(
+                orchestrationName,
+                string.Empty,
+                Guid.NewGuid().ToString("N"),
+                input);
+
+            return new TestInstance<TInput>(this.client, instance, orchestrationName, string.Empty, utcNow, input);
+        }
+
         public void RegisterInlineActivity(string name, string version, TaskActivity activity)
         {
             this.worker.AddTaskActivities(new TestObjectCreator<TaskActivity>(name, version, activity));

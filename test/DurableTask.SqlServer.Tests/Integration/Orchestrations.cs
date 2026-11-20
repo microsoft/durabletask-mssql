@@ -282,6 +282,19 @@ namespace DurableTask.SqlServer.Tests.Integration
             Assert.Equal(exceptionToThrow.Message, state.FailureDetails.ErrorMessage);
             Assert.Equal(exceptionToThrow.GetType().FullName, state.FailureDetails.ErrorType);
             Assert.NotNull(state.FailureDetails.StackTrace);
+
+            // Like the Azure Storage provider, the output of a failed orchestration is "{ErrorType}: {ErrorMessage}"
+            string expectedOutput = $"{exceptionToThrow.GetType().FullName}: {exceptionToThrow.Message}";
+            Assert.Equal(expectedOutput, state.Output);
+
+            // The paged query path must report the same output and failure details
+            var query = new SqlOrchestrationQuery { InstanceIdPrefix = instance.InstanceId, FetchOutput = true };
+            IReadOnlyCollection<OrchestrationState> results =
+                await this.testService.OrchestrationServiceMock.Object.GetManyOrchestrationsAsync(query, CancellationToken.None);
+            OrchestrationState queriedState = Assert.Single(results);
+            Assert.Equal(OrchestrationStatus.Failed, queriedState.OrchestrationStatus);
+            Assert.Equal(expectedOutput, queriedState.Output);
+            Assert.Equal(state.FailureDetails, queriedState.FailureDetails);
         }
 
         [Fact]
@@ -303,6 +316,7 @@ namespace DurableTask.SqlServer.Tests.Integration
             Assert.Contains("Task 'Throw' (#0) failed with an unhandled exception", state.FailureDetails.ErrorMessage);
             Assert.Equal(typeof(TaskFailedException).FullName, state.FailureDetails.ErrorType);
             Assert.NotNull(state.FailureDetails.StackTrace);
+            Assert.Equal($"{state.FailureDetails.ErrorType}: {state.FailureDetails.ErrorMessage}", state.Output);
 
             // Ideally, the original exception message would be included in the orchestrator output.
             // This would require a change in DurableTask.Core.
@@ -444,6 +458,104 @@ namespace DurableTask.SqlServer.Tests.Integration
                 LogAssert.CheckpointCompleted(orchestrationName),
                 LogAssert.CheckpointStarting(orchestrationName),
                 LogAssert.CheckpointCompleted(orchestrationName));
+        }
+
+        // Each 'あ' is 3 bytes in UTF-8, so this string is under 8,000 characters but over 8,000 bytes.
+        // Regression coverage for https://github.com/microsoft/durabletask-mssql/issues/333.
+        static readonly string LargeUtf8Payload = new string('あ', 3000);
+
+        [Fact]
+        public async Task LargeUtf8Input()
+        {
+            TestInstance<string> instance = await this.testService.RunOrchestration(
+                LargeUtf8Payload,
+                orchestrationName: "EchoOrchestration",
+                implementation: (ctx, input) => Task.FromResult(input));
+
+            await instance.WaitForCompletion(expectedOutput: LargeUtf8Payload);
+        }
+
+        [Fact]
+        public async Task LargeUtf8CustomStatus()
+        {
+            // Keep the input small so this test exercises only the custom status parameter.
+            TestInstance<string> instance = await this.testService.RunOrchestration(
+                "input",
+                orchestrationName: "CustomStatusOrchestration",
+                new LargeCustomStatusOrchestration());
+
+            OrchestrationState state = await instance.WaitForCompletion(expectedOutput: "done");
+            Assert.Equal(LargeUtf8Payload, JToken.Parse(state.Status).ToString());
+        }
+
+        class LargeCustomStatusOrchestration : TaskOrchestration<string, string>
+        {
+            string status;
+
+            public override Task<string> RunTask(OrchestrationContext context, string input)
+            {
+                this.status = LargeUtf8Payload;
+                return Task.FromResult("done");
+            }
+
+            public override string OnGetStatus() => this.status;
+        }
+
+        [Fact]
+        public async Task LargeUtf8TerminateReason()
+        {
+            TestInstance<string> instance = await this.testService.RunOrchestration(
+                "input",
+                orchestrationName: "OrchestrationWithTimer",
+                implementation: (ctx, input) => ctx.CreateTimer(ctx.CurrentUtcDateTime.AddSeconds(30), input));
+
+            await instance.WaitForStart();
+            await instance.TerminateAsync(LargeUtf8Payload);
+
+            await instance.WaitForCompletion(
+                TimeSpan.FromSeconds(10),
+                expectedStatus: OrchestrationStatus.Terminated,
+                expectedOutput: LargeUtf8Payload);
+        }
+
+        [Fact]
+        public async Task LargeUtf8RewindReason()
+        {
+            bool shouldFail = true;
+
+            TestInstance<string> instance = await this.testService.RunOrchestration(
+                "input",
+                orchestrationName: "RewindableOrchestration",
+                implementation: (ctx, input) => ctx.ScheduleTask<string>("MaybeFail", "", input),
+                activities: ("MaybeFail", TestService.MakeActivity((TaskContext ctx, string input) =>
+                {
+                    if (shouldFail)
+                    {
+                        throw new InvalidOperationException("Kah-BOOOOM!!!");
+                    }
+
+                    return input;
+                })));
+
+            await instance.WaitForCompletion(expectedStatus: OrchestrationStatus.Failed);
+
+            shouldFail = false;
+            await this.testService.OrchestrationServiceMock.Object.RewindTaskOrchestrationAsync(
+                instance.InstanceId,
+                LargeUtf8Payload);
+
+            await instance.WaitForCompletion(expectedOutput: "input");
+
+            // The rewind reason is persisted as the payload of a GenericEvent in the orchestration history.
+            // Rewind also converts the failure-related events into GenericEvents (with their original
+            // payloads), so look for the one carrying the reason rather than for a single GenericEvent.
+            string historyJson = await this.testService.OrchestrationServiceMock.Object.GetOrchestrationHistoryAsync(
+                instance.InstanceId,
+                executionIdFilter: null);
+            Assert.Single(
+                JArray.Parse(historyJson),
+                e => e.Value<int>("EventType") == (int)EventType.GenericEvent
+                    && e.Value<string>("Data") == LargeUtf8Payload);
         }
 
         [Theory]
